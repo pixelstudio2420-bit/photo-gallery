@@ -5,6 +5,10 @@
 @section('content')
 <div class="max-w-6xl mx-auto px-4 md:px-6 py-6">
 
+  {{-- Pay-now countdown banner. See _countdown.blade.php for the
+       Alpine logic + visual states. --}}
+  @include('public.payment._countdown', ['order' => $order])
+
   {{-- Header --}}
   <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
     <h1 class="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">

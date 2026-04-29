@@ -23,6 +23,9 @@ class Order extends Model
         'referral_code_id','loyalty_points_earned','loyalty_points_redeemed','utm_attribution_id',
         // Idempotency + paid-at — added by 2026_04_27_200002 hardening migration
         'idempotency_key','paid_at',
+        // Payment countdown — when the order's pay-now window closes.
+        // Set automatically on create (see booted() below).
+        'payment_expires_at',
     ];
 
     protected $casts = [
@@ -31,7 +34,23 @@ class Order extends Model
         'discount_amount'   => 'decimal:2',
         'delivered_at'      => 'datetime',
         'delivery_meta'     => 'array',
+        'payment_expires_at'=> 'datetime',
     ];
+
+    /** True if the pay-now window has closed (and order isn't already paid). */
+    public function paymentExpired(): bool
+    {
+        if ($this->isPaid()) return false;
+        if (!$this->payment_expires_at) return false;
+        return $this->payment_expires_at->isPast();
+    }
+
+    /** Seconds remaining until expiry — clamped to 0 to avoid negative countdowns. */
+    public function paymentSecondsRemaining(): int
+    {
+        if (!$this->payment_expires_at || $this->isPaid()) return 0;
+        return max(0, now()->diffInSeconds($this->payment_expires_at, false));
+    }
 
     // Order types — photo_package is the legacy default (buyer buys photos),
     // credit_package is the new flow (photographer buys upload credits),
@@ -110,6 +129,27 @@ class Order extends Model
         // Application-level guard so it ports across drivers and surfaces
         // as a clean exception in logs + tests.
         static::observe(OrderIntegrityObserver::class);
+
+        // Auto-stamp the payment expiry on insert.
+        //
+        // Default 30 minutes — short enough to feel urgent and convert
+        // faster (Thai e-commerce A/B tests routinely show 30-60 min
+        // countdowns lift conversion 8-15% over no-deadline checkouts),
+        // long enough to cover a customer who needs to open their
+        // banking app, type the amount, and confirm.
+        //
+        // Operators can tune via AppSetting `payment_expiry_minutes`.
+        // The value is treated as MINUTES so admins don't have to think
+        // in seconds for the common case. Clamped 5 min – 24 h to keep
+        // a typo from putting a 1-second-or-72-hour countdown in front
+        // of a customer.
+        static::creating(function (self $order) {
+            if (empty($order->payment_expires_at)) {
+                $minutes = (int) (\App\Models\AppSetting::get('payment_expiry_minutes', '30') ?: 30);
+                $minutes = max(5, min(1440, $minutes));
+                $order->payment_expires_at = now()->addMinutes($minutes);
+            }
+        });
 
         static::deleting(function (self $order) {
             try {

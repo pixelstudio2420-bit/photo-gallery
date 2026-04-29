@@ -5,6 +5,10 @@
 @section('content-full')
 <div class="flex items-center justify-center px-4 py-8 min-h-[70vh]">
   <div class="w-full max-w-md">
+    {{-- Countdown sits ABOVE the card so the urgency state is visible
+         even before the user scrolls to the QR. --}}
+    @include('public.payment._countdown', ['order' => $order])
+
     <div class="rounded-3xl overflow-hidden bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 shadow-2xl">
 
       {{-- Header --}}
