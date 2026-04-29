@@ -311,8 +311,15 @@
                  @dragleave.prevent="dropActive = false"
                  @drop.prevent="dropActive = false; $refs.imgInput.files = $event.dataTransfer.files; handleFile({target: $refs.imgInput})"
                  style="padding: 1.25rem 1rem;">
+            {{-- `sr-only` (visually hidden, browser-focusable) instead of
+                 `hidden` (display:none, NOT focusable). When the form is
+                 submitted with no file, the browser tries to focus the
+                 invalid `required` field to show the validation tooltip —
+                 display:none breaks that with the console error
+                 "An invalid form control with name='image' is not focusable."
+                 sr-only keeps the element off-screen but focusable. --}}
             <input type="file" name="image" accept="image/png,image/jpeg" required
-                   class="hidden" x-ref="imgInput" @change="handleFile">
+                   class="sr-only" x-ref="imgInput" @change="handleFile">
             <template x-if="!fileName">
               <div>
                 <div class="w-10 h-10 mx-auto mb-2 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-white text-lg shadow-md shadow-emerald-500/30">
