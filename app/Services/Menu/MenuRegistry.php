@@ -90,9 +90,17 @@ class MenuRegistry
                     continue;
                 }
             }
-            // Conditional callable (e.g. footer "show only to guests")
-            if (!empty($item['condition']) && is_callable($item['condition'])) {
-                if (!$item['condition']()) {
+            // Conditional visibility (e.g. footer "show only to guests").
+            //
+            // Two value shapes accepted:
+            //   1. string key — resolved by evaluateCondition() below.
+            //      This is the cache-safe form: configs containing only
+            //      strings/arrays survive `php artisan config:cache`.
+            //   2. Closure — legacy form, still works at runtime but
+            //      crashes config:cache (Closures aren't serializable).
+            //      New code must use the string form.
+            if (!empty($item['condition'])) {
+                if (!$this->evaluateCondition($item['condition'])) {
                     continue;
                 }
             }
@@ -157,5 +165,41 @@ class MenuRegistry
                 $this->collectRoutes($item['items'], $bad, $localPath);
             }
         }
+    }
+
+    /**
+     * Resolve a `condition` value to a boolean visibility flag.
+     *
+     * Accepts:
+     *   - string key — preferred form (cache-safe)
+     *   - Closure   — legacy form (works at runtime but breaks config:cache)
+     *
+     * Adding a new condition key
+     * --------------------------
+     * Add a new arm to the match() expression below. Keep the keys
+     * descriptive (e.g. "guest", "non_photographer") rather than
+     * implementation-leaky (e.g. "auth_check_returns_false") — config
+     * authors should be able to read the menu file without knowing
+     * which Auth facade method backs each branch.
+     */
+    private function evaluateCondition($condition): bool
+    {
+        // Legacy: Closure / callable. Still works for in-process menus,
+        // but will block config:cache. Prefer the string form below.
+        if ($condition instanceof Closure || is_callable($condition)) {
+            return (bool) $condition();
+        }
+
+        if (is_string($condition)) {
+            return match ($condition) {
+                'guest'             => !\Illuminate\Support\Facades\Auth::check(),
+                'authenticated'     => \Illuminate\Support\Facades\Auth::check(),
+                'non_photographer'  => !\Illuminate\Support\Facades\Auth::user()?->photographerProfile,
+                'is_photographer'   => (bool) \Illuminate\Support\Facades\Auth::user()?->photographerProfile,
+                default             => true,  // unknown key → don't filter
+            };
+        }
+
+        return true;
     }
 }

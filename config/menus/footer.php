@@ -26,8 +26,10 @@
 |   columns:
 |     - title         section title
 |     - items         array of items (label + route OR url)
-|     - condition     optional closure that returns bool
-|                     (e.g. show only when guest, etc.)
+|     - condition     optional STRING key resolved by MenuRegistry
+|                     (NOT a closure — closures break config:cache).
+|                     Valid keys: 'guest', 'authenticated',
+|                     'non_photographer'. See MenuRegistry::evaluateCondition().
 */
 
 return [
@@ -52,12 +54,12 @@ return [
                     // Show only to guests + non-photographer users.
                     // Approved photographers see their dashboard
                     // link in the user-dropdown instead.
-                    'condition' => fn () => !\Illuminate\Support\Facades\Auth::user()?->photographerProfile,
+                    'condition' => 'non_photographer',
                 ],
                 [
                     'label' => 'Login',
                     'route' => 'photographer.login',
-                    'condition' => fn () => !\Illuminate\Support\Facades\Auth::check(),
+                    'condition' => 'guest',
                 ],
             ],
         ],
