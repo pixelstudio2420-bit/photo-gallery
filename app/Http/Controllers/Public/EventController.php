@@ -179,11 +179,26 @@ class EventController extends Controller
 
     public function show($slug)
     {
-        // Support both slug and ID lookup
-        $event = Event::with('category')
-            ->where('slug', $slug)
-            ->orWhere('id', $slug)
-            ->firstOrFail();
+        // Resolve event by slug, falling back to numeric ID lookup for the
+        // legacy /events/{id} URL shape.
+        //
+        // We MUST NOT just chain `->orWhere('id', $slug)` here — Postgres
+        // is strict about column types and refuses to compare a non-numeric
+        // string against an integer column, throwing
+        //   SQLSTATE[22P02]: invalid input syntax for type integer: "ab"
+        // …which surfaces as a 500 on every event slug page that contains
+        // letters. (MySQL silently coerces 'ab' → 0 and matches nothing,
+        // which is why this latent bug went unnoticed until the recent
+        // pgsql migration.)
+        //
+        // Only fold in the id-equality clause when the input is a pure
+        // digit string. ctype_digit() rejects '1.5', '1e5', and negative
+        // numbers — exactly the values that can't be a primary-key match.
+        $query = Event::with('category')->where('slug', $slug);
+        if (ctype_digit((string) $slug)) {
+            $query->orWhere('id', (int) $slug);
+        }
+        $event = $query->firstOrFail();
 
         // Check password-protected visibility
         if ($event->visibility === 'password') {
