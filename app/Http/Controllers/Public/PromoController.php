@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Event;
 use App\Models\StoragePlan;
 use App\Models\SubscriptionPlan;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -129,5 +131,70 @@ class PromoController extends Controller
             'storagePlans',
             'featuredEvents',
         ));
+    }
+
+    /**
+     * Smart "buy this plan" redirect.
+     *
+     * Routed from each plan card on /promo. Funnels every user into the
+     * shortest path that ends at a payable subscription page, regardless
+     * of whether they already have a photographer profile.
+     *
+     * Decision tree:
+     *   - Plan code unknown / inactive → bounce back to /promo with error.
+     *   - Authenticated photographer       → /photographer/subscription/plans?plan=…
+     *     (the plans page reads ?plan=… and scrolls to / pre-selects that
+     *     card so the user is one click from "Subscribe").
+     *   - Authenticated user, no profile   → /photographer/register
+     *     (claim flow), with the plan code stashed in the session so the
+     *     register handler can finish the journey.
+     *   - Anonymous                        → /photographer/register, same
+     *     session-stash treatment.
+     *
+     * The session key used (`intended_plan`) is consumed by
+     * Photographer\AuthController::register() and ::claim() — see those
+     * methods for the post-signup redirect.
+     */
+    public function checkout(string $code): RedirectResponse
+    {
+        $plan = null;
+        try {
+            $plan = SubscriptionPlan::where('code', $code)
+                ->where('is_active', 1)
+                ->first();
+        } catch (\Throwable $e) {
+            Log::warning('promo.checkout.plan_lookup_failed', ['code' => $code, 'err' => $e->getMessage()]);
+        }
+
+        if (!$plan) {
+            return redirect()->route('promo')
+                ->with('error', 'ไม่พบแผนที่เลือก หรือแผนนี้ปิดให้สมัครชั่วคราว');
+        }
+
+        if (Auth::check()) {
+            $user = Auth::user();
+            // Already a photographer → land on the plans page with the
+            // selection pre-filled. Subscription plans page reads
+            // ?plan=… and uses it to scroll/highlight the matching card.
+            if ($user->photographerProfile) {
+                return redirect()->to(
+                    route('photographer.subscription.plans') . '?plan=' . urlencode($code) . '#plan-' . $code
+                );
+            }
+
+            // Logged in but not a photographer (e.g. customer who came
+            // from /promo). Funnel through the photographer claim flow;
+            // the session key lets register/claim finish the redirect.
+            session(['intended_plan' => $code]);
+            return redirect()->route('photographer.register')
+                ->with('info', 'เปิดบัญชีช่างภาพก่อน — แล้วระบบจะพาคุณไปหน้าสมัครแผน “' . $plan->name . '” อัตโนมัติ');
+        }
+
+        // Anonymous → store plan in session + send to register. The
+        // register page also accepts a "Login" link, and once they
+        // authenticate the same intended_plan key gets consumed.
+        session(['intended_plan' => $code]);
+        return redirect()->route('photographer.register')
+            ->with('info', 'สร้างบัญชีก่อน — แล้วระบบจะพาคุณไปหน้าสมัครแผน “' . $plan->name . '” อัตโนมัติ');
     }
 }

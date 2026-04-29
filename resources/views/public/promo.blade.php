@@ -535,7 +535,13 @@
           @endforeach
         </ul>
 
-        <a href="{{ route('photographer.register') }}"
+        {{-- CTA — routes through /promo/checkout/{code} which figures out
+             where to send the user based on auth state:
+               • photographer logged in → subscription plans w/ pre-select
+               • customer logged in     → register-as-photographer (claim)
+               • anonymous              → register, plan stashed in session
+             so the post-signup redirect lands on subscription checkout. --}}
+        <a href="{{ route('promo.checkout', ['code' => $plan->code]) }}"
            class="block w-full text-center py-2.5 rounded-xl text-sm font-bold transition
                   {{ $isFeatured
                        ? 'text-white bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 hover:shadow-xl hover:shadow-violet-500/40 hover:-translate-y-0.5'

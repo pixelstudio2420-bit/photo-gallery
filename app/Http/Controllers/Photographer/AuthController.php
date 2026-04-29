@@ -218,6 +218,16 @@ class AuthController extends Controller
             Log::warning('Photographer email failed: ' . $e->getMessage());
         }
 
+        // Promo-funnel hand-off (mirrors register() above) — if the user
+        // came in from /promo/checkout/{code} we honour that intent
+        // first, jumping straight to the subscription checkout page.
+        $intendedPlan = session()->pull('intended_plan');
+        if ($intendedPlan) {
+            return redirect()->to(
+                route('photographer.subscription.plans') . '?plan=' . urlencode($intendedPlan) . '#plan-' . $intendedPlan
+            )->with('success', 'เปิดบัญชีช่างภาพสำเร็จ — เลือกวิธีชำระเงินด้านล่างเพื่อเริ่มใช้แผน');
+        }
+
         // Where to go next: if the admin has the require-google flag on,
         // and Google isn't yet linked, push the user through the connect
         // gate. Otherwise straight to the dashboard.
@@ -319,6 +329,20 @@ class AuthController extends Controller
             }
         } catch (\Throwable $e) {
             \Log::warning('Photographer email failed: ' . $e->getMessage());
+        }
+
+        // Promo-funnel hand-off: if the user came in via /promo/checkout/{code}
+        // we stash the plan code in the session there. After the account is
+        // live we honour that intent FIRST, before the connect-google gate
+        // — paying customers shouldn't be forced through Google linking
+        // before they can hand us money. They can connect Google after
+        // checkout if the require-google flag is on; the connect-google
+        // page is reachable from the photographer dashboard anyway.
+        $intendedPlan = session()->pull('intended_plan');
+        if ($intendedPlan) {
+            return redirect()->to(
+                route('photographer.subscription.plans') . '?plan=' . urlencode($intendedPlan) . '#plan-' . $intendedPlan
+            )->with('success', 'สมัครสำเร็จ — เลือกวิธีชำระเงินด้านล่างเพื่อเริ่มใช้แผน');
         }
 
         // Email signup → still must connect Google (replaces email-verify).

@@ -242,6 +242,12 @@ Route::post('/contact', [ContactController::class, 'store'])->name('contact.stor
 // pitches the 3 killer USPs (LINE delivery, Face Search AI, Auto-payout).
 // Heavy edge-cache: stats refresh every 5 min, page stays fast under campaign load.
 Route::get('/promo', [\App\Http\Controllers\Public\PromoController::class, 'index'])->name('promo')->middleware('edge.cache:300,3600');
+// Smart "buy this plan" redirect — funnels promo CTAs straight into the
+// subscription checkout flow regardless of the user's auth state.
+// NOT edge-cached: the redirect target depends on Auth::check().
+Route::get('/promo/checkout/{code}', [\App\Http\Controllers\Public\PromoController::class, 'checkout'])
+    ->where('code', '[a-z0-9_-]+')
+    ->name('promo.checkout');
 Route::get('/why-us', fn () => redirect()->route('promo'))->name('why-us'); // friendly alias
 
 // Static documentation (HTML files in /docs at project root).

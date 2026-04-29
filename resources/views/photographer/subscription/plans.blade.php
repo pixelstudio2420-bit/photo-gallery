@@ -592,7 +592,9 @@ html.dark .faq-a{ color:#94a3b8; }
         $delayClass = 'd'.min(5, $idx + 1);
       @endphp
 
-      <div class="plan-tile plan-anim {{ $delayClass }} {{ $isCurrent ? 'current' : ($isPopular ? 'popular' : '') }}"
+      <div id="plan-{{ $p->code }}"
+           data-plan-code="{{ $p->code }}"
+           class="plan-tile plan-anim {{ $delayClass }} {{ $isCurrent ? 'current' : ($isPopular ? 'popular' : '') }}"
            style="--accent: {{ $accent }}; --accent-soft: {{ $accent }}1f; --accent-border: {{ $accent }}35; --accent-shadow: {{ $accent }}55;">
         @if($isCurrent)
           <div class="plan-ribbon current"><i class="bi bi-check-circle-fill"></i> แผนปัจจุบัน</div>
@@ -716,6 +718,7 @@ html.dark .faq-a{ color:#94a3b8; }
             </button>
           @else
             <button type="button" @click="open({{ Js::from($planPayload) }})"
+                    data-subscribe-btn
                     class="plan-cta {{ $p->isFree() ? 'plan-cta-free' : ($isPopular ? 'plan-cta-primary' : 'plan-cta-secondary') }}">
               @if($p->isFree())
                 <i class="bi bi-arrow-down-circle"></i> เลือกแผนฟรี
@@ -1053,5 +1056,52 @@ html.dark .faq-a{ color:#94a3b8; }
       },
     }
   }
+
+  /* ──────────────────────────────────────────────────────────────
+     Promo-funnel hand-off
+     ──────────────────────────────────────────────────────────────
+     /promo/checkout/{code} routes the user here with `?plan=…` so
+     after register/login they land on the right card. We:
+       1. scroll-into-view the matching tile (smooth, with offset
+          so the sticky navbar doesn't cover it)
+       2. flash a brief outline-glow so the eye lands on it
+       3. trigger the same Alpine open(...) the Subscribe button
+          uses — no extra click required
+     The handler is wrapped in DOMContentLoaded + a 250ms delay so
+     plan-tile elements + Alpine root are both ready. ────────────── */
+  document.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+    const wanted = params.get('plan');
+    if (!wanted) return;
+
+    setTimeout(() => {
+      const tile = document.querySelector(`[data-plan-code="${wanted}"]`);
+      if (!tile) return;
+
+      // Smooth scroll with offset for sticky header (navbar ~60-80px tall).
+      const top = tile.getBoundingClientRect().top + window.scrollY - 100;
+      window.scrollTo({ top, behavior: 'smooth' });
+
+      // Highlight pulse — a CSS animation defined inline so we don't
+      // touch the page's stylesheet for a one-off effect.
+      tile.style.transition = 'box-shadow .6s ease, transform .6s ease';
+      tile.style.boxShadow = '0 0 0 4px var(--accent), 0 22px 50px -12px var(--accent-shadow)';
+      tile.style.transform = 'translateY(-4px)';
+      setTimeout(() => {
+        tile.style.boxShadow = '';
+        tile.style.transform = '';
+      }, 1800);
+
+      // Auto-open the subscribe modal so the user is one tap from
+      // confirming. The Subscribe button inside the tile fires the
+      // same Alpine open(payload) — we click it programmatically.
+      const subscribeBtn = tile.querySelector('[data-subscribe-btn], button[\\@click*="open"]');
+      if (subscribeBtn) {
+        // Wait until the highlight scroll completes so the modal
+        // opens over a settled card instead of mid-animation.
+        setTimeout(() => subscribeBtn.click(), 700);
+      }
+    }, 250);
+  });
 </script>
 @endsection
