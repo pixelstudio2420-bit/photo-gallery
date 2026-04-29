@@ -266,10 +266,41 @@ class PhotoController extends Controller
                 throw $e;
             }
 
-            // Step 3: Dispatch async processing for thumbnail/watermark.
-            $queueLane = app(\App\Services\SubscriptionService::class)
-                ->uploadQueueFor(Auth::user()?->photographerProfile);
-            ProcessUploadedPhotoJob::dispatch($photo->id)->onQueue($queueLane);
+            // Step 3: Process the photo (thumbnail + watermark generation).
+            //
+            // We run inline by default (`dispatchSync`) instead of pushing
+            // to a queue lane, because Laravel Cloud apps without an
+            // explicit Worker resource don't have a queue runner — async
+            // dispatch would leave the photo stuck at status='processing'
+            // forever, and the photographer would see "กำลังประมวลผล" with
+            // no thumbnail.
+            //
+            // To opt back into async dispatch (faster upload response,
+            // requires a running queue worker), set the AppSetting
+            // `photo_processing_async = 1` from /admin/settings.
+            $async = \App\Models\AppSetting::get('photo_processing_async', '0') === '1';
+            if ($async) {
+                $queueLane = app(\App\Services\SubscriptionService::class)
+                    ->uploadQueueFor(Auth::user()?->photographerProfile);
+                ProcessUploadedPhotoJob::dispatch($photo->id)->onQueue($queueLane);
+            } else {
+                // Inline path — adds 1-3 seconds per upload (image resize +
+                // watermark) but the photographer sees the result
+                // immediately. The job has its own try/catch so a
+                // single bad image won't fail the whole upload request.
+                try {
+                    ProcessUploadedPhotoJob::dispatchSync($photo->id);
+                } catch (\Throwable $e) {
+                    Log::warning('Inline photo processing failed', [
+                        'photo_id' => $photo->id,
+                        'error'    => $e->getMessage(),
+                    ]);
+                    // Photo stays at status='processing' — the
+                    // `php artisan photos:reprocess` command can retry it
+                    // later, and the API still returns success because
+                    // the original file did upload to R2.
+                }
+            }
 
             // Step 4: Record metered usage so the daily upload quota +
             // lifetime storage quota stay in sync with what's actually on
