@@ -444,6 +444,7 @@ return [
                     ['id' => 'storage_main', 'label' => 'R2/S3/Drive', 'icon' => 'bi-cloud', 'route' => 'admin.settings.storage'],
                     ['id' => 'storage_drive', 'label' => 'Google Drive', 'icon' => 'bi-google', 'route' => 'admin.settings.google-drive'],
                     ['id' => 'storage_aws', 'label' => 'AWS', 'icon' => 'bi-amazon', 'route' => 'admin.settings.aws'],
+                    ['id' => 'storage_r2',  'label' => 'Cloudflare R2', 'icon' => 'bi-cloud-fill', 'route' => 'admin.settings.r2'],
                     ['id' => 'storage_quota', 'label' => 'Photographer Quota', 'icon' => 'bi-pie-chart', 'route' => 'admin.settings.photographer-storage'],
                     ['id' => 'storage_overview', 'label' => 'Overview', 'icon' => 'bi-bar-chart', 'route' => 'admin.storage'],
                     ['id' => 'storage_backup', 'label' => 'Backup', 'icon' => 'bi-archive', 'route' => 'admin.settings.backup'],

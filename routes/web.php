@@ -1251,6 +1251,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/aws', [\App\Http\Controllers\Admin\SettingsController::class, 'aws'])->name('aws');
             Route::post('/aws', [\App\Http\Controllers\Admin\SettingsController::class, 'updateAws'])->name('aws.update');
 
+            // Cloudflare R2 Object Storage — dedicated page (separate from
+            // /admin/settings/cloudflare which handles CDN + zone API).
+            Route::get('/r2', [\App\Http\Controllers\Admin\SettingsController::class, 'r2'])->name('r2');
+            Route::post('/r2', [\App\Http\Controllers\Admin\SettingsController::class, 'updateR2'])->name('r2.update');
+
             // Payment Gateway Credentials
             Route::get('/payment-gateways', [\App\Http\Controllers\Admin\SettingsController::class, 'paymentGateways'])->name('payment-gateways');
             Route::post('/payment-gateways', [\App\Http\Controllers\Admin\SettingsController::class, 'updatePaymentGateways'])->name('payment-gateways.update');

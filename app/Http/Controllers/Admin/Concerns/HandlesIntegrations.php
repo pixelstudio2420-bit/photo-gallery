@@ -246,6 +246,94 @@ trait HandlesIntegrations
     }
 
     // ─────────────────────────────────────────────────────────────
+    // Cloudflare R2 — dedicated settings page (separate from the
+    // Cloudflare CDN/Zone page so admins can configure object storage
+    // without scrolling past CDN options they don't care about).
+    //
+    // The underlying AppSetting keys are SHARED with the legacy R2
+    // section on the Cloudflare page (`r2_enabled`, `r2_access_key_id`,
+    // etc.), so existing data is read/written to the same place — only
+    // the UI is split.
+    // ─────────────────────────────────────────────────────────────
+
+    public function r2()
+    {
+        $all = AppSetting::getAll();
+
+        $keys = [
+            'r2_enabled',
+            'r2_access_key_id', 'r2_secret_access_key',
+            'r2_bucket', 'r2_endpoint',
+            'r2_public_url', 'r2_custom_domain',
+        ];
+
+        $settings = [];
+        foreach ($keys as $key) {
+            $settings[$key] = $all[$key] ?? '';
+        }
+
+        // Mask secret for display so a casual screen-share doesn't leak
+        // the credential. The save handler treats any value containing
+        // `***` as "no change requested" so the masked display value
+        // doesn't accidentally overwrite the real secret on save.
+        $secret = $settings['r2_secret_access_key'];
+        $settings['r2_secret_masked'] = ($secret !== '')
+            ? substr($secret, 0, 6) . str_repeat('*', max(0, strlen($secret) - 6))
+            : '';
+
+        $isConfigured = !empty($settings['r2_access_key_id'])
+            && !empty($secret)
+            && !empty($settings['r2_bucket'])
+            && !empty($settings['r2_endpoint']);
+
+        return view('admin.settings.r2', compact('settings', 'isConfigured'));
+    }
+
+    public function updateR2(Request $request)
+    {
+        // ── AJAX: test connection ──────────────────────────────────
+        if ($request->input('action') === 'test_r2') {
+            try {
+                // Touch the bucket through the same disk Laravel uses
+                // for actual storage operations so a passing test
+                // genuinely means "uploads will work".
+                $testKey = '.r2-test-' . time();
+                Storage::disk('r2')->put($testKey, 'ok');
+                Storage::disk('r2')->delete($testKey);
+                return response()->json([
+                    'success' => true,
+                    'message' => 'R2 connection successful! Bucket is accessible.',
+                ]);
+            } catch (\Throwable $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $items = [
+            'r2_enabled'       => $request->has('r2_enabled') ? '1' : '0',
+            'r2_access_key_id' => trim((string) $request->input('r2_access_key_id', '')),
+            'r2_bucket'        => trim((string) $request->input('r2_bucket', '')),
+            'r2_endpoint'      => trim((string) $request->input('r2_endpoint', '')),
+            'r2_public_url'    => trim((string) $request->input('r2_public_url', '')),
+            'r2_custom_domain' => trim((string) $request->input('r2_custom_domain', '')),
+        ];
+
+        // Preserve existing secret unless a new (non-masked) value is
+        // supplied — same convention as the API token handling above.
+        $secretInput = (string) $request->input('r2_secret_access_key', '');
+        if ($secretInput !== '' && !str_contains($secretInput, '***')) {
+            $items['r2_secret_access_key'] = $secretInput;
+        }
+
+        AppSetting::setMany($items);
+
+        return back()->with('success', 'บันทึกการตั้งค่า Cloudflare R2 สำเร็จ');
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // Analytics & Social (GA4 + FB Pixel + OG defaults)
     // ─────────────────────────────────────────────────────────────
 
