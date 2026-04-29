@@ -172,63 +172,127 @@
              x-transition:leave-end="opacity-0 -translate-y-2"
              class="relative mb-4 overflow-hidden rounded-2xl border border-indigo-200/50 dark:border-indigo-500/20"
              style="background: linear-gradient(135deg, rgba(99,102,241,.08) 0%, rgba(236,72,153,.05) 50%, rgba(245,158,11,.08) 100%);">
-          {{-- Subtle radial accent --}}
+          {{-- Subtle radial accent (decorative) --}}
           <div class="absolute inset-0 pointer-events-none opacity-60"
                style="background: radial-gradient(ellipse 60% 100% at 0% 50%, rgba(99,102,241,.15) 0%, transparent 60%);"></div>
 
-          <div class="relative p-4 flex items-center gap-4 flex-wrap">
-            {{-- Google G logo (official) --}}
-            <div class="flex-shrink-0 w-12 h-12 rounded-xl bg-white dark:bg-slate-100 shadow-md flex items-center justify-center ring-1 ring-slate-200/60">
-              <svg viewBox="0 0 24 24" class="w-7 h-7">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-            </div>
+          {{-- Dismiss button — absolute-positioned top-right so it doesn't
+               compete with the main CTA for horizontal space on mobile.
+               Larger 32px hit-area to satisfy touch-target a11y. --}}
+          <button type="button"
+                  @click="show = false; sessionStorage.setItem('pg_google_promo_dismissed_' + {{ \Illuminate\Support\Facades\Auth::id() }}, '1')"
+                  class="absolute top-2 right-2 z-10 w-8 h-8 inline-flex items-center justify-center rounded-full
+                         text-slate-400 hover:text-slate-700 dark:hover:text-slate-200
+                         hover:bg-white/40 dark:hover:bg-slate-800/40 transition"
+                  title="ปิด (จะแสดงอีกในครั้งหน้า)">
+            <i class="bi bi-x-lg text-sm"></i>
+            <span class="sr-only">ปิด</span>
+          </button>
 
-            {{-- Copy --}}
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <h3 class="text-sm font-bold text-slate-800 dark:text-slate-100">
-                  เชื่อมต่อ Google เพื่อใช้งานฟีเจอร์ได้เต็มรูปแบบ
-                </h3>
-                @if($_pgHasLine)
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
-                    <i class="bi bi-check-circle-fill"></i> LINE เชื่อมแล้ว
-                  </span>
-                @endif
+          {{--
+            Responsive layout strategy
+            ─────────────────────────
+            Mobile  (<sm):  3-row stack — logo + heading row, features row,
+                            full-width CTA at bottom (easier thumb tap).
+            Tablet  (sm+):  2 rows — top: logo + heading, bottom: features
+                            inline + CTA on the right.
+            Desktop (md+):  Single horizontal row — logo · text · CTA.
+          --}}
+          <div class="relative p-4 sm:p-5">
+            <div class="flex flex-col md:flex-row md:items-center gap-4 pr-8">
+
+              {{-- Logo + Heading group (stays together at every breakpoint) --}}
+              <div class="flex items-start gap-3 sm:gap-4 md:flex-shrink-0">
+                {{-- Google G logo (official 4-color mark) --}}
+                <div class="shrink-0 w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white dark:bg-slate-100
+                            shadow-md flex items-center justify-center ring-1 ring-slate-200/60">
+                  <svg viewBox="0 0 24 24" class="w-6 h-6 sm:w-7 sm:h-7" aria-hidden="true">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                </div>
+
+                {{-- Heading + LINE-linked badge — visible only on mobile/tablet
+                     stacked layout. The desktop version repeats this in the
+                     centre column below for proper horizontal flow. --}}
+                <div class="md:hidden flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <h3 class="text-sm sm:text-[15px] font-bold text-slate-800 dark:text-slate-100 leading-snug">
+                      เชื่อมต่อ Google เพื่อใช้งานเต็มรูปแบบ
+                    </h3>
+                    @if($_pgHasLine)
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold
+                                   bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300 shrink-0">
+                        <i class="bi bi-check-circle-fill"></i> LINE
+                      </span>
+                    @endif
+                  </div>
+                </div>
               </div>
-              <p class="text-xs text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed">
-                <span class="inline-flex items-center gap-1"><i class="bi bi-cloud-fill text-emerald-500"></i> Backup Drive</span> ·
-                <span class="inline-flex items-center gap-1"><i class="bi bi-calendar-event text-rose-500"></i> Sync Calendar</span> ·
-                <span class="inline-flex items-center gap-1"><i class="bi bi-envelope-paper-fill text-blue-500"></i> ส่งใบเสร็จ Gmail</span> ·
-                <span class="inline-flex items-center gap-1"><i class="bi bi-shield-fill-check text-violet-500"></i> ยืนยันตัวตน</span>
-              </p>
-            </div>
 
-            {{-- Action --}}
-            <div class="flex items-center gap-2 flex-shrink-0">
-              <a href="{{ route('photographer.auth.redirect', ['provider' => 'google']) }}"
-                 class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
-                        bg-white dark:bg-slate-100 text-slate-700 hover:text-slate-900
-                        border border-slate-200 hover:border-slate-300
-                        shadow-sm hover:shadow-md transition-all duration-200
-                        hover:-translate-y-0.5">
-                <svg viewBox="0 0 24 24" class="w-4 h-4">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                </svg>
-                เชื่อมต่อ Google
-              </a>
-              <button type="button"
-                      @click="show = false; sessionStorage.setItem('pg_google_promo_dismissed_' + {{ \Illuminate\Support\Facades\Auth::id() }}, '1')"
-                      class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition p-1 rounded"
-                      title="ปิด (จะแสดงอีกในครั้งหน้า)">
-                <i class="bi bi-x-lg text-sm"></i>
-              </button>
+              {{-- Centre column (desktop heading + features chips) --}}
+              <div class="md:flex-1 md:min-w-0">
+                {{-- Heading — desktop only --}}
+                <div class="hidden md:flex items-center gap-2 flex-wrap mb-1.5">
+                  <h3 class="text-[15px] font-bold text-slate-800 dark:text-slate-100 leading-snug">
+                    เชื่อมต่อ Google เพื่อใช้งานเต็มรูปแบบ
+                  </h3>
+                  @if($_pgHasLine)
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold
+                                 bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                      <i class="bi bi-check-circle-fill"></i> LINE เชื่อมแล้ว
+                    </span>
+                  @endif
+                </div>
+
+                {{-- Feature chips. Each chip is its own pill so they wrap
+                     cleanly when there's not enough horizontal room — no
+                     more orphan dot separators on tight mobile widths. --}}
+                <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                  <span class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] sm:text-xs
+                               bg-white/70 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300
+                               ring-1 ring-slate-200/60 dark:ring-slate-700/40">
+                    <i class="bi bi-cloud-fill text-emerald-500"></i> Backup Drive
+                  </span>
+                  <span class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] sm:text-xs
+                               bg-white/70 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300
+                               ring-1 ring-slate-200/60 dark:ring-slate-700/40">
+                    <i class="bi bi-calendar-event text-rose-500"></i> Sync Calendar
+                  </span>
+                  <span class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] sm:text-xs
+                               bg-white/70 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300
+                               ring-1 ring-slate-200/60 dark:ring-slate-700/40">
+                    <i class="bi bi-envelope-paper-fill text-blue-500"></i> ส่งใบเสร็จ Gmail
+                  </span>
+                  <span class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] sm:text-xs
+                               bg-white/70 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300
+                               ring-1 ring-slate-200/60 dark:ring-slate-700/40">
+                    <i class="bi bi-shield-fill-check text-violet-500"></i> ยืนยันตัวตน
+                  </span>
+                </div>
+              </div>
+
+              {{-- Primary CTA — full-width on mobile (better thumb-tap), inline
+                   pill on desktop. --}}
+              <div class="md:flex-shrink-0">
+                <a href="{{ route('photographer.auth.redirect', ['provider' => 'google']) }}"
+                   class="w-full md:w-auto inline-flex items-center justify-center gap-2
+                          px-4 py-2.5 rounded-xl text-sm font-semibold
+                          bg-white dark:bg-slate-100 text-slate-700 hover:text-slate-900
+                          border border-slate-200 hover:border-slate-300
+                          shadow-sm hover:shadow-md transition-all duration-200
+                          md:hover:-translate-y-0.5">
+                  <svg viewBox="0 0 24 24" class="w-4 h-4 shrink-0" aria-hidden="true">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                  <span>เชื่อมต่อ Google</span>
+                </a>
+              </div>
             </div>
           </div>
         </div>
