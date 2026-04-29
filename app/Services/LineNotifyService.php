@@ -236,10 +236,42 @@ class LineNotifyService
             idempotencyKey: $idempotencyKey,
         );
         // If we already sent this idempotent delivery, don't re-queue.
+        // The LineDeliveryLogger::begin() catch on the partial unique
+        // index `(line_user_id, idempotency_key)` collapsed the second
+        // call into the first row — re-firing the push would either
+        // return a 200 (LINE deduplicates by retry token) or worse
+        // re-spam the chat. Either way, returning true here lets the
+        // caller treat dispatch as "succeeded" without doing another
+        // round-trip.
         if ($audit['duplicate']) {
             return true;
         }
-        \App\Jobs\Line\SendLinePushJob::dispatch($lineUserId, $messages, $audit['id']);
+
+        // Inline-vs-queue dispatch.
+        //
+        // The default is INLINE (`dispatchSync`) because Laravel Cloud
+        // installs without a dedicated `notifications` queue worker
+        // would otherwise see SendLinePushJob rows pile up in the jobs
+        // table while line_deliveries.status stays 'pending' forever.
+        // The customer never sees the photos and the admin has no
+        // signal that anything went wrong (the audit row exists, but
+        // it never flips to 'sent' or 'failed').
+        //
+        // Operators who DO have a worker running queue:work --queue=
+        // notifications can flip `line_delivery_inline` to '0' to
+        // restore the original async behaviour and save the HTTP
+        // request a few hundred ms per push. The trade-off:
+        //   inline  → admin's slip-approve click takes ~3-15s extra
+        //             on a 30-photo order (worth it for the delivery
+        //             confirmation appearing immediately)
+        //   queue   → admin click is instant; delivery takes whatever
+        //             the worker's polling interval is (default ~3s)
+        $inline = (string) AppSetting::get('line_delivery_inline', '1') === '1';
+        if ($inline) {
+            \App\Jobs\Line\SendLinePushJob::dispatchSync($lineUserId, $messages, $audit['id']);
+        } else {
+            \App\Jobs\Line\SendLinePushJob::dispatch($lineUserId, $messages, $audit['id']);
+        }
         return true;
     }
 

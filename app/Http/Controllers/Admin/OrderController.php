@@ -92,8 +92,31 @@ class OrderController extends Controller
             ->limit(30)
             ->get();
 
+        // ── LINE delivery audit ─────────────────────────────────────
+        // Pull every line_deliveries row whose idempotency_key falls
+        // under this order — both photo chunks and the download-link
+        // bubble. Sorted oldest-first so the timeline reads top-to-
+        // bottom in the order events fired (caption → image batch 1
+        // → image batch 2 → download bubble).
+        //
+        // Wrapped in try/catch because the line_deliveries table is
+        // a relatively new addition (migration 2026_04_28) — older
+        // installs that haven't run migrations yet shouldn't break
+        // the order detail page.
+        $lineDeliveries = collect();
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('line_deliveries')) {
+                $lineDeliveries = \Illuminate\Support\Facades\DB::table('line_deliveries')
+                    ->where('idempotency_key', 'like', "order.{$order->id}.line.%")
+                    ->orderBy('created_at')
+                    ->get();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Failed to load line_deliveries for order ' . $order->id . ': ' . $e->getMessage());
+        }
+
         return view('admin.orders.show', compact(
-            'order', 'addonPurchase', 'timeline', 'activity',
+            'order', 'addonPurchase', 'timeline', 'activity', 'lineDeliveries',
         ));
     }
 

@@ -380,6 +380,208 @@
                 </section>
             @endif
 
+            {{-- ──────────────────────────────────────────────────────
+                 LINE Delivery Audit
+                 ──────────────────────────────────────────────────────
+                 One row per push attempt sent to the customer's LINE.
+                 The idempotency_key encodes WHICH push it is so admins
+                 can spot dupes / re-tries / missing pushes at a glance:
+
+                   order.{id}.line.photos.caption  → caption text
+                   order.{id}.line.photos.0,1,2…   → 5-image chunks
+                   order.{id}.line.download        → flex bubble + link
+
+                 status enum: pending|sent|failed|skipped. The (line_user_id,
+                 idempotency_key) partial unique index in the table is what
+                 actually prevents double-spam — even if SendLinePushJob
+                 is re-fired by a worker crash, the LineDeliveryLogger::begin()
+                 catch on the constraint returns the existing row instead
+                 of inserting a new one.
+                 ─────────────────────────────────────────────────── --}}
+            @if(!empty($lineDeliveries) && $lineDeliveries->count() > 0)
+                @php
+                    $lineStatusTone = [
+                        'sent'    => ['emerald', 'bi-check-circle-fill', 'ส่งสำเร็จ'],
+                        'pending' => ['amber',   'bi-hourglass-split',   'รอส่ง'],
+                        'failed'  => ['rose',    'bi-x-octagon-fill',    'ส่งไม่สำเร็จ'],
+                        'skipped' => ['slate',   'bi-skip-forward-fill', 'ข้าม'],
+                    ];
+                    $lineStats = $lineDeliveries->countBy('status');
+                @endphp
+                <section class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm overflow-hidden">
+                    <header class="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between flex-wrap gap-2">
+                        <h2 class="font-bold text-slate-900 dark:text-white">
+                            <svg viewBox="0 0 24 24" class="inline w-4 h-4 align-text-bottom" fill="#06C755" aria-hidden="true"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zM24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>
+                            ส่งรูปทาง LINE
+                            <span class="text-sm font-normal text-slate-500 ml-1">
+                                ({{ $lineDeliveries->count() }} ครั้ง)
+                            </span>
+                        </h2>
+                        {{-- Quick-status pills — at-a-glance audit --}}
+                        <div class="flex items-center gap-1.5 text-xs">
+                            @foreach(['sent','pending','failed','skipped'] as $st)
+                                @if(($lineStats[$st] ?? 0) > 0)
+                                    @php [$tone, $icon, $label] = $lineStatusTone[$st]; @endphp
+                                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full font-semibold
+                                                 @if($tone==='emerald') bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300 @endif
+                                                 @if($tone==='amber')   bg-amber-100   text-amber-700   dark:bg-amber-500/15   dark:text-amber-300   @endif
+                                                 @if($tone==='rose')    bg-rose-100    text-rose-700    dark:bg-rose-500/15    dark:text-rose-300    @endif
+                                                 @if($tone==='slate')   bg-slate-100   text-slate-700   dark:bg-slate-500/15   dark:text-slate-300   @endif">
+                                        <i class="bi {{ $icon }}"></i>
+                                        {{ $label }} {{ $lineStats[$st] }}
+                                    </span>
+                                @endif
+                            @endforeach
+                        </div>
+                    </header>
+
+                    <ul class="divide-y divide-slate-100 dark:divide-slate-700">
+                        @foreach($lineDeliveries as $d)
+                            @php
+                                [$tone, $icon, $label] = $lineStatusTone[$d->status] ?? ['slate', 'bi-circle', $d->status];
+
+                                // Decode the payload so we can pull image
+                                // URLs out for inline previews. payload_json
+                                // can be a JSON string OR (Postgres JSONB)
+                                // already-decoded array depending on driver.
+                                $payload = $d->payload_json;
+                                if (is_string($payload)) {
+                                    $payload = json_decode($payload, true) ?: [];
+                                }
+                                $payload = is_array($payload) ? $payload : [];
+
+                                // Walk the LINE message array and harvest
+                                // image previewImageUrl. Each chunk holds
+                                // ≤5 image messages (LINE batch cap).
+                                $imageUrls = [];
+                                foreach ($payload as $msg) {
+                                    if (is_array($msg) && ($msg['type'] ?? null) === 'image' && !empty($msg['previewImageUrl'])) {
+                                        $imageUrls[] = $msg['previewImageUrl'];
+                                    }
+                                }
+
+                                // Friendly label parsed from the idempotency
+                                // key (which is the only stable "what is
+                                // this push for" signal in the audit row).
+                                $idem = $d->idempotency_key ?? '';
+                                $sectionLabel = match (true) {
+                                    str_ends_with($idem, '.caption')   => 'ข้อความเปิด (caption)',
+                                    str_contains($idem, '.photos.')    => 'รูปชุดที่ ' . (((int) preg_replace('/.*\.photos\.(\d+)$/', '$1', $idem)) + 1),
+                                    str_ends_with($idem, '.download')  => 'ลิงก์ดาวน์โหลด (Flex)',
+                                    default                            => $d->message_type ?: 'message',
+                                };
+                            @endphp
+                            <li class="px-5 py-4">
+                                <div class="flex flex-wrap items-start justify-between gap-3 mb-2">
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center gap-2 flex-wrap mb-1">
+                                            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-bold
+                                                         @if($tone==='emerald') bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300 @endif
+                                                         @if($tone==='amber')   bg-amber-100   text-amber-700   dark:bg-amber-500/15   dark:text-amber-300   @endif
+                                                         @if($tone==='rose')    bg-rose-100    text-rose-700    dark:bg-rose-500/15    dark:text-rose-300    @endif
+                                                         @if($tone==='slate')   bg-slate-100   text-slate-700   dark:bg-slate-500/15   dark:text-slate-300   @endif">
+                                                <i class="bi {{ $icon }}"></i> {{ $label }}
+                                            </span>
+                                            <span class="font-semibold text-sm text-slate-800 dark:text-slate-200">{{ $sectionLabel }}</span>
+                                            @if($d->attempts > 1)
+                                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400">
+                                                    ลอง {{ $d->attempts }} ครั้ง
+                                                </span>
+                                            @endif
+                                        </div>
+
+                                        <div class="text-xs text-slate-500 dark:text-slate-400 space-x-3">
+                                            <span>
+                                                <i class="bi bi-clock"></i>
+                                                @if($d->sent_at)
+                                                    ส่งเมื่อ {{ \Carbon\Carbon::parse($d->sent_at)->format('d/m/Y H:i:s') }}
+                                                @else
+                                                    สร้าง {{ \Carbon\Carbon::parse($d->created_at)->format('d/m/Y H:i:s') }}
+                                                @endif
+                                            </span>
+                                            @if($d->http_status)
+                                                <span><i class="bi bi-globe"></i> HTTP {{ $d->http_status }}</span>
+                                            @endif
+                                            <span class="font-mono text-[10px] text-slate-400">{{ $idem }}</span>
+                                        </div>
+
+                                        @if($d->payload_summary)
+                                            <div class="text-sm text-slate-700 dark:text-slate-300 mt-1.5 whitespace-pre-line line-clamp-2">
+                                                {{ $d->payload_summary }}
+                                            </div>
+                                        @endif
+
+                                        @if($d->error)
+                                            <div class="mt-2 px-3 py-2 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-xs text-rose-700 dark:text-rose-300">
+                                                <i class="bi bi-exclamation-circle"></i>
+                                                <strong>Error:</strong> {{ \Illuminate\Support\Str::limit($d->error, 200) }}
+                                            </div>
+                                        @endif
+                                    </div>
+                                </div>
+
+                                {{-- Inline image grid — for image-type pushes,
+                                     show what was actually sent so an admin
+                                     can verify "yes, the customer received
+                                     these specific photos in their chat". --}}
+                                @if(count($imageUrls) > 0)
+                                    <div class="mt-2 grid grid-cols-3 sm:grid-cols-5 gap-2">
+                                        @foreach(array_slice($imageUrls, 0, 5) as $url)
+                                            <a href="{{ $url }}" target="_blank" rel="noopener"
+                                               class="relative block aspect-square overflow-hidden rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-900 group">
+                                                <img src="{{ $url }}" alt="" loading="lazy"
+                                                     class="w-full h-full object-cover group-hover:scale-105 transition"
+                                                     onerror="this.style.opacity='0.3'; this.alt='⚠️'">
+                                                <div class="absolute inset-0 ring-1 ring-inset ring-black/5 dark:ring-white/5"></div>
+                                            </a>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+
+                    {{-- Footer hint — explains the dedup mechanism so the
+                         admin understands why "ลอง N ครั้ง" doesn't equal
+                         "spammed customer N times". --}}
+                    <div class="px-5 py-3 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400">
+                        <i class="bi bi-shield-check"></i>
+                        ระบบกันส่งซ้ำด้วย <code class="font-mono">idempotency_key</code> + unique index
+                        — กดอนุมัติซ้ำหรือ retry ไม่ทำให้ลูกค้าได้รูปซ้ำ
+                    </div>
+                </section>
+            @elseif(!empty($lineDeliveries))
+                {{-- Empty state — table exists but no rows for this order.
+                     Renders only when the order has reached a status that
+                     should have triggered LINE (paid + LINE-linked customer)
+                     so admins can tell apart "customer didn't link LINE"
+                     from "delivery never fired". --}}
+                @if($order->status === 'paid' && $order->user)
+                    @php
+                        $userHadLine = false;
+                        try {
+                            $userHadLine = \Illuminate\Support\Facades\DB::table('auth_social_logins')
+                                ->where('user_id', $order->user_id)
+                                ->where('provider', 'line')
+                                ->exists();
+                        } catch (\Throwable) {}
+                    @endphp
+                    @if($userHadLine)
+                        <section class="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-2xl p-5">
+                            <h2 class="font-bold text-amber-900 dark:text-amber-200 mb-1">
+                                <i class="bi bi-exclamation-triangle-fill"></i> ยังไม่มีการส่ง LINE
+                            </h2>
+                            <p class="text-sm text-amber-800 dark:text-amber-300/80">
+                                ลูกค้าเชื่อม LINE แล้ว แต่ระบบยังไม่มี audit row ใน <code class="font-mono">line_deliveries</code>
+                                — อาจเพราะ <strong>line_messaging_enabled</strong> ปิด หรือ
+                                <strong>line_channel_access_token</strong> ยังไม่ตั้ง
+                                — ตรวจที่ <a href="{{ route('admin.settings.line') }}" class="underline font-semibold">/admin/settings/line</a>
+                            </p>
+                        </section>
+                    @endif
+                @endif
+            @endif
+
             {{-- ── Payment transactions ── --}}
             @if($order->transactions && $order->transactions->count())
                 <section class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm overflow-hidden">

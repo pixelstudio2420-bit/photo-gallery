@@ -138,21 +138,36 @@ class PhotoDeliveryService
             return $this->fallback($order, 'LINE ไม่ได้เชื่อมต่อ');
         }
 
-        // Dispatch the actual delivery to a job. The webhook flow that
-        // calls deliver() (post-payment + admin-approval paths) needs to
-        // ack within seconds — running the LINE pushes inline can pin
-        // a worker for ~30s when LINE is congested. The job emits its
-        // pushes through SendLinePushJob, so each one is retried on
-        // 5xx and audited in line_deliveries.
-        \App\Jobs\Line\DeliverOrderViaLineJob::dispatch($order->id);
+        // Inline-vs-queue dispatch.
+        //
+        // Default INLINE because Laravel Cloud installs without a
+        // dedicated `notifications` queue worker would otherwise see
+        // DeliverOrderViaLineJob rows pile up in the jobs table while
+        // line_deliveries.status stays 'pending' forever — the
+        // customer gets no photos in chat and the admin has no signal
+        // anything went wrong. dispatchSync runs the whole delivery
+        // chain inside the slip-approve HTTP request (~3-15s on a
+        // 30-photo order, acceptable for the certainty it provides).
+        //
+        // Operators with a `php artisan queue:work --queue=notifications`
+        // worker can flip `line_delivery_inline` to '0' to restore
+        // async dispatch and keep the admin click instant.
+        $inline = (string) AppSetting::get('line_delivery_inline', '1') === '1';
+        if ($inline) {
+            \App\Jobs\Line\DeliverOrderViaLineJob::dispatchSync($order->id);
+        } else {
+            \App\Jobs\Line\DeliverOrderViaLineJob::dispatch($order->id);
+        }
 
         $url = route('orders.show', $order->id);
         // delivery_status enum is ['pending','sent','delivered','failed','partial'].
         // 'sent' = we handed it off; SendLinePushJob's audit trail
         // (line_deliveries) is the source of truth for actual delivery.
         return [
-            'status'  => 'sent',
-            'message' => 'จัดคิวการแจ้งเตือนทาง LINE แล้ว',
+            'status'  => $inline ? 'delivered' : 'sent',
+            'message' => $inline
+                ? 'ส่งรูปเข้า LINE สำเร็จ'
+                : 'จัดคิวการแจ้งเตือนทาง LINE แล้ว',
             'url'     => $url,
         ];
     }
