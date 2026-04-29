@@ -62,6 +62,7 @@ class AppServiceProvider extends ServiceProvider
         try {
             if (\Illuminate\Support\Facades\Schema::hasTable('app_settings')) {
                 $this->applyDynamicStorageConfig();
+                $this->applyDynamicOAuthConfig();
             }
         } catch (\Throwable) {
             // First-run / migration boot — settings table doesn't exist yet.
@@ -181,6 +182,61 @@ class AppServiceProvider extends ServiceProvider
                 }
             } catch (\Throwable) {
                 // Individual setting read failure — skip, don't abort boot.
+            }
+        }
+    }
+
+    /**
+     * Bridge OAuth credentials from admin AppSettings into Laravel's
+     * `services.*` config namespace so Socialite + the hand-rolled LINE
+     * flow can read them at runtime.
+     *
+     * Why this is necessary
+     * ---------------------
+     * The original config in config/services.php only sources values
+     * from env(). Once the project moved to admin-managed credentials
+     * (so an operator can paste a new Google Client ID in the UI without
+     * editing .env and redeploying), the SocialAuthController had to
+     * call its own `hydrateConfig()` before each redirect/callback.
+     * That worked for the photographer-side OAuth flow, but anything
+     * else touching `config('services.google.client_id')` directly —
+     * the public-side AuthController, future API consumers, queue
+     * jobs that resend a verification email — would still see the
+     * empty env value and fail.
+     *
+     * Hydrating once at boot covers every code path uniformly.
+     *
+     * Settings keys (managed via /admin/settings/social-auth)
+     *   - google_client_id          → services.google.client_id
+     *   - google_client_secret      → services.google.client_secret
+     *   - line_login_channel_id     → services.line.client_id
+     *   - line_login_channel_secret → services.line.client_secret
+     *
+     * Redirect URIs are NOT mirrored here — they're route-derived
+     * (route('photographer.auth.callback', ['provider' => …])) and
+     * therefore belong to the controller that builds them.
+     *
+     * Empty values pass through unchanged, so an unset admin field
+     * leaves the env-based default intact (good for local dev where
+     * .env still works fine).
+     */
+    private function applyDynamicOAuthConfig(): void
+    {
+        $map = [
+            'google_client_id'          => 'services.google.client_id',
+            'google_client_secret'      => 'services.google.client_secret',
+            'line_login_channel_id'     => 'services.line.client_id',
+            'line_login_channel_secret' => 'services.line.client_secret',
+        ];
+
+        foreach ($map as $settingKey => $configPath) {
+            try {
+                $value = \App\Models\AppSetting::get($settingKey, '');
+                if ($value !== '' && $value !== null) {
+                    config([$configPath => $value]);
+                }
+            } catch (\Throwable) {
+                // Schema not ready / row missing — fall back to env.
             }
         }
     }

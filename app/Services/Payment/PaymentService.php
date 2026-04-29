@@ -39,22 +39,69 @@ class PaymentService
     // ----------------------------------------------------------------
 
     /**
+     * Map of method_type → AppSetting key that admin uses to enable/
+     * disable that gateway. method_types not listed here are always
+     * enabled (e.g. bank_transfer is gated by BankAccount rows
+     * existing rather than a flag, and manual is the always-on
+     * fallback).
+     */
+    private const ENABLED_FLAG_MAP = [
+        'stripe'      => 'stripe_enabled',
+        'omise'       => 'omise_enabled',
+        'paypal'      => 'paypal_enabled',
+        'line_pay'    => 'line_pay_enabled',
+        'promptpay'   => 'promptpay_enabled',
+        'truemoney'   => 'truemoney_enabled',
+        'two_c_two_p' => '2c2p_enabled',
+    ];
+
+    /**
+     * Is this gateway turned on by the admin AND configured (creds set)?
+     *
+     * Two independent checks, both must pass:
+     *
+     *   1. The admin toggle in /admin/settings/payment-gateways. We
+     *      treat "no setting recorded yet" as ON for backward compat
+     *      — installations that had this gateway working before the
+     *      enabled-flag was respected shouldn't suddenly hide their
+     *      configured method on first deploy of this fix.
+     *
+     *   2. The gateway's own isAvailable() — credentials/keys present.
+     *
+     * Both gates are necessary because the previous behaviour ignored
+     * the toggle entirely: an admin could untick "Stripe Enabled" but
+     * the secret key was still in AppSettings, so isAvailable() said
+     * "yes" and the method showed up at checkout.
+     */
+    public static function isGatewayEnabled(string $methodType): bool
+    {
+        // Step 1 — admin toggle. Default '1' (enabled) when no row
+        // exists so legacy configurations don't suddenly disappear.
+        $flagKey = self::ENABLED_FLAG_MAP[$methodType] ?? null;
+        if ($flagKey !== null) {
+            if ((string) AppSetting::get($flagKey, '1') !== '1') {
+                return false;
+            }
+        }
+
+        // Step 2 — gateway-specific configuration check.
+        try {
+            return self::createGateway($methodType)->isAvailable();
+        } catch (\InvalidArgumentException) {
+            return false;
+        }
+    }
+
+    /**
      * Return active payment methods from DB, enriched with gateway availability.
      *
      * @return \Illuminate\Support\Collection<PaymentMethod>
      */
     public static function getActiveGateways()
     {
-        $methods = PaymentMethod::active()->get();
-
-        return $methods->filter(function (PaymentMethod $method) {
-            try {
-                $gateway = self::createGateway($method->method_type);
-                return $gateway->isAvailable();
-            } catch (\InvalidArgumentException) {
-                return false;
-            }
-        })->values();
+        return PaymentMethod::active()->get()
+            ->filter(fn (PaymentMethod $m) => self::isGatewayEnabled($m->method_type))
+            ->values();
     }
 
     // ----------------------------------------------------------------
@@ -63,9 +110,19 @@ class PaymentService
 
     /**
      * Route an order to the correct gateway and return the initiate() result.
+     *
+     * Server-side check on the enabled flag — without this, a user could
+     * craft a POST to /payment/process with a method_type the admin has
+     * disabled in the UI (e.g. Stripe is unticked) and still get a charge
+     * link out of us. The client-side filter at /payment/checkout/{order}
+     * is for UX; this is the actual gate.
      */
     public static function processPayment(Order $order, string $methodType): array
     {
+        if (!self::isGatewayEnabled($methodType)) {
+            throw new \InvalidArgumentException("ช่องทาง '{$methodType}' ไม่เปิดใช้งานอยู่");
+        }
+
         $gateway     = self::createGateway($methodType);
         $transaction = self::createTransaction($order, $methodType);
 
