@@ -119,25 +119,77 @@ class PaymentVerificationService
             );
         }
 
-        // ── 6. HARD: timing sanity ─────────────────────────────────────
+        // ── 6. Timing sanity ───────────────────────────────────────────
+        //
+        // We check three timing problems:
+        //   - slip_predates_order  — slip transaction time is before the
+        //     order's created_at (impossible for legit "pay for THIS order")
+        //   - slip_too_old         — transaction older than the cap (recycled
+        //     slip from a previous order being replayed)
+        //   - slip_in_future       — transaction time after `now()` (clock
+        //     skew or fake)
+        //
+        // Two important behaviour changes from the original implementation:
+        //
+        // 1. The "before order" check is now a SOFT WARNING by default,
+        //    not a hard reject. Real-world Thai customer behaviour:
+        //
+        //       a) Order created at 14:00:30, customer transfers at 14:00:00
+        //          (they prepared the transfer in another tab).
+        //       b) Bank app shows transaction time rounded down to the
+        //          minute — slip says 14:00, order created_at 14:00:31.
+        //       c) SlipOK / OCR returns the time in the bank's local TZ
+        //          but server-side Carbon parses it without TZ awareness.
+        //       d) Customer's phone clock is a few minutes off from
+        //          server's NTP-synced clock.
+        //
+        //    All four cases produce a slip dated "before" the order by a
+        //    handful of minutes and were rejecting legitimate payments.
+        //    A soft warning lets the admin review on the slip-review
+        //    page instead of bouncing the upload back to the customer.
+        //
+        // 2. Both the tolerance and the hard-reject behaviour are now
+        //    configurable via AppSettings so an operator can tighten the
+        //    rule once they've quantified their fraud rate:
+        //
+        //      slip_predate_tolerance_minutes   default: 30
+        //      slip_predate_hard_reject         default: '0' (soft)
+        //      slip_max_age_days                default: 30
+        //      slip_future_tolerance_minutes    default: 5
         try {
             $slipTime  = Carbon::parse((string) ($context['transfer_date'] ?? 'now'));
             $orderTime = Carbon::parse((string) ($context['order_created_at'] ?? $order->created_at));
             $now       = Carbon::now();
 
+            $predateTolMinutes = max(0, (int) \App\Models\AppSetting::get('slip_predate_tolerance_minutes', '30'));
+            $predateHardReject = (string) \App\Models\AppSetting::get('slip_predate_hard_reject', '0') === '1';
+            $maxAgeDays        = max(1, (int) \App\Models\AppSetting::get('slip_max_age_days', '30'));
+            $futureTolMinutes  = max(1, (int) \App\Models\AppSetting::get('slip_future_tolerance_minutes', '5'));
+
             $checks['slip_minutes_before_order'] = $orderTime->diffInMinutes($slipTime, false);
-            // Slip dated BEFORE order — impossible for it to be payment FOR this order.
-            if ($slipTime->lt($orderTime->copy()->subMinutes(2))) {  // 2-min clock-skew tolerance
+
+            // Slip dated before order beyond the configured tolerance →
+            // raise a flag. Whether that flag turns into a hard reject
+            // depends on the operator's setting — by default it's a
+            // soft signal that pushes the slip into admin review.
+            if ($slipTime->lt($orderTime->copy()->subMinutes($predateTolMinutes))) {
                 $fraudFlags[] = 'slip_predates_order';
-                $hardReject = $hardReject ?? 'Slip is dated before the order was created.';
+                if ($predateHardReject) {
+                    $hardReject = $hardReject ?? 'Slip is dated before the order was created.';
+                }
             }
-            // Slip older than 30 days — stale slip recycling
-            if ($slipTime->lt($now->copy()->subDays(30))) {
+
+            // Stale slip recycling — clear hard fraud signal regardless
+            // of tolerance settings, so this stays a hard reject.
+            if ($slipTime->lt($now->copy()->subDays($maxAgeDays))) {
                 $fraudFlags[] = 'slip_too_old';
-                $hardReject = $hardReject ?? 'Slip is older than 30 days.';
+                $hardReject = $hardReject ?? sprintf('Slip is older than %d days.', $maxAgeDays);
             }
-            // Slip in the future — impossible
-            if ($slipTime->gt($now->copy()->addMinutes(5))) {
+
+            // Future-dated slip — likewise a hard reject. The tolerance
+            // here covers minor clock skew between customer phone and
+            // server.
+            if ($slipTime->gt($now->copy()->addMinutes($futureTolMinutes))) {
                 $fraudFlags[] = 'slip_in_future';
                 $hardReject = $hardReject ?? 'Slip date is in the future.';
             }
