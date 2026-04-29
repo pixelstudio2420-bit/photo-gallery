@@ -18,7 +18,6 @@ backup_*.zip
 
 # ─── Logs ────────────────────────────────────────
 *.log
-storage/logs/
 storage/pail/
 
 # ─── Build artifacts & caches ────────────────────
@@ -29,6 +28,11 @@ storage/pail/
 /.phpunit.cache
 .phpunit.result.cache
 .phpactor.json
+
+# ─── Laravel runtime (keep dirs tracked via per-subdir .gitignore,
+#       but ignore the runtime contents inside) ─
+database/database.sqlite
+database/database.sqlite-journal
 
 # ─── Dependencies ────────────────────────────────
 /vendor
