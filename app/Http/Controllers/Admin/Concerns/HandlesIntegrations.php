@@ -580,6 +580,81 @@ trait HandlesIntegrations
 
         AppSetting::setMany($items);
 
+        // Mirror the enable toggles into payment_methods.is_active so the
+        // two admin pages — /admin/settings/payment-gateways here, and
+        // /admin/payments/methods which lists payment_methods rows — stay
+        // in lock-step. Without this sync, an admin who unticks "Stripe
+        // Enabled" here would still see Stripe as active over there
+        // (and at customer checkout), since checkout queries
+        // PaymentMethod::active() not the AppSetting toggle.
+        //
+        // The map mirrors PaymentService::ENABLED_FLAG_MAP — keep them
+        // aligned if a new gateway is added.
+        $flagToMethod = [
+            'stripe_enabled'    => 'stripe',
+            'omise_enabled'     => 'omise',
+            'paypal_enabled'    => 'paypal',
+            'line_pay_enabled'  => 'line_pay',
+            'promptpay_enabled' => 'promptpay',
+            'truemoney_enabled' => 'truemoney',
+            '2c2p_enabled'      => 'two_c_two_p',
+        ];
+
+        foreach ($flagToMethod as $flagKey => $methodType) {
+            if (!array_key_exists($flagKey, $items)) {
+                continue; // gateway absent from this form submission — skip
+            }
+            $isActive = $items[$flagKey] === '1';
+
+            // updateOrInsert so a brand-new install (where the seeder
+            // missed this method type) gets a row created the first time
+            // an admin enables it, instead of silently failing.
+            try {
+                \Illuminate\Support\Facades\DB::table('payment_methods')->updateOrInsert(
+                    ['method_type' => $methodType],
+                    [
+                        'method_type' => $methodType,
+                        'is_active'   => $isActive,
+                        // Only set method_name on insert (don't clobber
+                        // an admin-edited display name on update).
+                        'method_name' => \Illuminate\Support\Facades\DB::table('payment_methods')
+                                            ->where('method_type', $methodType)
+                                            ->value('method_name')
+                                            ?? $this->defaultMethodName($methodType),
+                    ]
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('payment_methods sync failed', [
+                    'method_type' => $methodType,
+                    'is_active'   => $isActive,
+                    'error'       => $e->getMessage(),
+                ]);
+                // Non-fatal — the AppSetting flag still saved, so
+                // PaymentService::isGatewayEnabled() will still see the
+                // change at checkout time even if the row sync glitched.
+            }
+        }
+
         return back()->with('success', 'บันทึกการตั้งค่า Payment Gateways สำเร็จ');
+    }
+
+    /**
+     * Display name fallback used when seeding a brand-new payment_methods
+     * row from the gateway settings page (i.e. a gateway type that was
+     * absent from the original seeder migration). The admin can rename
+     * it anytime via /admin/payments/methods.
+     */
+    private function defaultMethodName(string $type): string
+    {
+        return match ($type) {
+            'stripe'      => 'บัตรเครดิต/เดบิต (Stripe)',
+            'omise'       => 'บัตรเครดิต/เดบิต (Omise)',
+            'paypal'      => 'PayPal',
+            'line_pay'    => 'LINE Pay',
+            'promptpay'   => 'PromptPay',
+            'truemoney'   => 'TrueMoney Wallet',
+            'two_c_two_p' => '2C2P',
+            default       => ucfirst(str_replace('_', ' ', $type)),
+        };
     }
 }
