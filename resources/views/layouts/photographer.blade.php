@@ -108,16 +108,21 @@
              x-transition:leave-start="opacity-100 scale-100"
              x-transition:leave-end="opacity-0 scale-95"
              x-cloak
-             {{-- Width strategy:
-                  - Aim for 340px (the design-system default).
-                  - Cap at calc(100vw - 1rem) so on a 320px iPhone SE
-                    the panel still leaves 8px of breathing room on
-                    each side instead of overflowing the viewport.
-                  - Anchored right-0 so it tucks under the bell icon on
-                    every breakpoint (no awkward "centered on phone,
-                    right-aligned on desktop" jump). --}}
-             class="absolute right-0 mt-2 z-50
-                    w-[340px] max-w-[calc(100vw-1rem)]
+             {{-- Position strategy:
+                  - Mobile (<sm): position:fixed, anchored 12px from
+                    each edge of the viewport (`inset-x-3`) so the
+                    panel sits in the centre with equal breathing
+                    room on both sides — no longer hugging the bell
+                    icon at the top-right corner. `top-16` clears the
+                    photographer navbar (h-14 = 56px) plus an 8px gap.
+                  - sm+: revert to absolute right-0 + width 340px so
+                    the dropdown tucks neatly under the bell icon on
+                    laptops/desktops where the whole right side of
+                    the navbar is visible. --}}
+             class="fixed inset-x-3 top-16 sm:inset-x-auto sm:top-auto
+                    sm:absolute sm:right-0 sm:mt-2
+                    z-50
+                    w-auto sm:w-[340px]
                     max-h-[75vh] sm:max-h-[450px]
                     overflow-hidden rounded-xl shadow-2xl
                     bg-white border-0 p-0 dark:bg-slate-800

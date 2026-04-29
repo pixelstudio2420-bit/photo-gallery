@@ -146,13 +146,21 @@
                aria-hidden="true"></div>
 
           {{-- Notification dropdown.
-               Width: aims for 380px (design default), but caps at
-                      calc(100vw - 1rem) so on a 320px-wide iPhone SE
-                      it doesn't punch through the viewport edge.
-               Height: 75vh on phones (room for the URL bar + system
-                      gestures), capped at 520px on tablets+. --}}
-          <div class="absolute right-0 mt-2 z-50
-                      w-[380px] max-w-[calc(100vw-1rem)]
+               Position:
+                  - Mobile (<sm): position:fixed, anchored 12px from
+                    each edge of the viewport (`inset-x-3`) so the
+                    panel sits centred with equal breathing room
+                    instead of hugging the bell at the top-right
+                    corner. `top-16` clears the admin navbar height.
+                  - sm+: revert to `absolute right-0` so the panel
+                    tucks under the bell icon as a regular dropdown.
+               Height:
+                  - 75vh on phones (room for browser URL bar + system
+                    gestures), capped at 520px on tablets+. --}}
+          <div class="fixed inset-x-3 top-16 sm:inset-x-auto sm:top-auto
+                      sm:absolute sm:right-0 sm:mt-2
+                      z-50
+                      w-auto sm:w-[380px]
                       max-h-[75vh] sm:max-h-[520px]
                       overflow-hidden rounded-2xl shadow-2xl
                       bg-white border border-gray-100
