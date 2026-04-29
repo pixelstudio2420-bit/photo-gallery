@@ -1,0 +1,949 @@
+/* ============================================
+   Photo Gallery — Photographer CSS
+   ============================================ */
+
+:root {
+    --pg-sidebar-width: 250px;
+    --pg-sidebar-collapsed: 64px;
+    --pg-sidebar-bg: #2563eb;
+    --pg-sidebar-hover: rgba(255,255,255,0.15);
+    --pg-sidebar-active: rgba(255,255,255,0.25);
+    --pg-topbar-height: 56px;
+}
+
+body.photographer-layout {
+    background: #f0f4ff;
+    font-family: 'Sarabun', sans-serif;
+    margin: 0;
+    overflow-x: hidden;
+}
+
+/* ============================================
+   Sidebar
+   ============================================ */
+#pg-sidebar {
+    width: var(--pg-sidebar-width);
+    min-height: 100vh;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: width .3s ease;
+    z-index: 1040;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,.2) transparent;
+}
+
+#pg-sidebar::-webkit-scrollbar { width: 4px; }
+#pg-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,.2); border-radius: 2px; }
+
+/* Collapsed sidebar (desktop) */
+#pg-wrapper.sidebar-collapsed #pg-sidebar {
+    width: var(--pg-sidebar-collapsed);
+}
+#pg-wrapper.sidebar-collapsed .brand-text,
+#pg-wrapper.sidebar-collapsed .nav-link span,
+#pg-wrapper.sidebar-collapsed .nav-section-label,
+#pg-wrapper.sidebar-collapsed .sidebar-bottom-btn span {
+    display: none;
+}
+#pg-wrapper.sidebar-collapsed .sidebar-nav .nav-link {
+    justify-content: center;
+    padding: 10px;
+}
+#pg-wrapper.sidebar-collapsed .sidebar-brand {
+    justify-content: center;
+    padding: 1rem .5rem;
+}
+
+/* ============================================
+   Sidebar Nav Links
+   ============================================ */
+.sidebar-nav .nav-link {
+    color: rgba(255,255,255,.8);
+    border-radius: 8px;
+    padding: 9px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    white-space: nowrap;
+    transition: all .2s;
+    font-size: .88rem;
+    text-decoration: none;
+    margin-bottom: 2px;
+    min-height: 40px;
+}
+
+.sidebar-nav .nav-link i {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    width: 22px;
+    text-align: center;
+}
+
+.sidebar-nav .nav-link:hover {
+    background: var(--pg-sidebar-hover);
+    color: #fff;
+}
+
+.sidebar-nav .nav-link.active {
+    background: var(--pg-sidebar-active);
+    color: #fff;
+    font-weight: 600;
+}
+
+.nav-section-label {
+    font-size: .68rem;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: rgba(255,255,255,.4);
+    padding: 0 12px;
+    margin-bottom: 4px;
+}
+
+.sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 1rem;
+    font-size: 1.05rem;
+}
+
+/* ============================================
+   Top Bar
+   ============================================ */
+.pg-topbar {
+    height: var(--pg-topbar-height);
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    padding: 0 1.25rem;
+    position: sticky;
+    top: 0;
+    z-index: 1030;
+}
+
+.pg-topbar .page-title {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #1f2937;
+}
+
+/* ============================================
+   Main Content
+   ============================================ */
+.pg-main {
+    padding: 1.5rem;
+    flex: 1;
+}
+
+/* ============================================
+   Stat Cards
+   ============================================ */
+.stat-card {
+    border-radius: .75rem;
+    transition: transform .2s, box-shadow .2s;
+}
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,.08) !important;
+}
+
+/* ============================================
+   Drive link input
+   ============================================ */
+.drive-link-input {
+    font-family: monospace;
+    font-size: 0.85rem;
+}
+
+/* ============================================
+   Tables
+   ============================================ */
+.table-responsive {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ============================================
+   Prevent iOS auto-zoom on input focus
+   ============================================ */
+@media screen and (max-width: 768px) {
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    input[type="tel"],
+    input[type="url"],
+    input[type="search"],
+    input[type="date"],
+    input[type="datetime-local"],
+    input[type="time"],
+    select,
+    textarea,
+    .form-control,
+    .form-select {
+        font-size: 16px !important;
+    }
+}
+
+/* ============================================
+   RESPONSIVE: Tablet (≤991px)
+   ============================================ */
+@media (max-width: 991.98px) {
+    /* Sidebar: overlay */
+    #pg-sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: var(--pg-sidebar-width);
+        transform: translateX(-100%);
+        transition: transform .3s ease;
+        z-index: 1050;
+    }
+
+    #pg-wrapper.sidebar-open #pg-sidebar {
+        transform: translateX(0);
+    }
+
+    /* Backdrop */
+    #pg-wrapper.sidebar-open::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.4);
+        z-index: 1045;
+        backdrop-filter: blur(2px);
+    }
+
+    /* Disable collapsed class on mobile */
+    #pg-wrapper.sidebar-collapsed #pg-sidebar {
+        width: var(--pg-sidebar-width);
+        transform: translateX(-100%);
+    }
+    #pg-wrapper.sidebar-collapsed.sidebar-open #pg-sidebar {
+        transform: translateX(0);
+    }
+    #pg-wrapper.sidebar-collapsed .brand-text,
+    #pg-wrapper.sidebar-collapsed .nav-link span,
+    #pg-wrapper.sidebar-collapsed .nav-section-label,
+    #pg-wrapper.sidebar-collapsed .sidebar-bottom-btn span {
+        display: inline;
+    }
+    #pg-wrapper.sidebar-collapsed .sidebar-nav .nav-link {
+        justify-content: flex-start;
+        padding: 9px 12px;
+    }
+    #pg-wrapper.sidebar-collapsed .sidebar-brand {
+        justify-content: flex-start;
+        padding: 1rem;
+    }
+
+    /* Content full width */
+    #pg-content {
+        width: 100%;
+    }
+
+    .pg-main {
+        padding: 1rem;
+    }
+
+    /* Navbar compact */
+    .pg-topbar {
+        padding: 0 .75rem;
+    }
+    .pg-topbar .photographer-name {
+        display: none;
+    }
+}
+
+/* ============================================
+   RESPONSIVE: Mobile (≤767px)
+   ============================================ */
+@media (max-width: 767.98px) {
+    .pg-main {
+        padding: .75rem;
+    }
+
+    /* Stat cards: 2 columns */
+    .row .col-sm-6.col-xl-3 {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+
+    .stat-card .card-body {
+        padding: .75rem;
+        gap: .5rem !important;
+    }
+    .stat-card .card-body .fs-4 {
+        font-size: 1.1rem !important;
+    }
+    .stat-card .card-body .p-3 {
+        padding: .6rem !important;
+    }
+    .stat-card .card-body .fs-4 i,
+    .stat-card .card-body i.fs-4 {
+        font-size: 1.2rem !important;
+    }
+
+    /* Tables */
+    .table th, .table td {
+        font-size: .8rem;
+        padding: .5rem .4rem;
+        white-space: nowrap;
+    }
+
+    /* Cards */
+    .card-header {
+        padding: .6rem .75rem;
+        font-size: .9rem;
+    }
+    .card-body {
+        padding: .75rem;
+    }
+
+    /* Buttons */
+    .btn { font-size: .85rem; }
+    .d-flex.gap-2.flex-wrap .btn {
+        flex: 1 1 auto;
+        text-align: center;
+    }
+
+    /* Chart responsive */
+    canvas {
+        max-height: 250px !important;
+    }
+
+    /* Forms */
+    .form-control, .form-select {
+        font-size: .88rem;
+    }
+
+    h4, .h4 { font-size: 1.2rem; }
+    h5, .h5 { font-size: 1.05rem; }
+}
+
+/* ============================================
+   RESPONSIVE: Small Mobile (≤480px)
+   ============================================ */
+@media (max-width: 480px) {
+    :root {
+        --pg-sidebar-width: 260px;
+    }
+
+    .pg-main {
+        padding: .5rem;
+    }
+
+    .stat-card .card-body {
+        flex-direction: column;
+        text-align: center;
+        gap: .3rem !important;
+    }
+
+    /* Quick action buttons stack */
+    .d-flex.gap-2.flex-wrap {
+        flex-direction: column;
+    }
+    .d-flex.gap-2.flex-wrap .btn {
+        width: 100%;
+    }
+
+    /* Summary cards in earnings */
+    .summary-card, .summary-box {
+        padding: .75rem .5rem;
+    }
+    .summary-num, .fs-5 {
+        font-size: 1rem !important;
+    }
+}
+
+/* ============================================
+   Touch Devices
+   ============================================ */
+@media (hover: none) and (pointer: coarse) {
+    .sidebar-nav .nav-link {
+        min-height: 44px;
+        padding: 10px 12px;
+    }
+
+    .btn {
+        min-height: 40px;
+    }
+
+    .stat-card:hover {
+        transform: none;
+        box-shadow: 0 .125rem .25rem rgba(0,0,0,.075) !important;
+    }
+}
+
+/* ============================================
+   Print
+   ============================================ */
+@media print {
+    #pg-sidebar,
+    .pg-topbar,
+    #sidebarToggle,
+    .btn { display: none !important; }
+
+    .pg-main {
+        padding: 0;
+    }
+
+    body.photographer-layout {
+        background: #fff;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PHOTOGRAPHER PAGE THEME — matches auth flow (indigo→purple→pink)
+   Add `class="pg-page"` to the dashboard <main> wrapper and use the
+   utilities below for consistent gradient hero + glass cards everywhere.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Page background — applied via <body data-pg-themed> or direct class */
+.pg-page-bg{
+    background:
+        radial-gradient(900px 500px at 15% -10%, rgba(99,102,241,.15), transparent 60%),
+        radial-gradient(800px 500px at 85% 15%, rgba(236,72,153,.10), transparent 60%),
+        linear-gradient(160deg,#f8fafc 0%,#f1f5f9 60%,#ede9fe 100%);
+    min-height: calc(100vh - 64px);
+}
+html.dark .pg-page-bg{
+    background:
+        radial-gradient(900px 500px at 15% -10%, rgba(99,102,241,.20), transparent 60%),
+        radial-gradient(800px 500px at 85% 15%, rgba(236,72,153,.15), transparent 60%),
+        linear-gradient(160deg,#020617 0%,#0f172a 60%,#1e1b4b 100%);
+}
+
+/* Page header — gradient title row */
+.pg-hero{
+    display: flex; align-items: flex-start; justify-content: space-between;
+    flex-wrap: wrap; gap: 1rem;
+    padding-bottom: 1.25rem; margin-bottom: 1.5rem;
+    border-bottom: 1px solid rgba(99,102,241,.08);
+}
+html.dark .pg-hero{ border-bottom-color: rgba(255,255,255,.06); }
+
+.pg-hero-title{
+    font-weight: 800; font-size: 1.5rem; letter-spacing: -0.02em;
+    margin: 0; line-height: 1.2;
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 45%, #ec4899 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+@media (min-width: 640px){ .pg-hero-title{ font-size: 1.75rem; } }
+
+.pg-hero-eyebrow{
+    font-size: .68rem; font-weight: 800; letter-spacing: .18em;
+    text-transform: uppercase; color: #64748b;
+    margin: 0 0 .25rem; display: inline-flex; align-items: center; gap: .35rem;
+}
+html.dark .pg-hero-eyebrow{ color: #94a3b8; }
+.pg-hero-eyebrow i{ color: #7c3aed; }
+
+.pg-hero-subtitle{
+    font-size: .85rem; color: #64748b; margin: .35rem 0 0; line-height: 1.5;
+}
+html.dark .pg-hero-subtitle{ color: #94a3b8; }
+
+.pg-hero-icon{
+    width: 48px; height: 48px; border-radius: 14px;
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 45%, #ec4899 100%);
+    color: #fff; font-size: 1.4rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    box-shadow: 0 8px 20px -4px rgba(124,58,237,.4);
+    flex-shrink: 0;
+}
+
+.pg-hero-actions{ display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+
+/* Glass card — semi-transparent panel that lets the page bg show through */
+.pg-glass{
+    background: rgba(255,255,255,.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(99,102,241,.1);
+    border-radius: 18px;
+    box-shadow: 0 4px 20px -4px rgba(99,102,241,.06), 0 1px 3px rgba(0,0,0,.03);
+}
+html.dark .pg-glass{
+    background: rgba(15,23,42,.7);
+    border-color: rgba(255,255,255,.06);
+    box-shadow: 0 4px 20px -4px rgba(0,0,0,.4);
+}
+
+/* Solid card (less transparent variant) */
+.pg-card{
+    background: #fff;
+    border: 1px solid rgba(99,102,241,.08);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+html.dark .pg-card{
+    background: #0f172a;
+    border-color: rgba(255,255,255,.06);
+}
+
+/* Stat card — gradient pastel bg */
+.pg-stat{
+    padding: 1rem 1.15rem;
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(99,102,241,.06), rgba(236,72,153,.04));
+    border: 1px solid rgba(99,102,241,.08);
+}
+html.dark .pg-stat{
+    background: linear-gradient(135deg, rgba(99,102,241,.12), rgba(236,72,153,.06));
+    border-color: rgba(255,255,255,.06);
+}
+
+.pg-stat-label{
+    font-size: .65rem; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .12em; color: #64748b; margin-bottom: .35rem;
+}
+html.dark .pg-stat-label{ color: #94a3b8; }
+
+.pg-stat-value{
+    font-weight: 800; font-size: 1.5rem; color: #0f172a;
+    letter-spacing: -0.01em; line-height: 1;
+}
+html.dark .pg-stat-value{ color: #f1f5f9; }
+
+.pg-stat-meta{
+    font-size: .72rem; color: #94a3b8; margin-top: .35rem; display: inline-flex; align-items: center; gap: .25rem;
+}
+
+/* Button styles for pages */
+.pg-btn-primary{
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .55rem 1rem; border-radius: 10px;
+    font-size: .82rem; font-weight: 700;
+    background: linear-gradient(135deg, #4f46e5, #7c3aed, #ec4899);
+    color: #fff; border: none; cursor: pointer;
+    box-shadow: 0 6px 16px -4px rgba(124,58,237,.4);
+    transition: transform .15s, box-shadow .2s, filter .2s;
+    text-decoration: none;
+}
+.pg-btn-primary:hover{
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px -4px rgba(124,58,237,.55);
+    filter: brightness(1.05);
+    color: #fff;
+}
+
+.pg-btn-ghost{
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .5rem .9rem; border-radius: 10px;
+    font-size: .8rem; font-weight: 600;
+    background: rgba(99,102,241,.06);
+    color: #4338ca;
+    border: 1px solid rgba(99,102,241,.12);
+    transition: all .15s;
+    text-decoration: none;
+}
+.pg-btn-ghost:hover{
+    background: rgba(99,102,241,.12);
+    border-color: rgba(99,102,241,.25);
+    color: #4338ca;
+}
+html.dark .pg-btn-ghost{
+    background: rgba(99,102,241,.15);
+    color: #a5b4fc;
+    border-color: rgba(99,102,241,.25);
+}
+html.dark .pg-btn-ghost:hover{
+    background: rgba(99,102,241,.25);
+    color: #c7d2fe;
+}
+
+/* Empty state */
+.pg-empty{
+    text-align: center; padding: 3rem 1.5rem;
+    color: #64748b;
+}
+html.dark .pg-empty{ color: #94a3b8; }
+.pg-empty-icon{
+    width: 64px; height: 64px; border-radius: 18px;
+    background: linear-gradient(135deg, rgba(99,102,241,.1), rgba(236,72,153,.08));
+    color: #7c3aed;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 1.75rem; margin-bottom: 1rem;
+}
+html.dark .pg-empty-icon{
+    background: linear-gradient(135deg, rgba(99,102,241,.2), rgba(236,72,153,.1));
+    color: #c7d2fe;
+}
+
+/* Section header inside cards */
+.pg-section-title{
+    font-size: 1rem; font-weight: 700; color: #0f172a;
+    letter-spacing: -0.01em; margin: 0 0 .85rem;
+    display: inline-flex; align-items: center; gap: .5rem;
+}
+html.dark .pg-section-title{ color: #f1f5f9; }
+.pg-section-title i{
+    color: #7c3aed;
+    background: rgba(124,58,237,.1);
+    width: 28px; height: 28px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: .9rem;
+}
+html.dark .pg-section-title i{ background: rgba(124,58,237,.2); color: #c7d2fe; }
+
+/* Animated entrance */
+@keyframes pgfade{ from{opacity:0;transform:translateY(8px);} to{opacity:1;transform:translateY(0);} }
+.pg-anim{ animation: pgfade .4s ease-out both; }
+.pg-anim.d1{ animation-delay: .05s; }
+.pg-anim.d2{ animation-delay: .15s; }
+.pg-anim.d3{ animation-delay: .25s; }
+.pg-anim.d4{ animation-delay: .35s; }
+.pg-anim.d5{ animation-delay: .45s; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   UNIFIED CARD LAYOUT — header / body / footer pieces
+
+   Use as:
+     <div class="pg-card pg-card-padded">…</div>          plain padded card
+     <div class="pg-card overflow-hidden">                card with internal sections
+       <div class="pg-card-header">…</div>
+       <div class="pg-card-body">…</div>
+       <div class="pg-card-footer">…</div>
+     </div>
+
+   The flat .pg-card was already defined above; the helpers below add
+   structured sub-regions and an interactive lift on hover.
+   ═══════════════════════════════════════════════════════════════════════ */
+.pg-card-padded{ padding: 1.25rem; }
+@media (min-width: 768px){ .pg-card-padded{ padding: 1.5rem; } }
+
+.pg-card-hover{ transition: transform .25s, box-shadow .25s, border-color .2s; }
+.pg-card-hover:hover{
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px -8px rgba(99,102,241,.18);
+    border-color: rgba(124,58,237,.25);
+}
+html.dark .pg-card-hover:hover{
+    box-shadow: 0 12px 28px -8px rgba(124,58,237,.4);
+}
+
+.pg-card-header{
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid rgba(99,102,241,.08);
+    background: linear-gradient(180deg, rgba(99,102,241,.025), transparent);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: .75rem;
+}
+html.dark .pg-card-header{
+    border-bottom-color: rgba(255,255,255,.06);
+    background: linear-gradient(180deg, rgba(99,102,241,.05), transparent);
+}
+.pg-card-header h2,
+.pg-card-header h3,
+.pg-card-header h5{ margin: 0; font-weight: 700; color: #0f172a; font-size: 1rem; letter-spacing: -.01em; }
+html.dark .pg-card-header h2,
+html.dark .pg-card-header h3,
+html.dark .pg-card-header h5{ color: #f1f5f9; }
+
+.pg-card-body{ padding: 1.25rem; }
+@media (min-width: 768px){ .pg-card-body{ padding: 1.5rem; } }
+
+.pg-card-footer{
+    padding: .85rem 1.25rem;
+    border-top: 1px solid rgba(99,102,241,.08);
+    background: rgba(99,102,241,.02);
+    font-size: .82rem;
+    color: #64748b;
+}
+html.dark .pg-card-footer{
+    border-top-color: rgba(255,255,255,.06);
+    background: rgba(255,255,255,.02);
+    color: #94a3b8;
+}
+
+/* Card with subtle gradient corner gleam — for "primary" cards on a page */
+.pg-card-accent{ position: relative; overflow: hidden; }
+.pg-card-accent::before{
+    content: ''; position: absolute; top: 0; right: 0;
+    width: 160px; height: 160px;
+    background: radial-gradient(circle at top right, rgba(124,58,237,.18) 0%, transparent 65%);
+    pointer-events: none; opacity: .6;
+}
+html.dark .pg-card-accent::before{ opacity: .35; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   UNIFIED TABLE STYLE
+
+   Use the .pg-table-wrap on the outer container (gives it the rounded
+   border + shadow + scroll on overflow) and .pg-table on the <table>
+   itself. Header/body cells are auto-styled to match the rest of the
+   theme — no need to specify thead/tbody classes anymore.
+
+   Markup:
+     <div class="pg-table-wrap">
+       <table class="pg-table">
+         <thead><tr><th>Col</th>…</tr></thead>
+         <tbody><tr><td>Cell</td>…</tr></tbody>
+       </table>
+     </div>
+
+   Optional helpers:
+     .pg-table tr.is-active   highlight a "current" row
+     td.text-end              right-align numeric columns
+     td.is-mono               monospaced (for ids, prefixes, txn refs)
+   ═══════════════════════════════════════════════════════════════════════ */
+.pg-table-wrap{
+    background: #fff;
+    border: 1px solid rgba(99,102,241,.1);
+    border-radius: 16px;
+    box-shadow: 0 4px 20px -8px rgba(99,102,241,.08), 0 1px 3px rgba(0,0,0,.03);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+html.dark .pg-table-wrap{
+    background: rgba(15,23,42,.85);
+    border-color: rgba(255,255,255,.08);
+    box-shadow: 0 4px 20px -8px rgba(0,0,0,.5);
+}
+
+.pg-table{
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: .875rem;
+    color: #1f2937;
+}
+html.dark .pg-table{ color: #e2e8f0; }
+
+.pg-table thead th{
+    background: linear-gradient(180deg, rgba(99,102,241,.05), rgba(99,102,241,.02));
+    color: #4f46e5;
+    font-size: .68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    text-align: left;
+    padding: .85rem 1.1rem;
+    border-bottom: 1px solid rgba(99,102,241,.12);
+    white-space: nowrap;
+    position: sticky; top: 0; z-index: 1;
+}
+html.dark .pg-table thead th{
+    background: linear-gradient(180deg, rgba(99,102,241,.15), rgba(99,102,241,.08));
+    color: #a5b4fc;
+    border-bottom-color: rgba(99,102,241,.25);
+}
+
+.pg-table tbody td{
+    padding: .85rem 1.1rem;
+    border-bottom: 1px solid rgba(99,102,241,.06);
+    vertical-align: middle;
+}
+html.dark .pg-table tbody td{ border-bottom-color: rgba(255,255,255,.05); }
+
+.pg-table tbody tr:last-child td{ border-bottom: none; }
+.pg-table tbody tr{ transition: background-color .15s; }
+.pg-table tbody tr:hover{ background: rgba(99,102,241,.035); }
+html.dark .pg-table tbody tr:hover{ background: rgba(99,102,241,.08); }
+
+.pg-table tbody tr.is-active{
+    background: linear-gradient(90deg, rgba(124,58,237,.06), rgba(236,72,153,.03));
+}
+html.dark .pg-table tbody tr.is-active{
+    background: linear-gradient(90deg, rgba(124,58,237,.18), rgba(236,72,153,.08));
+}
+
+.pg-table .text-end{ text-align: right; }
+.pg-table .text-center{ text-align: center; }
+.pg-table .is-mono{ font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: .82rem; }
+
+/* Compact variant — denser rows for big lists */
+.pg-table--compact thead th{ padding: .6rem .85rem; }
+.pg-table--compact tbody td{ padding: .6rem .85rem; }
+
+/* Status pills inside table cells (use as <span class="pg-pill pg-pill--green">…</span>) */
+.pg-pill{
+    display: inline-flex; align-items: center; gap: .3rem;
+    padding: .2rem .6rem; border-radius: 999px;
+    font-size: .68rem; font-weight: 700; letter-spacing: .04em;
+    text-transform: uppercase; line-height: 1;
+    border: 1px solid transparent;
+}
+.pg-pill--green{ background: rgba(16,185,129,.1); color: #059669; border-color: rgba(16,185,129,.25); }
+.pg-pill--amber{ background: rgba(251,191,36,.12); color: #b45309; border-color: rgba(251,191,36,.3); }
+.pg-pill--rose { background: rgba(239,68,68,.1);  color: #b91c1c; border-color: rgba(239,68,68,.25); }
+.pg-pill--blue { background: rgba(59,130,246,.1); color: #1d4ed8; border-color: rgba(59,130,246,.25); }
+.pg-pill--gray { background: rgba(148,163,184,.12);color: #475569; border-color: rgba(148,163,184,.25); }
+.pg-pill--violet{background: rgba(124,58,237,.1); color: #6d28d9; border-color: rgba(124,58,237,.25); }
+html.dark .pg-pill--green{ background: rgba(16,185,129,.18); color: #34d399; border-color: rgba(16,185,129,.35); }
+html.dark .pg-pill--amber{ background: rgba(251,191,36,.2);  color: #fbbf24; border-color: rgba(251,191,36,.4); }
+html.dark .pg-pill--rose { background: rgba(239,68,68,.2);   color: #fb7185; border-color: rgba(239,68,68,.35); }
+html.dark .pg-pill--blue { background: rgba(59,130,246,.2);  color: #60a5fa; border-color: rgba(59,130,246,.35); }
+html.dark .pg-pill--gray { background: rgba(148,163,184,.2); color: #cbd5e1; border-color: rgba(148,163,184,.35); }
+html.dark .pg-pill--violet{background: rgba(124,58,237,.25); color: #c4b5fd; border-color: rgba(124,58,237,.4); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ALERT / NOTICE BLOCKS — coloured info banners that match the theme.
+   Used for inline page-level messages (warnings, hints, errors).
+   ═══════════════════════════════════════════════════════════════════════ */
+.pg-alert{
+    display: flex; align-items: flex-start; gap: .75rem;
+    padding: .9rem 1.15rem;
+    border-radius: 14px;
+    font-size: .85rem; line-height: 1.5;
+    border: 1px solid transparent;
+}
+.pg-alert > i:first-child{ font-size: 1.1rem; flex-shrink: 0; margin-top: .1rem; }
+.pg-alert--info  { background: rgba(59,130,246,.06);  border-color: rgba(59,130,246,.2);  color: #1e40af; }
+.pg-alert--success{background: rgba(16,185,129,.06); border-color: rgba(16,185,129,.22); color: #065f46; }
+.pg-alert--warning{background: rgba(251,191,36,.08); border-color: rgba(251,191,36,.3);  color: #92400e; }
+.pg-alert--danger { background: rgba(239,68,68,.06);  border-color: rgba(239,68,68,.22);  color: #991b1b; }
+html.dark .pg-alert--info  { background: rgba(59,130,246,.15);  border-color: rgba(59,130,246,.35); color: #93c5fd; }
+html.dark .pg-alert--success{background: rgba(16,185,129,.18); border-color: rgba(16,185,129,.35); color: #6ee7b7; }
+html.dark .pg-alert--warning{background: rgba(251,191,36,.18); border-color: rgba(251,191,36,.4);  color: #fcd34d; }
+html.dark .pg-alert--danger { background: rgba(239,68,68,.18);  border-color: rgba(239,68,68,.35);  color: #fca5a5; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   DARK-MODE READABILITY GUARANTEES
+
+   Many existing pages use hard-coded Tailwind utilities like
+   `text-gray-900`, `text-slate-900`, `text-gray-700` that were authored
+   for light mode and never got `dark:text-*` variants. When the user
+   flips dark mode, those utilities resolve to dark gray on dark gray,
+   which is unreadable.
+
+   Rather than manually adding `dark:` to every utility across 40+ blade
+   files, we override the worst offenders site-wide in dark mode below.
+   This is purely additive — it only activates inside `.dark` and only
+   for utilities used inside our themed shell (`.pg-card`, `.pg-glass`,
+   `.pg-table-wrap`, `.pg-stat`, `.pg-page-bg`).
+
+   `:where()` keeps specificity at zero so authors who DO add explicit
+   `dark:` variants on a particular element still win.
+   ═══════════════════════════════════════════════════════════════════════ */
+html.dark :where(.pg-card, .pg-glass, .pg-table-wrap, .pg-stat, .pg-page-bg, .pg-card-body, .pg-card-header, .pg-card-footer) {
+    /* Default body text inside themed shells — readable slate */
+    color: #cbd5e1;
+}
+
+/* Headings & strong-coloured grays */
+html.dark :where(.pg-card, .pg-glass, .pg-table-wrap, .pg-stat, .pg-page-bg) :where(
+    .text-slate-900, .text-gray-900, .text-zinc-900, .text-neutral-900, .text-stone-900
+){
+    color: #f1f5f9 !important;
+}
+html.dark :where(.pg-card, .pg-glass, .pg-table-wrap, .pg-stat, .pg-page-bg) :where(
+    .text-slate-800, .text-gray-800, .text-zinc-800, .text-neutral-800
+){
+    color: #e2e8f0 !important;
+}
+html.dark :where(.pg-card, .pg-glass, .pg-table-wrap, .pg-stat, .pg-page-bg) :where(
+    .text-slate-700, .text-gray-700, .text-zinc-700, .text-neutral-700
+){
+    color: #cbd5e1 !important;
+}
+html.dark :where(.pg-card, .pg-glass, .pg-table-wrap, .pg-stat, .pg-page-bg) :where(
+    .text-slate-600, .text-gray-600, .text-zinc-600, .text-neutral-600
+){
+    color: #94a3b8 !important;
+}
+html.dark :where(.pg-card, .pg-glass, .pg-table-wrap, .pg-stat, .pg-page-bg) :where(
+    .text-slate-500, .text-gray-500, .text-zinc-500, .text-neutral-500
+){
+    color: #94a3b8 !important;
+}
+html.dark :where(.pg-card, .pg-glass, .pg-table-wrap, .pg-stat, .pg-page-bg) :where(
+    .text-slate-400, .text-gray-400, .text-zinc-400, .text-neutral-400
+){
+    color: #64748b !important;
+}
+
+/* Native heading elements default to white in dark mode within shells */
+html.dark :where(.pg-card, .pg-glass, .pg-table-wrap, .pg-stat) :where(h1, h2, h3, h4, h5, h6) {
+    color: #f1f5f9;
+}
+
+/* Bootstrap-icon based section titles — keep gradient bullet visible */
+html.dark .pg-section-title{ color: #f1f5f9; }
+html.dark .pg-card-header h2,
+html.dark .pg-card-header h3,
+html.dark .pg-card-header h5,
+html.dark .pg-card-header .pg-section-title{ color: #f1f5f9; }
+
+/* Tailwind `text-gray-100..400` used as muted text on COLOURED gradient
+   cards (white background under hero-style banners) is fine — but on
+   dark themed cards we want them brighter. Apply only to `<p>` and
+   `<span>` so we don't affect inline mute classes the author intended
+   for white-on-violet-gradient banners. */
+html.dark :where(.pg-card, .pg-glass) :where(p, span, li, td, th):where(
+    .text-gray-100, .text-slate-100
+){
+    color: #e2e8f0 !important;
+}
+
+/* Card-header right-side meta links (e.g. "ดูทั้งหมด →") */
+html.dark :where(.pg-card-header) a:where(.text-indigo-600){
+    color: #a5b4fc !important;
+}
+
+/* Status helper text on tables: `text-gray-400` should be a visible
+   placeholder grey, not invisible. */
+html.dark .pg-table tbody td .text-gray-400,
+html.dark .pg-table tbody td.text-gray-400{ color: #64748b !important; }
+
+/* Hover-row background collision: a few pages declare
+   `hover:bg-gray-50` directly on <tr>. In dark mode that flashes white
+   on dark — override to a violet-tinted hover that matches .pg-table */
+html.dark .pg-table tbody tr:where(.hover\:bg-gray-50, .hover\:bg-gray-50\/50):hover{
+    background: rgba(99,102,241,.08) !important;
+}
+
+/* Bordered "filter pill" backgrounds — make light grey pill chips
+   readable in dark mode (used on credits/history filters etc.) */
+html.dark .pg-card :where(.bg-gray-100):where(:not(.bg-gradient-to-r)):where(:not([class*="from-"])){
+    background: rgba(255,255,255,.06) !important;
+    color: #cbd5e1;
+}
+html.dark .pg-card :where(.bg-gray-50, .bg-slate-50, .bg-zinc-50):where(:not([class*="from-"])){
+    background: rgba(255,255,255,.04) !important;
+}
+
+/* Empty-state container shows on dark cards — ensure its text shows up */
+html.dark .pg-empty p{ color: #cbd5e1; }
+html.dark .pg-empty p.text-xs,
+html.dark .pg-empty .text-xs{ color: #94a3b8; }
+
+/* Pagination links inside .pg-card-footer — Laravel's default uses
+   text-gray-700 / bg-white for items which becomes invisible in dark. */
+html.dark .pg-card-footer nav span,
+html.dark .pg-card-footer nav a{ color: #cbd5e1; }
+html.dark .pg-card-footer nav a:hover{ color: #fff; background: rgba(255,255,255,.06); }
+html.dark .pg-card-footer nav span[aria-current]{
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    color: #fff !important;
+    border-color: transparent !important;
+}
+
+/* "Code" tags used for transaction IDs / invoice numbers */
+html.dark .pg-table code,
+html.dark .pg-card code{
+    background: rgba(99,102,241,.18) !important;
+    color: #c7d2fe !important;
+}
+
+/* Inputs/selects inside cards inherit dark surface */
+html.dark .pg-card :where(input, select, textarea):where(:not([type="submit"])){
+    background: rgba(15,23,42,.6);
+    border-color: rgba(255,255,255,.1);
+    color: #f1f5f9;
+}
+html.dark .pg-card :where(input, select, textarea)::placeholder{ color: #64748b; }
+
+/* Borders that delineate sections — bring up to dark-mode equivalents */
+html.dark :where(.pg-card, .pg-glass) :where(.border-gray-100, .border-slate-100, .border-gray-200){
+    border-color: rgba(255,255,255,.06) !important;
+}
+html.dark :where(.pg-card, .pg-glass) :where(.divide-gray-100, .divide-slate-100, .divide-gray-200) > * + *{
+    border-color: rgba(255,255,255,.06) !important;
+}
+

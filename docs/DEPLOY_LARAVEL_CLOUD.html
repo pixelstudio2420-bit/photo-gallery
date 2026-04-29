@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deploy บน Laravel Cloud — คู่มือมือใหม่</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['"Noto Sans Thai"', 'system-ui', '-apple-system', 'sans-serif'],
+          mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace']
+        }
+      }
+    }
+  }
+</script>
+<style>
+  body { font-family: 'Noto Sans Thai', system-ui, sans-serif; line-height: 1.75; }
+  code, pre { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .prose-doc h1 { font-size: 2.25rem; font-weight: 800; margin-top: 2rem; margin-bottom: 1.5rem; letter-spacing: -0.025em; }
+  .prose-doc h2 { font-size: 1.875rem; font-weight: 800; margin-top: 3rem; margin-bottom: 1.25rem; padding-bottom: 0.5rem; border-bottom: 2px solid rgb(99 102 241 / 0.2); scroll-margin-top: 80px; }
+  .prose-doc h3 { font-size: 1.5rem; font-weight: 700; margin-top: 2.5rem; margin-bottom: 1rem; scroll-margin-top: 80px; }
+  .prose-doc h4 { font-size: 1.25rem; font-weight: 700; margin-top: 2rem; margin-bottom: 0.75rem; }
+  .prose-doc p { margin: 1rem 0; }
+  .prose-doc ul, .prose-doc ol { margin: 1rem 0; padding-left: 1.5rem; }
+  .prose-doc li { margin: 0.4rem 0; }
+  .prose-doc ul { list-style: disc; }
+  .prose-doc ol { list-style: decimal; }
+  .prose-doc table { width: 100%; margin: 1.5rem 0; border-collapse: collapse; font-size: 0.95rem; }
+  .prose-doc th { background: rgb(99 102 241 / 0.08); text-align: left; padding: 0.75rem; font-weight: 700; border-bottom: 2px solid rgb(99 102 241 / 0.2); }
+  .prose-doc td { padding: 0.75rem; border-bottom: 1px solid rgb(226 232 240); vertical-align: top; }
+  .dark .prose-doc td { border-bottom-color: rgb(51 65 85); }
+  .prose-doc :not(pre) > code {
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.375rem;
+    font-size: 0.875em;
+    background: rgb(99 102 241 / 0.1);
+    color: rgb(67 56 202);
+    font-weight: 500;
+  }
+  .dark .prose-doc :not(pre) > code { background: rgb(99 102 241 / 0.18); color: rgb(165 180 252); }
+  .prose-doc pre { padding: 1.25rem; border-radius: 0.75rem; overflow-x: auto; margin: 1.5rem 0; font-size: 0.9rem; line-height: 1.65; }
+  .prose-doc blockquote { border-left: 4px solid #6366f1; padding: 0.5rem 1rem; margin: 1.5rem 0; background: rgb(99 102 241 / 0.05); border-radius: 0.5rem; font-style: italic; }
+  .dark .prose-doc blockquote { background: rgb(99 102 241 / 0.1); }
+  .prose-doc a { color: #6366f1; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  .prose-doc a:hover { color: #4338ca; }
+  .dark .prose-doc a { color: #a5b4fc; }
+  .prose-doc hr { margin: 3rem 0; border: 0; border-top: 1px solid rgb(226 232 240); }
+  .dark .prose-doc hr { border-top-color: rgb(51 65 85); }
+  .prose-doc strong { font-weight: 700; color: rgb(15 23 42); }
+  .dark .prose-doc strong { color: white; }
+  .toc-link.active { color: #4338ca; font-weight: 600; border-left-color: #4338ca; }
+  .dark .toc-link.active { color: #a5b4fc; border-left-color: #a5b4fc; }
+  .toc-scroll::-webkit-scrollbar { width: 6px; }
+  .toc-scroll::-webkit-scrollbar-thumb { background: rgb(99 102 241 / 0.3); border-radius: 3px; }
+  /* Step number circle */
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem; height: 2rem;
+    border-radius: 9999px;
+    background: linear-gradient(135deg, #6366f1, #a855f7);
+    color: white;
+    font-weight: 800;
+    font-size: 0.875rem;
+    margin-right: 0.5rem;
+    flex-shrink: 0;
+  }
+  .callout {
+    padding: 1rem 1.25rem;
+    border-radius: 0.75rem;
+    margin: 1.5rem 0;
+    border-left: 4px solid;
+  }
+  .callout-info { background: rgb(99 102 241 / 0.08); border-color: #6366f1; }
+  .dark .callout-info { background: rgb(99 102 241 / 0.15); }
+  .callout-warning { background: rgb(245 158 11 / 0.10); border-color: #f59e0b; }
+  .dark .callout-warning { background: rgb(245 158 11 / 0.18); }
+  .callout-danger { background: rgb(244 63 94 / 0.10); border-color: #f43f5e; }
+  .dark .callout-danger { background: rgb(244 63 94 / 0.18); }
+  @media print {
+    aside, header.sticky, .no-print { display: none !important; }
+    main { width: 100% !important; padding: 0 !important; }
+  }
+</style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 min-h-screen">
+
+<header class="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-700">
+  <div class="max-w-7xl mx-auto px-4 lg:px-6 h-14 flex items-center justify-between gap-4">
+    <a href="index.html" class="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
+      <i class="bi bi-cloud-upload text-indigo-500 text-xl"></i>
+      <span class="hidden sm:inline">Photo Gallery Docs</span>
+    </a>
+    <div class="flex items-center gap-2">
+      <a href="MANUAL_2026.html" class="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
+        <i class="bi bi-book"></i> System Manual
+      </a>
+      <button onclick="toggleTheme()" class="w-9 h-9 inline-flex items-center justify-center rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" title="Toggle theme">
+        <i class="bi bi-sun-fill dark:hidden"></i>
+        <i class="bi bi-moon-fill hidden dark:inline"></i>
+      </button>
+      <button onclick="window.print()" class="w-9 h-9 inline-flex items-center justify-center rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 no-print" title="พิมพ์">
+        <i class="bi bi-printer-fill"></i>
+      </button>
+      <button onclick="document.getElementById('toc').classList.toggle('hidden')" class="lg:hidden w-9 h-9 inline-flex items-center justify-center rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" title="สารบัญ">
+        <i class="bi bi-list"></i>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="max-w-7xl mx-auto flex">
+
+  <aside id="toc" class="hidden lg:block w-72 shrink-0 border-r border-slate-200 dark:border-slate-700 px-4 py-6 sticky top-14 self-start max-h-[calc(100vh-3.5rem)] overflow-y-auto toc-scroll">
+    <h3 class="text-xs uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 mb-3 px-2">15 ขั้นตอน</h3>
+    <nav class="space-y-1 text-sm">
+      <a href="#step-1" class="toc-link block px-3 py-1.5 border-l-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300">1. เตรียมตัว</a>
+      <a href="#step-2" class="toc-link block px-3 py-1.5 border-l-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300">2. สมัคร Laravel Cloud</a>
+      <a href="#step-3" class="toc-link block px-3 py-1.5 border-l-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300">3. Push ขึ้น GitHub</a>
+      <a href="#step-4" class="toc-link block px-3 py-1.5 border-l-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300">4. สร้าง Application</a>
+      <a href="#step-5" class="toc-link block px-3 py-1.5 border-l-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300">5. Database (Postgres)</a>
+      <a href="#step-6" class="toc-link block px-3 py-1.5 border-l-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300">6. Redis</a>
+      <a href="#step-7" class="toc-link block px-3 py-1.5 border-l-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300">7. Storage (R2/S3)</a>
+      <a href="#step-8" class="toc-link block px-3 py-1.5 border-l-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300">8. Environment Vars</a>
+      <a href="#step-9" class="toc-link block px-3 py-1.5 border-l-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300">9. Deploy ครั้งแรก</a>
+      <a href="#step-10" class="toc-link block px-3 py-1.5 border-l-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300">10. Worker + Scheduler</a>
+      <a href="#step-11" class="toc-link block px-3 py-1.5 border-l-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300">11. Custom Domain + SSL</a>
+      <a href="#step-12" class="toc-link block px-3 py-1.5 border-l-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300">12. Integration ภายนอก</a>
+      <a href="#step-13" class="toc-link block px-3 py-1.5 border-l-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300">13. เปิดใช้งานจริง</a>
+      <a href="#step-14" class="toc-link block px-3 py-1.5 border-l-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300">14. Deploy ครั้งต่อไป</a>
+      <a href="#step-15" class="toc-link block px-3 py-1.5 border-l-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300">15. Troubleshooting</a>
+      <hr class="my-3 border-slate-200 dark:border-slate-700">
+      <a href="MANUAL_2026.html" class="block px-3 py-1.5 text-sm text-indigo-600 dark:text-indigo-300 hover:underline">
+        <i class="bi bi-book mr-1"></i> System Manual →
+      </a>
+    </nav>
+  </aside>
+
+  <main class="flex-1 min-w-0 px-4 lg:px-10 py-8 max-w-4xl">
+    <article class="prose-doc">
+
+      <div class="mb-8 pb-6 border-b-2 border-slate-200 dark:border-slate-700">
+        <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 mb-3">
+          <i class="bi bi-cloud-upload"></i> Deployment Guide
+        </span>
+        <h1 class="!mt-0 !mb-3 text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+          Deploy บน Laravel Cloud
+        </h1>
+        <p class="text-lg text-slate-500 dark:text-slate-400">คู่มือ step-by-step สำหรับมือใหม่ — ทำตามได้เลย ไม่ต้องมีพื้นฐาน DevOps</p>
+        <div class="flex flex-wrap items-center gap-3 mt-4 text-sm text-slate-500">
+          <span><i class="bi bi-clock"></i> ~30-60 นาที (ครั้งแรก)</span>
+          <span>·</span>
+          <span><i class="bi bi-currency-dollar"></i> เริ่มได้ฟรี (Hobby plan)</span>
+          <span>·</span>
+          <span><i class="bi bi-shield-check"></i> SSL + Auto-scale ไม่ต้องตั้งเอง</span>
+        </div>
+      </div>
+
+      <div class="callout callout-info">
+        <strong>Laravel Cloud คืออะไร?</strong> บริการ hosting ทางการของ Laravel เอง (เปิดตัวปี 2025) — deploy โดย push git commit เดียวจบ ไม่ต้องตั้งค่า VPS, Nginx, PHP-FPM, supervisor เอง
+      </div>
+
+      <h3>สิ่งที่ Laravel Cloud จัดการให้อัตโนมัติ</h3>
+      <ul>
+        <li>Web server (Nginx + PHP-FPM)</li>
+        <li>Queue worker</li>
+        <li>Scheduler (cron)</li>
+        <li>SSL certificate</li>
+        <li>Auto-scaling</li>
+        <li>Zero-downtime deploy</li>
+        <li>Logs streaming</li>
+      </ul>
+
+      <!-- Step 1 -->
+      <h2 id="step-1"><span class="step-num">1</span>เตรียมตัวก่อน deploy</h2>
+
+      <h3>สิ่งที่ต้องมี (ติดตั้งใน machine ของคุณ)</h3>
+      <pre><code class="language-bash">git --version       # ต้องมี Git
+node --version      # ต้องมี Node.js 18+
+php --version       # ต้องมี PHP 8.2+
+composer --version  # ต้องมี Composer 2.x</code></pre>
+
+      <h3>สิ่งที่ต้องสมัคร (ถ้ายังไม่มี)</h3>
+      <table>
+        <thead><tr><th>บริการ</th><th>ใช้ทำอะไร</th><th>เริ่มต้นฟรี</th></tr></thead>
+        <tbody>
+          <tr><td><strong>GitHub</strong></td><td>เก็บ source code</td><td>✅ ฟรี</td></tr>
+          <tr><td><strong>Laravel Cloud</strong></td><td>hosting</td><td>✅ มี free tier (Hobby)</td></tr>
+          <tr><td><strong>Cloudflare</strong></td><td>DNS + R2 storage</td><td>✅ ฟรี (R2 ฟรี 10GB)</td></tr>
+          <tr><td><strong>LINE Developers</strong></td><td>LINE Messaging API</td><td>✅ ฟรี</td></tr>
+          <tr><td><strong>Google Cloud</strong></td><td>OAuth + Drive</td><td>✅ ฟรี</td></tr>
+          <tr><td><strong>SlipOK</strong></td><td>ตรวจสลิป PromptPay</td><td>มีแพ็คเกจฟรีจำกัด</td></tr>
+          <tr><td><strong>AWS</strong></td><td>Rekognition + S3 (option)</td><td>มี free tier</td></tr>
+          <tr><td><strong>Sentry</strong></td><td>error tracking (option)</td><td>✅ ฟรี dev tier</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-info">
+        💡 <strong>Tip:</strong> เริ่มจากของฟรีก่อน เปิดเฉพาะ feature ที่ต้องใช้
+      </div>
+
+      <!-- Step 2 -->
+      <h2 id="step-2"><span class="step-num">2</span>สมัคร Laravel Cloud</h2>
+      <ol>
+        <li>ไปที่ <a href="https://cloud.laravel.com" target="_blank">https://cloud.laravel.com</a></li>
+        <li>กด <strong>Sign up</strong> → ใช้ GitHub login (แนะนำ)</li>
+        <li>ยืนยัน email</li>
+        <li>เข้า dashboard ของ Laravel Cloud</li>
+      </ol>
+
+      <h3>เลือก Plan</h3>
+      <table>
+        <thead><tr><th>Plan</th><th>ราคา</th><th>เหมาะกับ</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Hobby</strong></td><td>ฟรี</td><td>ลองเล่น, MVP, traffic น้อย (sleep หลัง 30 นาที)</td></tr>
+          <tr><td><strong>Production</strong></td><td>$20+/mo</td><td>production จริง, no sleep, autoscale</td></tr>
+          <tr><td><strong>Enterprise</strong></td><td>สั่งราคา</td><td>scale ใหญ่</td></tr>
+        </tbody>
+      </table>
+      <blockquote>มือใหม่แนะนำ Hobby ก่อน → ถ้า traffic เริ่มเยอะ upgrade เป็น Production</blockquote>
+
+      <!-- Step 3 -->
+      <h2 id="step-3"><span class="step-num">3</span>Push โค้ดขึ้น GitHub</h2>
+
+      <h3>A. สร้าง repo ใหม่</h3>
+      <ol>
+        <li>ไปที่ <a href="https://github.com/new" target="_blank">https://github.com/new</a></li>
+        <li><strong>Repository name</strong>: <code>photo-gallery</code></li>
+        <li><strong>Visibility</strong>: Private (แนะนำ — มี API keys)</li>
+        <li>❌ ไม่ต้องติ๊ก Initialize with README</li>
+        <li>กด <strong>Create repository</strong></li>
+      </ol>
+
+      <h3>B. Push โค้ด</h3>
+      <pre><code class="language-bash"># ถ้ายังไม่ได้ init git
+git init
+git branch -M main
+
+# เพิ่ม .env เข้า .gitignore (สำคัญ! กันรั่ว secret)
+echo ".env" >> .gitignore
+echo "node_modules/" >> .gitignore
+echo "vendor/" >> .gitignore
+echo "storage/logs/*" >> .gitignore
+echo "public/build/" >> .gitignore
+
+# Add + commit
+git add .
+git commit -m "Initial commit"
+
+# ผูกกับ GitHub
+git remote add origin https://github.com/YOUR_USERNAME/photo-gallery.git
+git push -u origin main</code></pre>
+
+      <!-- Step 4 -->
+      <h2 id="step-4"><span class="step-num">4</span>สร้าง Application</h2>
+      <p>ใน Laravel Cloud dashboard:</p>
+      <ol>
+        <li>กด <strong>Create Application</strong></li>
+        <li><strong>Source</strong>: เลือก GitHub → ให้สิทธิ์เข้าถึง repo <code>photo-gallery</code></li>
+        <li><strong>Branch</strong>: <code>main</code></li>
+        <li><strong>Name</strong>: <code>photo-gallery-prod</code></li>
+        <li><strong>Region</strong>: เลือกที่ใกล้ผู้ใช้
+          <ul>
+            <li>🇹🇭 ลูกค้าในไทย → <code>ap-southeast-1</code> (Singapore)</li>
+            <li>🇺🇸 ลูกค้า US → <code>us-east-1</code></li>
+          </ul>
+        </li>
+        <li>กด <strong>Create</strong></li>
+      </ol>
+
+      <p>Laravel Cloud จะ:</p>
+      <ul>
+        <li>Clone repo</li>
+        <li>Detect ว่าเป็น Laravel project</li>
+        <li>รัน <code>composer install</code></li>
+        <li>รัน <code>npm install &amp;&amp; npm run build</code> (auto-detect Vite)</li>
+      </ul>
+
+      <div class="callout callout-warning">
+        ⚠️ <strong>deploy ครั้งแรกจะล้มเหลว</strong> เพราะยังไม่ได้ตั้ง env vars + DB → ปกติ
+      </div>
+
+      <!-- Step 5 -->
+      <h2 id="step-5"><span class="step-num">5</span>ตั้งค่า Database (PostgreSQL)</h2>
+      <p>ระบบนี้ใช้ <strong>PostgreSQL 16</strong> (ไม่ใช่ MySQL — มี migration ที่ใช้ Postgres-specific syntax เช่น <code>STRING_AGG</code>, <code>INTERVAL</code>, partial unique indexes)</p>
+
+      <h3>Option A: Laravel Cloud Postgres (แนะนำ)</h3>
+      <ol>
+        <li>ไปที่ tab <strong>Resources</strong></li>
+        <li>กด <strong>Add Database</strong></li>
+        <li><strong>Type</strong>: PostgreSQL</li>
+        <li><strong>Version</strong>: 16</li>
+        <li><strong>Plan</strong>: เริ่มที่ Starter (1GB)</li>
+        <li><strong>Region</strong>: เดียวกับ application</li>
+        <li>กด <strong>Create</strong></li>
+      </ol>
+      <p>Laravel Cloud จะตั้ง env vars ให้อัตโนมัติ (DB_CONNECTION, DB_HOST, ฯลฯ)</p>
+
+      <h3>Option B: External Postgres (Neon.tech / Supabase)</h3>
+      <pre><code class="language-bash">DB_CONNECTION=pgsql
+DB_HOST=ep-xxxx.us-east-2.aws.neon.tech
+DB_PORT=5432
+DB_DATABASE=neondb
+DB_USERNAME=postgres
+DB_PASSWORD=your-password
+DB_SSLMODE=require</code></pre>
+
+      <!-- Step 6 -->
+      <h2 id="step-6"><span class="step-num">6</span>ตั้งค่า Redis (Cache + Queue)</h2>
+      <blockquote>Redis ใช้สำหรับ cache + queue + session — ไม่บังคับ แต่แนะนำมากสำหรับ production</blockquote>
+
+      <h3>Option A: Laravel Cloud Redis</h3>
+      <ol>
+        <li>tab <strong>Resources</strong> → <strong>Add Redis</strong></li>
+        <li><strong>Plan</strong>: Starter</li>
+        <li>Env vars จะถูก inject อัตโนมัติ</li>
+      </ol>
+
+      <h3>Option B: Upstash Redis (ฟรี 10K commands/วัน)</h3>
+      <pre><code class="language-bash">REDIS_HOST=xxx.upstash.io
+REDIS_PORT=6379
+REDIS_PASSWORD=xxxx</code></pre>
+
+      <h3>บังคับใช้ Redis</h3>
+      <pre><code class="language-bash">CACHE_STORE=redis
+QUEUE_CONNECTION=redis
+SESSION_DRIVER=redis</code></pre>
+
+      <!-- Step 7 -->
+      <h2 id="step-7"><span class="step-num">7</span>ตั้งค่า Storage (R2 หรือ S3)</h2>
+      <p>ระบบเก็บรูปทุกตัวบน object storage — ไม่ใช่ใน server (เพราะ photo file ใหญ่)</p>
+
+      <h3>แนะนำ: Cloudflare R2 (ถูกกว่า S3 ~10x — egress ฟรี)</h3>
+      <ol>
+        <li>สมัคร <a href="https://cloudflare.com" target="_blank">https://cloudflare.com</a> (ฟรี)</li>
+        <li>Dashboard → R2 Object Storage → Create bucket
+          <ul>
+            <li><strong>Name</strong>: <code>photo-gallery-media</code></li>
+            <li><strong>Location</strong>: ASIA</li>
+          </ul>
+        </li>
+        <li>R2 → Manage API Tokens → Create API Token
+          <ul>
+            <li><strong>Permission</strong>: Object Read &amp; Write</li>
+            <li><strong>Specify bucket</strong>: <code>photo-gallery-media</code></li>
+          </ul>
+        </li>
+        <li>เก็บ Access Key ID, Secret Access Key, Account ID</li>
+        <li>(option) เปิด Public access ที่ Bucket settings → ได้ public URL: <code>https://pub-xxxxx.r2.dev</code></li>
+      </ol>
+
+      <h3>ตั้งใน Laravel Cloud env</h3>
+      <pre><code class="language-bash">FILESYSTEM_DISK=r2
+
+AWS_ACCESS_KEY_ID=your-r2-access-key
+AWS_SECRET_ACCESS_KEY=your-r2-secret
+AWS_DEFAULT_REGION=auto
+AWS_BUCKET=photo-gallery-media
+AWS_USE_PATH_STYLE_ENDPOINT=false
+AWS_ENDPOINT=https://YOUR-ACCOUNT-ID.r2.cloudflarestorage.com
+AWS_URL=https://pub-xxxxx.r2.dev</code></pre>
+      <div class="callout callout-warning">
+        ⚠️ R2 ใช้ <code>region = auto</code> (ไม่ใช่ region จริง)
+      </div>
+
+      <!-- Step 8 -->
+      <h2 id="step-8"><span class="step-num">8</span>ตั้งค่า Environment Variables</h2>
+      <p>Application → tab <strong>Environment</strong></p>
+
+      <h3>Env vars ที่บังคับต้องตั้ง</h3>
+      <pre><code class="language-bash"># ── Core ──
+APP_NAME="Photo Gallery"
+APP_ENV=production
+APP_KEY=               # generate ด้านล่าง
+APP_DEBUG=false
+APP_URL=https://your-app.cloud.laravel.com
+APP_LOCALE=th
+APP_TIMEZONE=Asia/Bangkok
+APP_FALLBACK_LOCALE=en
+
+# ── Logging ──
+LOG_CHANNEL=stack
+LOG_STACK=single
+LOG_LEVEL=warning
+
+# ── Session / Cache / Queue ──
+SESSION_DRIVER=redis
+SESSION_LIFETIME=120
+SESSION_ENCRYPT=true
+SESSION_SECURE_COOKIE=true
+
+CACHE_STORE=redis
+QUEUE_CONNECTION=redis
+
+# ── Database ──
+DB_CONNECTION=pgsql
+# DB_HOST, DB_PORT, ฯลฯ จะ auto-inject ถ้าใช้ Cloud Postgres
+
+# ── Storage ──
+FILESYSTEM_DISK=r2
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_DEFAULT_REGION=auto
+AWS_BUCKET=photo-gallery-media
+AWS_ENDPOINT=https://YOUR-ACCOUNT.r2.cloudflarestorage.com
+AWS_URL=https://pub-xxxxx.r2.dev
+AWS_USE_PATH_STYLE_ENDPOINT=false</code></pre>
+
+      <h3>Env vars เลือกได้</h3>
+      <pre><code class="language-bash"># ── Mail ──
+MAIL_MAILER=ses
+MAIL_FROM_ADDRESS=noreply@yourdomain.com
+MAIL_FROM_NAME="Photo Gallery"
+
+# ── LINE ──
+LINE_CHANNEL_ACCESS_TOKEN=your-token
+LINE_CHANNEL_SECRET=your-secret
+
+# ── Sentry ──
+SENTRY_LARAVEL_DSN=https://xxx@sentry.io/yyy
+SENTRY_ENVIRONMENT=production
+SENTRY_TRACES_SAMPLE_RATE=0.1
+
+# ── AI ──
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...</code></pre>
+
+      <div class="callout callout-info">
+        💡 <strong>Payment gateway keys (Stripe, Omise, SlipOK, etc.)</strong> — ตั้งใน <code>/admin/settings/payment-gateways</code> ใน UI หลัง deploy ไม่ต้องตั้งใน env
+      </div>
+
+      <h3>Generate APP_KEY</h3>
+      <p>ทำในเครื่องของคุณก่อน push:</p>
+      <pre><code class="language-bash">cd C:\xampp\htdocs\photo-gallery-pgsql
+php artisan key:generate --show
+# ได้ output: base64:xxxxx...</code></pre>
+      <p>Copy ไปใส่ใน Laravel Cloud env → <code>APP_KEY=base64:xxxxx...</code></p>
+
+      <div class="callout callout-danger">
+        ⚠️ <strong>APP_KEY ใหม่หลัง deploy = ทุก session/encrypted data ถูก decrypt ไม่ได้</strong> — ตั้งครั้งเดียว แล้วอย่าเปลี่ยน
+      </div>
+
+      <!-- Step 9 -->
+      <h2 id="step-9"><span class="step-num">9</span>Deploy ครั้งแรก</h2>
+      <ol>
+        <li>tab <strong>Deployments</strong> → กด <strong>Trigger Deployment</strong></li>
+        <li>Laravel Cloud จะรันอัตโนมัติ:
+          <ul>
+            <li><code>composer install --no-dev --optimize-autoloader</code></li>
+            <li><code>npm ci &amp;&amp; npm run build</code></li>
+            <li><code>php artisan storage:link</code></li>
+            <li><code>php artisan migrate --force</code></li>
+          </ul>
+        </li>
+      </ol>
+
+      <h3>Seed ข้อมูลตั้งต้น (สำคัญมาก!)</h3>
+      <p>หลัง deploy สำเร็จ → tab <strong>Console</strong> (web SSH):</p>
+      <pre><code class="language-bash"># บัญชี admin default
+php artisan db:seed --class=DefaultAccountsSeeder
+
+# settings เริ่มต้น (chat OFF, credits OFF, ฯลฯ)
+php artisan db:seed --class=AppSettingsSeeder
+
+# alert rules 16 ตัว
+php artisan db:seed --class=DefaultAlertRulesSeeder
+
+# addon catalog
+php artisan db:seed --class=AddonItemsSeeder
+
+# pricing plans
+php artisan db:seed --class=PricingPackageSeeder
+
+# event categories
+php artisan db:seed --class=EventCategorySeeder
+
+# Thai geography (จังหวัด/อำเภอ)
+php artisan db:seed --class=ThaiGeographySeeder
+
+# Thai banks
+php artisan db:seed --class=ThaiBankSeeder
+
+# (option) ทดสอบ
+php artisan db:seed --class=TestPhotographersSeeder
+php artisan db:seed --class=TestEventsSeeder</code></pre>
+
+      <h3>Login ครั้งแรก</h3>
+      <p>ไปที่ <code>https://your-app.cloud.laravel.com/admin/login</code></p>
+      <pre><code class="language-text">Email: admin@photogallery.com
+Password: password123</code></pre>
+      <div class="callout callout-danger">
+        ⚠️ <strong>เปลี่ยน password ทันที</strong> ที่ <code>/admin/admins</code>
+      </div>
+
+      <!-- Step 10 -->
+      <h2 id="step-10"><span class="step-num">10</span>เปิด Queue Worker + Scheduler</h2>
+
+      <h3>Queue Worker</h3>
+      <ol>
+        <li>Application → tab <strong>Workers</strong></li>
+        <li>กด <strong>Add Worker</strong></li>
+        <li>ตั้งค่า:
+          <ul>
+            <li><strong>Connection</strong>: <code>redis</code></li>
+            <li><strong>Queue</strong>: <code>default,notifications,payouts</code></li>
+            <li><strong>Tries</strong>: 3</li>
+            <li><strong>Timeout</strong>: 600 (10 นาที)</li>
+          </ul>
+        </li>
+        <li>(option) <strong>Workers count</strong>: 2-4</li>
+      </ol>
+
+      <h3>Scheduler</h3>
+      <ol>
+        <li>tab <strong>Scheduler</strong></li>
+        <li>กด <strong>Enable Scheduler</strong></li>
+        <li>เสร็จ — Laravel Cloud รัน <code>php artisan schedule:run</code> ให้อัตโนมัติทุกนาที</li>
+      </ol>
+
+      <h3>ตรวจการทำงาน</h3>
+      <p>ใน admin → <code>/admin/diagnostics</code>:</p>
+      <ul>
+        <li>Queue heartbeat: should be &lt; 5 min ago</li>
+        <li>Scheduler last run: should be &lt; 1 min ago</li>
+      </ul>
+
+      <!-- Step 11 -->
+      <h2 id="step-11"><span class="step-num">11</span>ผูก Custom Domain + SSL</h2>
+      <p>Laravel Cloud ให้ subdomain ฟรี (มี SSL อยู่แล้ว) — ถ้าต้องการ domain ตัวเอง:</p>
+      <ol>
+        <li>Application → tab <strong>Domains</strong></li>
+        <li>กด <strong>Add Domain</strong> → ใส่ <code>photogallery.co.th</code></li>
+        <li>Laravel Cloud แสดง DNS records ที่ต้องตั้ง</li>
+      </ol>
+
+      <h3>ตั้ง DNS ที่ Cloudflare</h3>
+      <table>
+        <thead><tr><th>Type</th><th>Name</th><th>Content</th><th>Proxy</th></tr></thead>
+        <tbody>
+          <tr><td>CNAME</td><td><code>@</code> (root)</td><td><code>your-app.cloud.laravel.com</code></td><td>DNS only (gray)</td></tr>
+          <tr><td>CNAME</td><td><code>www</code></td><td><code>your-app.cloud.laravel.com</code></td><td>DNS only</td></tr>
+        </tbody>
+      </table>
+      <div class="callout callout-warning">
+        ⚠️ ถ้าใช้ Cloudflare proxy (orange cloud) ต้องตั้ง SSL mode เป็น <strong>Full (strict)</strong>
+      </div>
+      <ol start="4">
+        <li>รอ ~5-15 นาที ให้ DNS propagate</li>
+        <li>กด <strong>Verify</strong> → SSL จะ issue อัตโนมัติ (Let's Encrypt)</li>
+      </ol>
+
+      <h3>บังคับ HTTPS</h3>
+      <pre><code class="language-bash">APP_URL=https://photogallery.co.th
+SESSION_SECURE_COOKIE=true</code></pre>
+
+      <!-- Step 12 -->
+      <h2 id="step-12"><span class="step-num">12</span>ตั้งค่า Integration ภายนอก</h2>
+      <p>ทุก integration ตั้งใน admin UI (ไม่ใช่ใน env) — ดูคู่มือใน <a href="MANUAL_2026.html">MANUAL_2026.html section 7</a></p>
+
+      <h3>ลำดับที่แนะนำ</h3>
+
+      <h4>A. Mail (ลำดับแรกสุด)</h4>
+      <p>แอดมินไม่ได้รับ notification ถ้าไม่ตั้ง mail</p>
+      <pre><code class="language-bash">MAIL_MAILER=ses
+MAIL_FROM_ADDRESS=noreply@photogallery.co.th</code></pre>
+      <p>ทดสอบใน Console:</p>
+      <pre><code class="language-bash">php artisan tinker
+> Mail::raw('test', fn($m) => $m->to('your@email.com')->subject('Test'));</code></pre>
+
+      <h4>B. Payment Gateway</h4>
+      <p>ที่ <code>/admin/settings/payment-gateways</code> อย่างน้อยเปิด 1 ตัว:</p>
+      <ul>
+        <li><strong>ขั้นต่ำ — แค่ PromptPay</strong>: ตั้งบัญชีรับเงิน → ระบบสร้าง QR ให้ → ลูกค้า upload สลิป → admin approve manual</li>
+        <li><strong>แนะนำ — เพิ่ม SlipOK</strong>: สมัคร <a href="https://slipok.com" target="_blank">SlipOK</a> → ตรวจสลิปอัตโนมัติ ~3-5 วินาที</li>
+        <li><strong>Production — เพิ่ม Stripe / Omise</strong>: support card + Apple Pay + Google Pay</li>
+      </ul>
+
+      <h4>C. LINE Messaging API</h4>
+      <ol>
+        <li>สมัคร LINE OA (ฟรี: 200 push/month)</li>
+        <li>ที่ <code>/admin/settings/line</code>: Channel Access Token + Channel Secret</li>
+        <li>LINE Developers → Webhook URL: <code>https://photogallery.co.th/api/webhooks/line</code></li>
+      </ol>
+
+      <h4>D. Google OAuth</h4>
+      <ol>
+        <li>console.cloud.google.com → New Project</li>
+        <li>OAuth Client ID → Web application</li>
+        <li>Redirect URI: <code>https://photogallery.co.th/auth/google/callback</code></li>
+        <li>ที่ <code>/admin/settings/google</code> ใส่ credentials</li>
+      </ol>
+
+      <h4>E. AWS Rekognition (AI Face Search) — ถ้าต้องการ</h4>
+      <ol>
+        <li>AWS IAM → Create User → <code>AmazonRekognitionFullAccess</code></li>
+        <li>ตั้ง env</li>
+        <li><code>/admin/features</code> → เปิด <code>face_search</code></li>
+      </ol>
+      <blockquote>💡 Skip AI Face Search ก่อนได้ — feature flag ปิด default</blockquote>
+
+      <!-- Step 13 -->
+      <h2 id="step-13"><span class="step-num">13</span>เปิดใช้งานจริง</h2>
+      <h3>Checklist ก่อนเปิดให้ลูกค้า</h3>
+      <ul>
+        <li>☐ <code>APP_DEBUG=false</code> (ห้ามลืม)</li>
+        <li>☐ <code>APP_KEY</code> ตั้งแล้ว</li>
+        <li>☐ HTTPS ทำงาน + <code>SESSION_SECURE_COOKIE=true</code></li>
+        <li>☐ Database migrate สำเร็จ</li>
+        <li>☐ Seeders run แล้ว</li>
+        <li>☐ Storage R2/S3 ทำงาน — ทดสอบโดย upload avatar ที่ <code>/profile</code></li>
+        <li>☐ Mail ส่งได้</li>
+        <li>☐ Queue worker active</li>
+        <li>☐ Scheduler active</li>
+        <li>☐ อย่างน้อย 1 payment gateway ทำงาน</li>
+        <li>☐ เปลี่ยน admin password จาก <code>password123</code></li>
+        <li>☐ ลบ test photographers/events</li>
+        <li>☐ ตั้ง custom domain + SSL ทำงาน</li>
+      </ul>
+
+      <h3>ลบ test data</h3>
+      <pre><code class="language-bash">php artisan tinker
+> DB::table('event_events')->where('slug', 'like', '%-test')->delete();
+> DB::table('auth_users')->where('email', 'like', '%@test.local')->delete();
+> DB::table('photographer_profiles')->where('photographer_code', 'like', 'PH-T0%')->delete();</code></pre>
+
+      <!-- Step 14 -->
+      <h2 id="step-14"><span class="step-num">14</span>การ Deploy ครั้งต่อๆ ไป</h2>
+      <p>หลัง setup ครั้งแรกแล้ว deploy ใหม่ง่ายมาก:</p>
+      <pre><code class="language-bash">cd C:\xampp\htdocs\photo-gallery-pgsql
+
+# แก้ code
+# ...
+
+# Test
+php artisan test
+
+# Push
+git add .
+git commit -m "feat: เพิ่มฟีเจอร์ XYZ"
+git push
+
+# Laravel Cloud จะ auto-deploy</code></pre>
+
+      <h3>Deploy hooks</h3>
+      <p>Application → tab <strong>Settings</strong> → <strong>Deploy Script</strong>:</p>
+      <pre><code class="language-bash">php artisan migrate --force
+php artisan db:seed --class=AppSettingsSeeder
+php artisan cache:clear
+php artisan route:cache
+php artisan view:cache
+php artisan config:cache
+php artisan event:cache</code></pre>
+      <blockquote>⚠️ <code>config:cache</code> หลัง deploy = boot เร็วขึ้น ~30%</blockquote>
+
+      <h3>Rollback</h3>
+      <p>tab <strong>Deployments</strong> → หา deployment ก่อนหน้า → กด <strong>Rollback</strong></p>
+
+      <!-- Step 15 -->
+      <h2 id="step-15"><span class="step-num">15</span>Troubleshooting</h2>
+
+      <h3>Error: "SQLSTATE[08006]: could not connect to server"</h3>
+      <p><strong>สาเหตุ:</strong> Database ยังไม่ provision หรือ env vars ไม่ตรง</p>
+      <p><strong>แก้:</strong></p>
+      <ol>
+        <li>tab <strong>Resources</strong> → DB status = <code>running</code>?</li>
+        <li>ตรวจ env: <code>DB_HOST</code>, <code>DB_DATABASE</code>, <code>DB_USERNAME</code>, <code>DB_PASSWORD</code></li>
+        <li>ถ้า external DB → ตรวจ firewall whitelist</li>
+      </ol>
+
+      <h3>Error: R2 upload fail</h3>
+      <p><strong>แก้:</strong></p>
+      <pre><code class="language-bash">php artisan tinker
+> Storage::disk('r2')->put('test.txt', 'hello');
+> // ถ้า error → ดู error message</code></pre>
+      <ul>
+        <li>ตรวจ <code>AWS_ENDPOINT</code> URL — ต้องเป็น <code>https://YOUR-ACCOUNT-ID.r2.cloudflarestorage.com</code></li>
+        <li>ตรวจ R2 token permission — ต้องมี Object Read &amp; Write</li>
+      </ul>
+
+      <h3>Error: "419 Page Expired" หลัง login</h3>
+      <pre><code class="language-bash">APP_URL=https://photogallery.co.th
+SESSION_SECURE_COOKIE=true
+SESSION_DOMAIN=.photogallery.co.th</code></pre>
+
+      <h3>Image upload สำเร็จแต่ดูไม่ได้ (broken image)</h3>
+      <ol>
+        <li>R2 Dashboard → bucket → Settings → <strong>Public Access</strong> → Allow</li>
+        <li>Copy public URL: <code>https://pub-xxxxx.r2.dev</code></li>
+        <li>ตั้ง env: <code>AWS_URL=https://pub-xxxxx.r2.dev</code></li>
+        <li><code>php artisan cache:clear</code></li>
+      </ol>
+
+      <h3>Queue worker ไม่ process job</h3>
+      <ol>
+        <li>Application → Workers → status = <code>Running</code>?</li>
+        <li>Logs → กรอง <code>[queue]</code> → เห็น <code>Processing job</code>?</li>
+        <li>ตรวจ env <code>QUEUE_CONNECTION</code> ตรงกับ worker config</li>
+      </ol>
+
+      <h3>Scheduler ไม่รัน</h3>
+      <ol>
+        <li>Application → Scheduler → toggle = ON?</li>
+        <li>Console → <code>php artisan schedule:list</code> → เห็น job ทั้งหมด?</li>
+        <li>Console → <code>php artisan schedule:run</code> → manual test</li>
+      </ol>
+
+      <h3>LINE webhook ไม่ทำงาน</h3>
+      <ol>
+        <li>ตรวจ <code>line_channel_secret</code> ตรงกับ LINE Developers</li>
+        <li>Webhook URL ต้องเป็น HTTPS</li>
+        <li>ดู <code>payment_audit_log</code> table → action='line_webhook_failed'</li>
+      </ol>
+
+      <h3>Site ช้า / Timeout</h3>
+      <ol>
+        <li><strong>Cache config</strong>: <code>php artisan config:cache &amp;&amp; php artisan route:cache</code></li>
+        <li><strong>Upgrade plan</strong>: Hobby → Production</li>
+        <li><strong>Add Redis</strong> ถ้ายังใช้ database driver</li>
+        <li><strong>CDN</strong> — เพิ่ม Cloudflare proxy</li>
+      </ol>
+
+      <hr>
+
+      <h2>เปรียบเทียบ Laravel Cloud vs VPS</h2>
+      <table>
+        <thead><tr><th>สิ่งที่ต้องทำ</th><th>Laravel Cloud</th><th>VPS</th></tr></thead>
+        <tbody>
+          <tr><td>Setup server</td><td>✅ คลิกเดียว</td><td>❌ install เอง</td></tr>
+          <tr><td>SSL certificate</td><td>✅ auto</td><td>❌ ตั้ง certbot เอง</td></tr>
+          <tr><td>Auto-scaling</td><td>✅ มี</td><td>❌ ไม่มี</td></tr>
+          <tr><td>Zero-downtime</td><td>✅ auto</td><td>❌ ทำเอง</td></tr>
+          <tr><td>Queue worker</td><td>✅ UI toggle</td><td>❌ supervisor</td></tr>
+          <tr><td>Scheduler</td><td>✅ UI toggle</td><td>❌ crontab</td></tr>
+          <tr><td>Logs</td><td>✅ stream</td><td>❌ ssh + tail</td></tr>
+          <tr><td>ราคา</td><td>$0-20+/mo</td><td>$5-10/mo</td></tr>
+        </tbody>
+      </table>
+
+      <h2>สิ่งที่ทำต่อหลัง deploy</h2>
+      <ol>
+        <li>อ่าน <a href="MANUAL_2026.html"><code>MANUAL_2026.html</code></a> — คู่มือใช้งานทุก feature</li>
+        <li>เปลี่ยน admin password — <code>/admin/admins</code></li>
+        <li>ตั้ง alert rules — <code>/admin/alerts/rules</code> (มี 16 rules default แล้ว)</li>
+        <li>เปิด feature ที่ต้องการ — <code>/admin/features</code></li>
+        <li>ใส่ branding — site logo, favicon ที่ <code>/admin/settings/general</code></li>
+        <li>ตั้ง legal pages — privacy/terms/refund ที่ <code>/admin/legal-pages</code></li>
+        <li>เชิญทีมงาน — <code>/admin/admins</code></li>
+        <li>Monitor 7 วันแรก — ดู <code>/admin/diagnostics</code> ทุกวัน</li>
+      </ol>
+
+      <hr>
+      <p class="text-xs text-slate-400 mt-12">
+        เวอร์ชันคู่มือ: <strong>2026.04.29</strong> · ระบบที่อิงตาม: <strong>Laravel 12 + PHP 8.2 + PostgreSQL 16 + Vite 7 + Tailwind 4</strong><br>
+        ขอบเขต: ระบบที่มีอยู่จริงในโค้ดเบสปัจจุบันเท่านั้น
+      </p>
+
+      <p class="text-sm text-slate-500 mt-6">
+        หากเจอปัญหาที่คู่มือไม่ครอบคลุม:
+      </p>
+      <ol class="text-sm">
+        <li>ดู logs ใน Laravel Cloud → tab Logs</li>
+        <li>ดู error ใน Sentry (ถ้าเปิด)</li>
+        <li>ดู <code>storage/logs/laravel.log</code> ผ่าน Console</li>
+        <li>ตรวจ <code>/admin/diagnostics</code> ในแอป</li>
+      </ol>
+
+    </article>
+
+    <div class="mt-12 grid grid-cols-1 sm:grid-cols-2 gap-4 no-print">
+      <a href="MANUAL_2026.html" class="block p-5 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-xl transition">
+        <div class="text-xs uppercase tracking-wider opacity-80 mb-1">ถัดไป</div>
+        <div class="font-bold text-lg">System Manual →</div>
+        <div class="text-sm opacity-90 mt-1">คู่มือใช้งานทุก feature</div>
+      </a>
+      <a href="index.html" class="block p-5 rounded-2xl bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 hover:shadow-md transition">
+        <div class="text-xs uppercase tracking-wider text-slate-400 mb-1">หน้าหลัก</div>
+        <div class="font-bold text-lg text-slate-900 dark:text-white">↑ กลับหน้าแรก Docs</div>
+        <div class="text-sm text-slate-500 mt-1">ดูเอกสารอื่นๆ</div>
+      </a>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+  function toggleTheme() {
+    const html = document.documentElement;
+    html.classList.toggle('dark');
+    localStorage.setItem('docs-theme', html.classList.contains('dark') ? 'dark' : 'light');
+  }
+  if (localStorage.getItem('docs-theme') === 'dark' ||
+      (!localStorage.getItem('docs-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.classList.add('dark');
+  }
+
+  const tocLinks = document.querySelectorAll('.toc-link');
+  const sections = document.querySelectorAll('h2[id]');
+  function updateActiveTOC() {
+    const scrollY = window.scrollY + 120;
+    let current = null;
+    sections.forEach(s => {
+      if (s.offsetTop <= scrollY) current = s.id;
+    });
+    tocLinks.forEach(link => {
+      link.classList.toggle('active', link.getAttribute('href') === '#' + current);
+    });
+  }
+  window.addEventListener('scroll', updateActiveTOC);
+  updateActiveTOC();
+
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      const target = document.querySelector(a.getAttribute('href'));
+      if (target) {
+        e.preventDefault();
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+</script>
+</body>
+</html>

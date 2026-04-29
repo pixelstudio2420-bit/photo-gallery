@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php check_admins.php)",
+      "Bash(php check_users.php)",
+      "Bash(php check_admin_pw.php)",
+      "Bash(php artisan:*)",
+      "Bash(xargs grep:*)",
+      "Bash(php vendor/bin/phpunit --testsuite Unit --filter \"DashboardAggregationServiceTest|ValidatesFileUploadsTraitTest\")",
+      "Bash(grep -n '        $this->ok\\\\|        $this->warn\\\\|        $this->fail\\\\|return;$\\\\|^            $this->ok\\\\|^            $this->warn\\\\|^            $this->fail' /c/xampp/htdocs/photo-gallery-pgsql/app/Console/Commands/EnvironmentCheckCommand.php)"
+    ]
+  }
+}

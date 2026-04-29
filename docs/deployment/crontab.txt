@@ -1,0 +1,22 @@
+# ────────────────────────────────────────────────────────────────────────
+# Photo Gallery — Laravel Scheduler crontab entry
+# ────────────────────────────────────────────────────────────────────────
+# Install as the www-data user so scheduled tasks have the right file
+# permissions for storage/ and bootstrap/cache:
+#
+#   sudo crontab -u www-data -e
+#
+# Paste the single non-comment line below:
+# ────────────────────────────────────────────────────────────────────────
+
+* * * * * cd /var/www/photo-gallery && /usr/bin/php artisan schedule:run >> /dev/null 2>&1
+
+# The scheduler dispatches:
+#   • app:cleanup-tokens        — purge expired download tokens (hourly)
+#   • app:sync-drive-cache      — refresh event_photos_cache from Drive
+#   • app:health-check          — ping critical services
+#   • app:backup                — MySQL dump + storage tarball (nightly)
+#   • app:send-abandoned-carts  — recover abandoned checkouts
+#   • app:rotate-watermarks     — regenerate aged watermarks
+#
+# See app/Console/Kernel.php for the full schedule definition.

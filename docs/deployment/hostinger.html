@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🟣 Hostinger VPS — Step-by-Step Guide | Photo Gallery</title>
+<meta name="description" content="คู่มือ deploy Photo Gallery บน Hostinger VPS แบบ step-by-step ตั้งแต่กดจ่ายเงินจนเว็บขึ้น online">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --hostinger: #673DE6;
+    --hostinger-dark: #5321d4;
+    --hostinger-light: #e9e0ff;
+  }
+  html { scroll-behavior: smooth; scroll-padding-top: 2rem; }
+  body { font-family: 'Prompt', ui-sans-serif, system-ui, sans-serif; }
+  code, pre { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+  .hero-bg {
+    background:
+      radial-gradient(ellipse 70% 40% at 50% 0%, rgba(103,61,230,0.4) 0%, transparent 60%),
+      radial-gradient(ellipse at bottom right, #2e1065 0%, #0f172a 70%);
+  }
+  .brand-text { color: #a78bfa; }
+  .brand-bg { background-color: #673DE6; }
+  .brand-bg:hover { background-color: #5321d4; }
+
+  .code-block {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    font-size: 0.875rem;
+    line-height: 1.7;
+    border: 1px solid #1e293b;
+    position: relative;
+  }
+  .code-block .comment { color: #64748b; font-style: italic; }
+  .code-block .keyword { color: #c084fc; }
+  .code-block .string  { color: #fbbf24; }
+  .code-block .cmd     { color: #4ade80; }
+  .code-block .flag    { color: #60a5fa; }
+  .code-block .path    { color: #f472b6; }
+  .code-block .prompt  { color: #94a3b8; user-select: none; }
+
+  .copy-btn {
+    position: absolute; top: 0.5rem; right: 0.5rem;
+    background: #1e293b; color: #94a3b8;
+    border: 1px solid #334155;
+    padding: 0.25rem 0.625rem; border-radius: 0.375rem;
+    font-size: 0.75rem; cursor: pointer;
+    font-family: 'Prompt', sans-serif;
+    opacity: 0; transition: opacity .15s;
+  }
+  .code-block:hover .copy-btn { opacity: 1; }
+  .copy-btn:hover { background: #334155; color: #f1f5f9; }
+  .copy-btn.copied { background: #065f46; color: #a7f3d0; border-color: #059669; }
+
+  .sidebar-link {
+    display: block; padding: 0.375rem 0.75rem;
+    border-radius: 0.375rem; color: #475569;
+    font-size: 0.875rem; transition: all .15s;
+    border-left: 2px solid transparent;
+  }
+  .sidebar-link:hover { background: #f5f3ff; color: #5321d4; }
+  .sidebar-link.active {
+    color: #5321d4; background: #ede9fe;
+    border-left-color: #673DE6; font-weight: 500;
+  }
+
+  .callout { border-left: 4px solid; padding: 1rem 1.25rem; border-radius: 0.5rem; margin: 1rem 0; }
+  .callout-info    { background: #eff6ff; border-color: #3b82f6; color: #1e3a8a; }
+  .callout-warn    { background: #fffbeb; border-color: #f59e0b; color: #78350f; }
+  .callout-danger  { background: #fef2f2; border-color: #ef4444; color: #7f1d1d; }
+  .callout-success { background: #f0fdf4; border-color: #22c55e; color: #14532d; }
+  .callout-tip     { background: #faf5ff; border-color: #a855f7; color: #581c87; }
+  .callout-brand   { background: #f5f3ff; border-color: #673DE6; color: #4c1d95; }
+
+  .step-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 2.5rem; height: 2.5rem; border-radius: 9999px;
+    background: #673DE6; color: white; font-weight: 700;
+    font-size: 1rem; margin-right: 0.75rem;
+    box-shadow: 0 4px 12px rgb(103 61 230 / 0.4);
+  }
+  .time-badge {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    background: #f1f5f9; color: #475569;
+    padding: 0.25rem 0.625rem; border-radius: 9999px;
+    font-size: 0.75rem; font-weight: 500;
+  }
+
+  .screenshot-placeholder {
+    background: #f8fafc; border: 2px dashed #cbd5e1;
+    border-radius: 0.5rem; padding: 2rem;
+    text-align: center; color: #64748b;
+    font-size: 0.875rem; margin: 1rem 0;
+  }
+  .screenshot-placeholder .icon { font-size: 2rem; display: block; margin-bottom: 0.5rem; }
+
+  .ui-mockup {
+    background: white; border: 1px solid #e2e8f0;
+    border-radius: 0.5rem; padding: 1rem;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+    font-size: 0.875rem;
+    margin: 0.75rem 0;
+  }
+  .ui-mockup .ui-header {
+    background: #673DE6; color: white;
+    padding: 0.5rem 1rem; margin: -1rem -1rem 1rem -1rem;
+    border-radius: 0.5rem 0.5rem 0 0;
+    font-weight: 600;
+  }
+  .ui-mockup .ui-row {
+    display: flex; justify-content: space-between;
+    padding: 0.5rem 0; border-bottom: 1px solid #f1f5f9;
+  }
+  .ui-mockup .ui-row:last-child { border-bottom: none; }
+  .ui-mockup .ui-label { color: #64748b; font-size: 0.8125rem; }
+  .ui-mockup .ui-value { font-weight: 500; }
+  .ui-mockup .ui-button {
+    background: #673DE6; color: white;
+    padding: 0.5rem 1rem; border-radius: 0.375rem;
+    display: inline-block; margin-top: 0.5rem;
+    font-size: 0.8125rem; font-weight: 500;
+  }
+
+  table.info { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+  table.info th, table.info td { padding: 0.75rem; border: 1px solid #e2e8f0; text-align: left; font-size: 0.875rem; }
+  table.info thead th { background: #f5f3ff; font-weight: 600; color: #5321d4; }
+  table.info tbody tr:hover { background: #faf5ff; }
+
+  .pill { display: inline-block; padding: 0.125rem 0.625rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+  .pill-time    { background: #e0e7ff; color: #3730a3; }
+  .pill-cost    { background: #fef3c7; color: #92400e; }
+  .pill-req     { background: #fee2e2; color: #991b1b; }
+  .pill-recommend { background: #dcfce7; color: #166534; }
+
+  h2 { scroll-margin-top: 2rem; }
+  h3 { scroll-margin-top: 2rem; }
+
+  @media print {
+    .no-print, aside, .copy-btn { display: none !important; }
+    main { padding: 0 !important; max-width: none !important; }
+  }
+
+  .timeline {
+    position: relative;
+    padding-left: 2rem;
+  }
+  .timeline::before {
+    content: ''; position: absolute;
+    left: 0.875rem; top: 0; bottom: 0;
+    width: 2px; background: linear-gradient(to bottom, #673DE6 0%, #a78bfa 100%);
+  }
+  .timeline-item {
+    position: relative;
+    margin-bottom: 2rem;
+  }
+  .timeline-item::before {
+    content: ''; position: absolute;
+    left: -1.75rem; top: 0.25rem;
+    width: 1rem; height: 1rem;
+    border-radius: 9999px;
+    background: #673DE6;
+    border: 3px solid white;
+    box-shadow: 0 0 0 2px #673DE6;
+  }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+
+<!-- ═══ HERO ═══ -->
+<header class="hero-bg text-white">
+  <div class="max-w-7xl mx-auto px-6 py-16 md:py-20">
+    <div class="flex items-center gap-3 mb-4">
+      <a href="../index.html" class="text-purple-300 hover:text-white text-sm flex items-center gap-1">
+        ← กลับไปยัง Documentation Hub
+      </a>
+    </div>
+    <div class="flex items-center gap-2 text-purple-300 text-sm mb-4">
+      <span>🟣</span>
+      <span>PROVIDER-SPECIFIC GUIDE</span>
+      <span class="mx-2">•</span>
+      <span>Hostinger VPS</span>
+    </div>
+    <h1 class="text-4xl md:text-6xl font-bold mb-4 leading-tight">
+      Deploy บน <span class="brand-text">Hostinger VPS</span><br>
+      แบบ Step-by-Step
+    </h1>
+    <p class="text-lg md:text-xl text-slate-300 max-w-3xl mb-6">
+      จาก <strong class="text-white">กดจ่ายเงิน</strong> ถึง
+      <strong class="text-white">เว็บขึ้น online</strong> ใน <strong class="text-white">~30 นาที</strong>
+      • งบเริ่มต้น ฿180/เดือน
+    </p>
+    <div class="flex flex-wrap gap-3 mb-6">
+      <a href="#step-1" class="bg-white text-slate-900 hover:bg-slate-100 px-5 py-2.5 rounded-lg font-medium transition">เริ่มต้น →</a>
+      <a href="#timeline" class="brand-bg text-white px-5 py-2.5 rounded-lg font-medium transition">ดู Timeline</a>
+      <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-700 px-5 py-2.5 rounded-lg font-medium transition no-print">🖨 พิมพ์</button>
+    </div>
+    <div class="flex flex-wrap gap-4 text-sm">
+      <div class="flex items-center gap-2 bg-white/10 backdrop-blur px-3 py-1.5 rounded-lg">
+        <span class="text-purple-300">⏱</span>
+        <span>~30 นาที รวม</span>
+      </div>
+      <div class="flex items-center gap-2 bg-white/10 backdrop-blur px-3 py-1.5 rounded-lg">
+        <span class="text-purple-300">💰</span>
+        <span>฿180-250/เดือน</span>
+      </div>
+      <div class="flex items-center gap-2 bg-white/10 backdrop-blur px-3 py-1.5 rounded-lg">
+        <span class="text-purple-300">📍</span>
+        <span>Singapore Location</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="max-w-7xl mx-auto px-6 flex gap-8 py-8">
+
+<!-- ═══ SIDEBAR ═══ -->
+<aside class="no-print hidden lg:block w-64 flex-shrink-0">
+  <nav class="sticky top-4 space-y-1">
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-4 mb-2 px-3">ภาพรวม</div>
+    <a href="#timeline" class="sidebar-link">📅 Timeline</a>
+    <a href="#prerequisites" class="sidebar-link">✅ สิ่งที่ต้องเตรียม</a>
+
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-4 mb-2 px-3">ซื้อ + ตั้งค่า</div>
+    <a href="#step-1" class="sidebar-link">1. สมัครบัญชี</a>
+    <a href="#step-2" class="sidebar-link">2. เลือกแผน + ชำระเงิน</a>
+    <a href="#step-3" class="sidebar-link">3. ตั้งค่า VPS ครั้งแรก</a>
+    <a href="#step-4" class="sidebar-link">4. เข้า Server (SSH)</a>
+    <a href="#step-5" class="sidebar-link">5. Harden Security</a>
+
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-4 mb-2 px-3">Deploy</div>
+    <a href="#step-6" class="sidebar-link">6. ชี้ DNS</a>
+    <a href="#step-7" class="sidebar-link">7. รัน provision.sh</a>
+    <a href="#step-8" class="sidebar-link">8. External Services</a>
+    <a href="#step-9" class="sidebar-link">9. ทดสอบ + Admin</a>
+
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-4 mb-2 px-3">หลัง Deploy</div>
+    <a href="#hpanel-tips" class="sidebar-link">hPanel Tips</a>
+    <a href="#troubleshoot" class="sidebar-link">แก้ปัญหา</a>
+    <a href="#cost" class="sidebar-link">สรุปค่าใช้จ่าย</a>
+  </nav>
+</aside>
+
+<!-- ═══ MAIN ═══ -->
+<main class="flex-1 min-w-0 bg-white rounded-xl shadow-sm p-6 md:p-10 space-y-12">
+
+<!-- ── TIMELINE ── -->
+<section id="timeline">
+  <h2 class="text-3xl font-bold mb-6">📅 Timeline ภาพรวม</h2>
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="flex items-center gap-3 mb-1">
+        <strong class="text-lg">สมัครบัญชี + เลือกแผน</strong>
+        <span class="pill pill-time">~5 นาที</span>
+      </div>
+      <p class="text-sm text-slate-600">สมัคร Hostinger → เลือก KVM 2 → เลือก location Singapore → ชำระเงิน</p>
+    </div>
+    <div class="timeline-item">
+      <div class="flex items-center gap-3 mb-1">
+        <strong class="text-lg">รอ VPS provisioning</strong>
+        <span class="pill pill-time">~10 นาที</span>
+      </div>
+      <p class="text-sm text-slate-600">Hostinger สร้าง server ให้ — เตรียมบัญชี Google Cloud / LINE Developers ระหว่างรอ</p>
+    </div>
+    <div class="timeline-item">
+      <div class="flex items-center gap-3 mb-1">
+        <strong class="text-lg">ชี้ DNS + SSH เข้าเครื่อง</strong>
+        <span class="pill pill-time">~5 นาที</span>
+      </div>
+      <p class="text-sm text-slate-600">ชี้ domain → VPS IP ผ่าน Cloudflare → SSH เข้าเครื่อง</p>
+    </div>
+    <div class="timeline-item">
+      <div class="flex items-center gap-3 mb-1">
+        <strong class="text-lg">รัน provision.sh</strong>
+        <span class="pill pill-time">~10 นาที</span>
+      </div>
+      <p class="text-sm text-slate-600">ติดตั้ง stack ทั้งหมด + deploy app + SSL อัตโนมัติ</p>
+    </div>
+    <div class="timeline-item">
+      <div class="flex items-center gap-3 mb-1">
+        <strong class="text-lg">สร้าง admin + ทดสอบ</strong>
+        <span class="pill pill-time">~5 นาที</span>
+      </div>
+      <p class="text-sm text-slate-600">tinker สร้าง admin → เปิดเว็บ → smoke test ผ่าน = เสร็จ!</p>
+    </div>
+  </div>
+
+  <div class="callout callout-brand mt-4">
+    <strong>⚡ รวมเวลาทั้งหมด: ~35 นาที</strong> — หักเวลาที่รอ Hostinger provision (10 นาที) คุณทำงานจริง ~25 นาที
+  </div>
+</section>
+
+<!-- ── PREREQUISITES ── -->
+<section id="prerequisites">
+  <h2 class="text-3xl font-bold mb-6">✅ สิ่งที่ต้องเตรียมก่อนเริ่ม</h2>
+
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="border border-red-200 bg-red-50 rounded-lg p-4">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="pill pill-req">จำเป็น</span>
+        <strong>บัตรเครดิต/เดบิต</strong>
+      </div>
+      <p class="text-sm">Visa / Mastercard — Hostinger รองรับ PayPal ด้วย ถ้าไม่มีบัตร</p>
+    </div>
+    <div class="border border-red-200 bg-red-50 rounded-lg p-4">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="pill pill-req">จำเป็น</span>
+        <strong>อีเมล</strong>
+      </div>
+      <p class="text-sm">สำหรับสมัครบัญชี + รับใบเสร็จ + Let's Encrypt notifications</p>
+    </div>
+    <div class="border border-red-200 bg-red-50 rounded-lg p-4">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="pill pill-req">จำเป็น</span>
+        <strong>Domain name</strong>
+      </div>
+      <p class="text-sm">ซื้อแยก (Porkbun/Cloudflare) หรือซื้อจาก Hostinger ก็ได้ — <strong>มีได้ตั้งแต่วันนี้</strong></p>
+    </div>
+    <div class="border border-red-200 bg-red-50 rounded-lg p-4">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="pill pill-req">จำเป็น</span>
+        <strong>Git repo ของโปรเจค</strong>
+      </div>
+      <p class="text-sm">GitHub/GitLab private/public — <code>provision.sh</code> จะ clone มา</p>
+    </div>
+    <div class="border border-blue-200 bg-blue-50 rounded-lg p-4">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="pill pill-recommend">แนะนำ</span>
+        <strong>SSH client</strong>
+      </div>
+      <p class="text-sm">
+        Windows: <a href="https://www.putty.org/" class="text-indigo-600 underline">PuTTY</a> หรือ Windows Terminal<br>
+        Mac/Linux: Terminal ในตัว
+      </p>
+    </div>
+    <div class="border border-blue-200 bg-blue-50 rounded-lg p-4">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="pill pill-recommend">แนะนำ</span>
+        <strong>Password Manager</strong>
+      </div>
+      <p class="text-sm">1Password / Bitwarden — สำหรับเก็บ API keys, SSH keys, passwords</p>
+    </div>
+  </div>
+
+  <div class="callout callout-tip mt-6">
+    <strong>💡 Tip:</strong> สมัคร Google Cloud + LINE Developers ไว้ก่อน (ใช้เวลา ~15 นาที) จะได้ไม่เสียเวลาระหว่าง deploy
+  </div>
+</section>
+
+<!-- ═══ STEP 1 ═══ -->
+<section id="step-1">
+  <div class="flex items-center mb-4">
+    <span class="step-badge">1</span>
+    <h2 class="text-3xl font-bold">สมัครบัญชี Hostinger</h2>
+    <span class="ml-auto pill pill-time">⏱ ~3 นาที</span>
+  </div>
+
+  <ol class="list-decimal ml-6 space-y-3">
+    <li>ไปที่ <a href="https://hostinger.com" class="text-purple-600 underline font-medium">hostinger.com</a></li>
+    <li>คลิก <strong>Log in</strong> (มุมบนขวา) → <strong>Sign up</strong></li>
+    <li>กรอกอีเมล + password (อย่างน้อย 12 ตัวอักษร + มีตัวพิมพ์ใหญ่ + ตัวเลข + สัญลักษณ์)</li>
+    <li>ยืนยันอีเมลผ่านลิงก์ที่ส่งไป</li>
+    <li>Login แล้วจะเข้า <strong>hPanel</strong> — หน้า dashboard หลัก</li>
+  </ol>
+
+  <div class="callout callout-warn mt-4">
+    <strong>⚠ อย่าใช้ Google/Facebook Login</strong> — ถ้าบัญชี Google/FB ถูก ban ในอนาคต จะเข้า Hostinger ไม่ได้ ใช้ email+password จะ stable กว่า
+  </div>
+</section>
+
+<!-- ═══ STEP 2 ═══ -->
+<section id="step-2">
+  <div class="flex items-center mb-4">
+    <span class="step-badge">2</span>
+    <h2 class="text-3xl font-bold">เลือกแผน + ชำระเงิน</h2>
+    <span class="ml-auto pill pill-time">⏱ ~5 นาที</span>
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">2.1 ไปหน้า VPS Hosting</h3>
+  <p class="text-sm mb-3">ในหน้า hostinger.com:</p>
+  <ol class="list-decimal ml-6 space-y-2 text-sm">
+    <li>เมนูบน: <strong>VPS Hosting</strong> (ไม่ใช่ Web Hosting!)</li>
+    <li>หรือไปตรงๆ: <a href="https://www.hostinger.com/vps-hosting" class="text-purple-600 underline">hostinger.com/vps-hosting</a></li>
+  </ol>
+
+  <div class="callout callout-danger mt-3">
+    <strong>🚫 อย่ากด "Web Hosting" / "Premium Hosting"</strong> — พวกนั้นเป็น Shared Hosting ใช้กับ Laravel ไม่ได้ (ไม่มี SSH, cron, supervisor)
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">2.2 เลือกแผน</h3>
+
+  <div class="ui-mockup">
+    <div class="ui-header">KVM 2 — Recommended ✨</div>
+    <div class="ui-row"><span class="ui-label">vCPU</span><span class="ui-value">2 cores</span></div>
+    <div class="ui-row"><span class="ui-label">RAM</span><span class="ui-value">8 GB</span></div>
+    <div class="ui-row"><span class="ui-label">Storage</span><span class="ui-value">100 GB NVMe</span></div>
+    <div class="ui-row"><span class="ui-label">Bandwidth</span><span class="ui-value">8 TB</span></div>
+    <div class="ui-row"><span class="ui-label">ราคา (48 เดือน)</span><span class="ui-value text-green-600">$6.99/mo ≈ ฿250</span></div>
+    <div class="ui-row"><span class="ui-label">ราคา (12 เดือน)</span><span class="ui-value">$11.99/mo ≈ ฿430</span></div>
+  </div>
+
+  <p class="text-sm mt-3">
+    <strong>คำแนะนำ:</strong>
+  </p>
+  <ul class="list-disc ml-6 text-sm space-y-1">
+    <li>ถ้ามั่นใจ + ใช้ยาว → <strong>48 เดือน</strong> (ถูกสุด ~฿250/mo)</li>
+    <li>ถ้าอยากทดลอง → <strong>12 เดือน</strong> (~฿430/mo — มี 30-day refund)</li>
+    <li>ห้ามเลือก 1 เดือน — แพงมาก (~$29 = ฿1,040/mo)</li>
+  </ul>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">2.3 กรอกข้อมูล Checkout</h3>
+
+  <div class="callout callout-info">
+    <strong>ช่องที่ต้องใส่ในตอน checkout:</strong>
+    <ul class="mt-2 ml-6 list-disc text-sm">
+      <li><strong>Payment method:</strong> Credit Card หรือ PayPal</li>
+      <li><strong>Coupon code:</strong> ลอง search Google "Hostinger VPS coupon [เดือน-ปี]" — อาจเจอลด 10-20% เพิ่ม</li>
+      <li><strong>Domain:</strong> ถ้าแผนมีแถมฟรี 1 ปี — ขึ้นอยู่กับแผน</li>
+      <li><strong>Autorenewal:</strong> ปิดก่อนได้ (ประหยัดค่าต่ออายุราคาแพง)</li>
+    </ul>
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">2.4 ชำระเงิน</h3>
+  <p class="text-sm">คลิก <strong>Submit Secure Payment</strong> → รอยืนยัน email + SMS OTP จากธนาคาร</p>
+
+  <div class="callout callout-success mt-4">
+    ✓ <strong>ชำระเงินเสร็จ!</strong> Hostinger จะส่ง email ยืนยันภายใน 1-2 นาที + redirect ไปหน้า <strong>Setup</strong> ของ VPS
+  </div>
+</section>
+
+<!-- ═══ STEP 3 ═══ -->
+<section id="step-3">
+  <div class="flex items-center mb-4">
+    <span class="step-badge">3</span>
+    <h2 class="text-3xl font-bold">ตั้งค่า VPS ครั้งแรก</h2>
+    <span class="ml-auto pill pill-time">⏱ ~5 นาที (+ รอ provision 10 นาที)</span>
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">3.1 เข้าหน้า VPS Setup</h3>
+
+  <p class="text-sm mb-3">หลังจ่ายเงินเสร็จ คุณจะถูก redirect ไปหน้านี้:</p>
+
+  <div class="screenshot-placeholder">
+    <span class="icon">🖥</span>
+    <strong>"Setup your VPS"</strong><br>
+    หน้านี้จะมี wizard 4 ขั้นตอน: Choose OS → Password → Location → Confirm
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">3.2 เลือก OS</h3>
+
+  <table class="info">
+    <thead>
+      <tr><th>Option</th><th>เลือก?</th><th>เหตุผล</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Ubuntu 24.04 LTS</td><td>❌</td><td>ใหม่เกิน — บาง packages ยังไม่รองรับ</td></tr>
+      <tr class="bg-green-50"><td><strong>Ubuntu 22.04 LTS</strong></td><td>✅ <strong>เลือกอันนี้</strong></td><td>Stable + provision.sh ทดสอบกับตัวนี้</td></tr>
+      <tr><td>Ubuntu 20.04 LTS</td><td>⚠️</td><td>เก่า — PHP 8.2 อาจไม่มี default repo</td></tr>
+      <tr><td>Debian 12</td><td>⚠️</td><td>ใช้ได้ แต่ต้องแก้ provision.sh</td></tr>
+      <tr><td>CentOS / AlmaLinux</td><td>❌</td><td>ใช้ package manager ต่าง — ไม่รองรับ</td></tr>
+      <tr><td>WordPress / cPanel</td><td>❌</td><td>ติดตั้งมาเต็มแล้ว เราต้อง bare OS</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">3.3 ตั้ง Root Password</h3>
+
+  <div class="callout callout-warn">
+    <strong>⚠ Password policy ของ Hostinger:</strong>
+    <ul class="mt-2 ml-6 list-disc text-sm">
+      <li>อย่างน้อย 8 ตัวอักษร (แนะนำ 20+)</li>
+      <li>ต้องมีตัวพิมพ์ใหญ่ + ตัวพิมพ์เล็ก + ตัวเลข + สัญลักษณ์</li>
+      <li>ห้ามใช้ dictionary word ซ้ำ</li>
+      <li><strong>บันทึกไว้ที่ Password Manager</strong> — ถ้าลืมต้อง reset ผ่าน hPanel</li>
+    </ul>
+  </div>
+
+  <p class="text-sm mt-3">สร้าง password แข็งๆ (หรือ copy จาก generator):</p>
+  <div class="code-block text-xs">
+<pre><span class="comment"># ใช้ Bitwarden/1Password generator หรือ command นี้ใน browser console:</span>
+<span class="cmd">Array.from(crypto.getRandomValues(new Uint8Array(24))).map(b =&gt;
+  'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&amp;*'[b % 70]
+).join('')</span></pre>
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">3.4 เลือก Location</h3>
+
+  <table class="info">
+    <thead>
+      <tr><th>Location</th><th>Latency จากไทย</th><th>แนะนำ?</th></tr>
+    </thead>
+    <tbody>
+      <tr class="bg-green-50"><td><strong>Singapore (sgp1)</strong></td><td>~30-40 ms</td><td>✅ <strong>ดีที่สุด</strong></td></tr>
+      <tr><td>Jakarta (Indonesia)</td><td>~50-70 ms</td><td>👍 ก็ใช้ได้</td></tr>
+      <tr><td>India</td><td>~100 ms</td><td>⚠️ ช้าลง</td></tr>
+      <tr><td>USA / Europe</td><td>200-300 ms</td><td>❌ ช้ามาก อย่าเลือก!</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">3.5 Confirm + รอ Provisioning</h3>
+
+  <p class="text-sm">คลิก <strong>"Finish setup"</strong> → Hostinger เริ่มสร้าง VM</p>
+
+  <div class="screenshot-placeholder">
+    <span class="icon">⏳</span>
+    <strong>"Setting up your VPS..."</strong><br>
+    จะเห็น progress bar — ใช้เวลา <strong>5-15 นาที</strong> (ปกติ ~10 นาที)<br>
+    <em>ระหว่างรอ ไปเตรียม Google Cloud + LINE Developers ได้เลย</em>
+  </div>
+
+  <div class="callout callout-success mt-4">
+    ✓ เมื่อเสร็จจะได้ email + hPanel แสดง <strong>IPv4 address</strong> ของเครื่อง — จดเก็บไว้ (เช่น 82.180.177.42)
+  </div>
+</section>
+
+<!-- ═══ STEP 4 ═══ -->
+<section id="step-4">
+  <div class="flex items-center mb-4">
+    <span class="step-badge">4</span>
+    <h2 class="text-3xl font-bold">เข้า Server (SSH)</h2>
+    <span class="ml-auto pill pill-time">⏱ ~2 นาที</span>
+  </div>
+
+  <p class="text-sm mb-4">มี 2 วิธี — เลือกอันที่สะดวก</p>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">🅰 วิธีที่ 1: Browser Terminal (ใน hPanel)</h3>
+
+  <p class="text-sm mb-2">ง่ายสุด ไม่ต้องติดตั้งอะไร:</p>
+  <ol class="list-decimal ml-6 space-y-2 text-sm">
+    <li>hPanel → <strong>VPS</strong> → คลิก server ที่ซื้อ</li>
+    <li>เมนูซ้าย → <strong>Browser terminal</strong></li>
+    <li>คลิก <strong>Connect</strong> → browser จะเปิด terminal ให้ใช้</li>
+    <li>Login ด้วย <code>root</code> + password ที่ตั้งไว้</li>
+  </ol>
+
+  <div class="callout callout-info mt-3 text-sm">
+    ⚠️ Browser terminal copy/paste ลำบากกว่า SSH จาก desktop — เหมาะกับงานเร็วๆ
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">🅱 วิธีที่ 2: SSH จาก Desktop (แนะนำ)</h3>
+
+  <h4 class="font-semibold mt-4 mb-2">🪟 บน Windows</h4>
+
+  <p class="text-sm mb-2">เปิด <strong>PowerShell</strong> (Win+X → Windows PowerShell) หรือ <strong>Windows Terminal</strong>:</p>
+  <div class="code-block">
+    <button class="copy-btn" data-copy>คัดลอก</button>
+<pre><span class="prompt">PS C:\&gt;</span> <span class="cmd">ssh</span> root@<span class="string">YOUR_VPS_IP</span>
+<span class="comment"># ครั้งแรกจะถาม "Are you sure you want to continue connecting?"</span>
+<span class="comment"># พิมพ์ yes + กรอก password ที่ตั้งไว้ใน Step 3.3</span></pre>
+  </div>
+
+  <h4 class="font-semibold mt-4 mb-2">🍎 บน Mac / 🐧 บน Linux</h4>
+
+  <p class="text-sm mb-2">เปิด <strong>Terminal</strong>:</p>
+  <div class="code-block">
+    <button class="copy-btn" data-copy>คัดลอก</button>
+<pre><span class="cmd">ssh</span> root@<span class="string">YOUR_VPS_IP</span></pre>
+  </div>
+
+  <div class="callout callout-success mt-4">
+    ✓ ถ้า login สำเร็จจะเห็น prompt: <code>root@srv-xxxxx:~#</code>
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">Troubleshoot Connection</h3>
+  <table class="info">
+    <thead>
+      <tr><th>Error</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>Connection refused</code></td>
+        <td>VPS ยังไม่ ready</td>
+        <td>รออีก 2-3 นาที ลองใหม่</td>
+      </tr>
+      <tr>
+        <td><code>Permission denied</code></td>
+        <td>Password ผิด</td>
+        <td>Copy-paste จาก password manager</td>
+      </tr>
+      <tr>
+        <td><code>Host key changed</code></td>
+        <td>Reinstall OS ทำให้ key เปลี่ยน</td>
+        <td><code>ssh-keygen -R YOUR_VPS_IP</code> แล้ว ssh ใหม่</td>
+      </tr>
+      <tr>
+        <td><code>Timeout</code></td>
+        <td>Firewall บล็อก</td>
+        <td>hPanel → Firewall → allow port 22</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═══ STEP 5 ═══ -->
+<section id="step-5">
+  <div class="flex items-center mb-4">
+    <span class="step-badge">5</span>
+    <h2 class="text-3xl font-bold">Harden Security (สำคัญ!)</h2>
+    <span class="ml-auto pill pill-time">⏱ ~5 นาที</span>
+  </div>
+
+  <div class="callout callout-danger">
+    <strong>⚠ ทำ step นี้ก่อนเปิดเว็บ!</strong> VPS ใหม่จะถูกโจมตีภายใน &lt;1 นาทีหลัง online — bot scan port 22 ตลอดเวลา
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">5.1 สร้าง non-root user</h3>
+
+  <p class="text-sm mb-2">ห้ามใช้ root ทำงานปกติ — สร้าง user ใหม่:</p>
+  <div class="code-block">
+    <button class="copy-btn" data-copy>คัดลอก</button>
+<pre><span class="comment"># สร้าง user ชื่อ deploy (เปลี่ยนได้ตามใจ)</span>
+<span class="cmd">adduser</span> deploy
+<span class="comment"># จะถาม password — ตั้งใหม่ บันทึกไว้</span>
+<span class="comment"># ข้อมูลอื่น (full name, phone) กด Enter ผ่าน</span>
+
+<span class="comment"># ให้สิทธิ์ sudo</span>
+<span class="cmd">usermod -aG</span> sudo deploy
+
+<span class="comment"># ทดสอบ</span>
+<span class="cmd">su -</span> deploy
+<span class="cmd">sudo</span> whoami  <span class="comment"># ควรตอบ: root</span>
+<span class="cmd">exit</span>  <span class="comment"># กลับเป็น root</span></pre>
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">5.2 ตั้ง SSH Key (ยกเลิก password login)</h3>
+
+  <p class="text-sm mb-2"><strong>บนเครื่องของคุณ (ไม่ใช่ VPS)</strong> — สร้าง SSH key ถ้ายังไม่มี:</p>
+
+  <div class="code-block">
+    <button class="copy-btn" data-copy>คัดลอก</button>
+<pre><span class="comment"># เช็คว่ามี key อยู่ไหม</span>
+<span class="cmd">ls</span> ~/.ssh/id_ed25519.pub
+
+<span class="comment"># ถ้าไม่มี — สร้างใหม่ (กด Enter ผ่าน 3 คำถาม)</span>
+<span class="cmd">ssh-keygen</span> <span class="flag">-t</span> ed25519 <span class="flag">-C</span> <span class="string">"your@email.com"</span>
+
+<span class="comment"># Copy ไป VPS</span>
+<span class="cmd">ssh-copy-id</span> deploy@<span class="string">YOUR_VPS_IP</span>
+<span class="comment"># (Windows ที่ไม่มี ssh-copy-id ให้ manual copy)</span></pre>
+  </div>
+
+  <p class="text-sm mt-3"><strong>ทดสอบ:</strong></p>
+  <div class="code-block">
+<pre><span class="cmd">ssh</span> deploy@<span class="string">YOUR_VPS_IP</span>  <span class="comment"># ไม่ควรถาม password</span></pre>
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">5.3 ปิด password login + root SSH</h3>
+
+  <p class="text-sm mb-2">หลังยืนยัน SSH key ใช้ได้แล้ว (สำคัญมาก!):</p>
+  <div class="code-block">
+    <button class="copy-btn" data-copy>คัดลอก</button>
+<pre><span class="comment"># บน VPS ในฐานะ root</span>
+<span class="cmd">nano</span> /etc/ssh/sshd_config
+
+<span class="comment"># แก้ 3 บรรทัดนี้ (ค้นด้วย Ctrl+W)</span>
+PasswordAuthentication <span class="string">no</span>
+PermitRootLogin <span class="string">no</span>
+PubkeyAuthentication <span class="string">yes</span>
+
+<span class="comment"># Save: Ctrl+O, Enter, Ctrl+X</span>
+<span class="cmd">systemctl restart</span> ssh</pre>
+  </div>
+
+  <div class="callout callout-warn mt-3">
+    <strong>⚠ อย่าออกจาก SSH session ตอนนี้!</strong> เปิด SSH session ใหม่อีก tab ก่อน (ด้วย deploy user + key) เพื่อยืนยันว่าเข้าได้ ถ้าพลาดจะล็อกตัวเองออก
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">5.4 เปิด Firewall (ufw)</h3>
+
+  <div class="code-block">
+    <button class="copy-btn" data-copy>คัดลอก</button>
+<pre><span class="cmd">ufw</span> default deny incoming
+<span class="cmd">ufw</span> default allow outgoing
+<span class="cmd">ufw</span> allow 22/tcp comment <span class="string">'SSH'</span>
+<span class="cmd">ufw</span> allow 80/tcp comment <span class="string">'HTTP'</span>
+<span class="cmd">ufw</span> allow 443/tcp comment <span class="string">'HTTPS'</span>
+<span class="cmd">ufw</span> enable
+<span class="cmd">ufw</span> status verbose</pre>
+  </div>
+
+  <div class="callout callout-info mt-3 text-sm">
+    💡 <strong>provision.sh ทำ step 5.4 ให้อัตโนมัติ</strong> — ถ้าจะรัน provision.sh ในขั้นตอนถัดไป ข้าม step 5.4 ได้
+  </div>
+</section>
+
+<!-- ═══ STEP 6 ═══ -->
+<section id="step-6">
+  <div class="flex items-center mb-4">
+    <span class="step-badge">6</span>
+    <h2 class="text-3xl font-bold">ชี้ DNS มาที่ VPS</h2>
+    <span class="ml-auto pill pill-time">⏱ ~3 นาที + รอ propagate</span>
+  </div>
+
+  <p class="text-sm mb-4">ก่อนรัน <code>provision.sh</code> ต้องให้ domain ชี้มาที่ VPS ก่อน (เพื่อให้ Let's Encrypt ขอ SSL ได้)</p>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">6.1 ถ้าใช้ Cloudflare (แนะนำ)</h3>
+
+  <ol class="list-decimal ml-6 space-y-2 text-sm">
+    <li>Login <a href="https://dash.cloudflare.com" class="text-purple-600 underline">dash.cloudflare.com</a></li>
+    <li>เพิ่ม domain (ถ้ายังไม่มี) → เลือก Free Plan</li>
+    <li>เปลี่ยน nameservers ที่ registrar ให้ใช้ของ Cloudflare</li>
+    <li>DNS → Records → Add:
+      <div class="code-block text-xs mt-2">
+<pre>Type: A     Name: @       IPv4: <span class="string">YOUR_VPS_IP</span>   Proxy: <span class="cmd">OFF</span> (สีเทา)
+Type: A     Name: www     IPv4: <span class="string">YOUR_VPS_IP</span>   Proxy: <span class="cmd">OFF</span> (สีเทา)</pre>
+      </div>
+    </li>
+  </ol>
+
+  <div class="callout callout-warn mt-3">
+    <strong>⚠ Proxy ต้องปิด (☁️ เทา) ตอนแรก</strong> เพื่อให้ Let's Encrypt ยืนยัน domain ownership ได้ — เปิด proxy หลังมี SSL แล้ว
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">6.2 ถ้าใช้ Hostinger DNS</h3>
+
+  <ol class="list-decimal ml-6 space-y-2 text-sm">
+    <li>hPanel → <strong>Domains</strong> → คลิก domain</li>
+    <li><strong>DNS / Nameservers</strong> → <strong>DNS Records</strong></li>
+    <li>Add record:
+      <div class="code-block text-xs mt-2">
+<pre>Type: A     Name: @       Points to: <span class="string">YOUR_VPS_IP</span>     TTL: 3600
+Type: A     Name: www     Points to: <span class="string">YOUR_VPS_IP</span>     TTL: 3600</pre>
+      </div>
+    </li>
+  </ol>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">6.3 ตรวจสอบ DNS Propagation</h3>
+
+  <div class="code-block">
+<pre><span class="comment"># รอ 2-5 นาที แล้วเช็ค</span>
+<span class="cmd">dig</span> +short yourdomain.com
+<span class="comment"># ควรคืนค่า: YOUR_VPS_IP</span>
+
+<span class="comment"># หรือเช็คออนไลน์</span>
+<span class="comment"># https://dnschecker.org/#A/yourdomain.com</span></pre>
+  </div>
+
+  <div class="callout callout-info mt-3">
+    💡 DNS propagation ปกติ 5-60 นาที — ถ้าเช็คแล้ว IP ตรง ทำ step ต่อไปได้เลย
+  </div>
+</section>
+
+<!-- ═══ STEP 7 ═══ -->
+<section id="step-7">
+  <div class="flex items-center mb-4">
+    <span class="step-badge">7</span>
+    <h2 class="text-3xl font-bold">รัน provision.sh (Auto Deploy)</h2>
+    <span class="ml-auto pill pill-time">⏱ ~10 นาที (mostly รอ)</span>
+  </div>
+
+  <p class="text-sm mb-4">ถึงขั้นตอนใจกลางของ guide แล้ว! Script จะติดตั้งทุกอย่างให้</p>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">7.1 SSH เข้าเครื่องในฐานะ root</h3>
+
+  <div class="callout callout-info">
+    provision.sh ต้องรันในฐานะ root (หรือ sudo) เพราะต้อง install packages
+  </div>
+
+  <div class="code-block">
+    <button class="copy-btn" data-copy>คัดลอก</button>
+<pre><span class="comment"># จากเครื่องของคุณ</span>
+<span class="cmd">ssh</span> deploy@<span class="string">YOUR_VPS_IP</span>
+
+<span class="comment"># บน VPS - เปลี่ยนเป็น root</span>
+<span class="cmd">sudo -i</span></pre>
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">7.2 ดาวน์โหลด + รัน script</h3>
+
+  <div class="code-block">
+    <button class="copy-btn" data-copy>คัดลอก</button>
+<pre><span class="comment"># ดาวน์โหลดจาก GitHub repo ของคุณ</span>
+<span class="cmd">curl</span> <span class="flag">-fsSL</span> <span class="path">https://raw.githubusercontent.com/YOUR-USER/REPO/main/docs/deployment/provision.sh</span> <span class="flag">-o</span> provision.sh
+
+<span class="comment"># รัน</span>
+<span class="cmd">sudo bash</span> provision.sh</pre>
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">7.3 ตอบคำถาม 6-7 ข้อ</h3>
+
+  <p class="text-sm mb-2">Script จะถาม — ตอบทีละข้อ:</p>
+
+  <div class="ui-mockup">
+    <div class="ui-header">📝 provision.sh Interactive Prompts</div>
+    <div class="space-y-3 text-sm">
+      <div>
+        <div class="ui-label">Primary domain</div>
+        <div class="ui-value font-mono">yourdomain.com</div>
+      </div>
+      <div>
+        <div class="ui-label">WWW subdomain [default: www.yourdomain.com]</div>
+        <div class="ui-value font-mono">⏎ (กด Enter)</div>
+      </div>
+      <div>
+        <div class="ui-label">Email for Let's Encrypt</div>
+        <div class="ui-value font-mono">you@yourdomain.com</div>
+      </div>
+      <div>
+        <div class="ui-label">Git repository URL (HTTPS)</div>
+        <div class="ui-value font-mono">https://github.com/YOU/photo-gallery.git</div>
+      </div>
+      <div>
+        <div class="ui-label">Git branch [default: main]</div>
+        <div class="ui-value font-mono">⏎</div>
+      </div>
+      <div>
+        <div class="ui-label">Install path [default: /var/www/photo-gallery]</div>
+        <div class="ui-value font-mono">⏎</div>
+      </div>
+      <div>
+        <div class="ui-label">MySQL database name [default: photo_gallery]</div>
+        <div class="ui-value font-mono">⏎</div>
+      </div>
+      <div>
+        <div class="ui-label">Use suggested password? [y]</div>
+        <div class="ui-value font-mono">⏎</div>
+      </div>
+      <div>
+        <div class="ui-label">Provision HTTPS now? [y]</div>
+        <div class="ui-value font-mono">⏎</div>
+      </div>
+      <div>
+        <div class="ui-label">Proceed? [y]</div>
+        <div class="ui-value font-mono">⏎</div>
+      </div>
+    </div>
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">7.4 รอ ~10 นาที</h3>
+
+  <p class="text-sm mb-2">Script จะแสดง progress 15 ขั้นตอน:</p>
+
+  <div class="code-block text-xs">
+<pre><span class="cmd">▶ 1/15  Updating system packages</span>
+  ✔ base packages installed
+<span class="cmd">▶ 2/15  Installing PHP 8.2 + extensions</span>
+  ✔ PHP 8.2.15 ready
+<span class="cmd">▶ 3/15  Installing MySQL + creating database</span>
+  ✔ database 'photo_gallery' ready
+...
+<span class="cmd">▶ 13/15 Provisioning SSL via Let's Encrypt</span>
+  ✔ HTTPS active
+<span class="cmd">▶ Running smoke test</span>
+  ✓ Passed: 95/95
+
+<span class="string">╔════════════════════════════════════════════╗
+║  ✓  Provisioning complete in 487s         ║
+╚════════════════════════════════════════════╝</span></pre>
+  </div>
+
+  <div class="callout callout-success mt-4">
+    ✓ <strong>เสร็จแล้ว!</strong> เว็บขึ้นที่ <code>https://yourdomain.com</code> — แต่ยังไม่มี content (ต้องสร้าง admin + ตั้งค่า external services)
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">7.5 บันทึก Credentials</h3>
+
+  <p class="text-sm">Script บันทึก MySQL password ไว้ที่:</p>
+  <div class="code-block text-xs">
+<pre><span class="cmd">cat</span> /root/photo-gallery-credentials.txt</pre>
+  </div>
+  <p class="text-sm mt-2">Copy ไฟล์นี้ไปเก็บ Password Manager ทันที — แล้วลบจาก server (หรือ <code>chmod 600</code> อยู่แล้ว ก็ปลอดภัยพอ)</p>
+</section>
+
+<!-- ═══ STEP 8 ═══ -->
+<section id="step-8">
+  <div class="flex items-center mb-4">
+    <span class="step-badge">8</span>
+    <h2 class="text-3xl font-bold">ตั้งค่า External Services</h2>
+    <span class="ml-auto pill pill-time">⏱ ~15 นาที</span>
+  </div>
+
+  <p class="text-sm mb-4">ดูรายละเอียดเต็มที่ <a href="./guide.html#external-services" class="text-purple-600 underline">Main Guide → External Services</a> — สรุปสั้นๆ ที่นี่</p>
+
+  <div class="grid md:grid-cols-2 gap-4 mt-4">
+    <div class="border border-slate-200 rounded-lg p-4">
+      <h4 class="font-semibold mb-2">🔑 Google OAuth + Drive API</h4>
+      <ol class="list-decimal ml-5 text-sm space-y-1">
+        <li><a href="https://console.cloud.google.com" class="text-purple-600 underline">console.cloud.google.com</a> → New Project</li>
+        <li>APIs & Services → Enable: Drive API + Google+ API</li>
+        <li>Credentials → OAuth 2.0 Client ID</li>
+        <li>Redirect URI: <code class="text-xs">https://yourdomain.com/auth/google/callback</code></li>
+      </ol>
+    </div>
+
+    <div class="border border-slate-200 rounded-lg p-4">
+      <h4 class="font-semibold mb-2">💬 LINE Messaging</h4>
+      <ol class="list-decimal ml-5 text-sm space-y-1">
+        <li><a href="https://developers.line.biz" class="text-purple-600 underline">developers.line.biz</a> → Provider</li>
+        <li>Create 2 channels: LINE Login + Messaging API</li>
+        <li>Webhook: <code class="text-xs">https://yourdomain.com/line/webhook</code></li>
+        <li>Callback: <code class="text-xs">https://yourdomain.com/auth/line/callback</code></li>
+      </ol>
+    </div>
+
+    <div class="border border-slate-200 rounded-lg p-4">
+      <h4 class="font-semibold mb-2">🧾 SlipOK</h4>
+      <ol class="list-decimal ml-5 text-sm space-y-1">
+        <li><a href="https://slipok.com" class="text-purple-600 underline">slipok.com</a> → สมัคร</li>
+        <li>Dashboard → API → Create Branch</li>
+        <li>Copy API Key</li>
+        <li>ฟรี 50 ครั้งแรก/เดือน</li>
+      </ol>
+    </div>
+
+    <div class="border border-slate-200 rounded-lg p-4">
+      <h4 class="font-semibold mb-2">📧 SMTP (Brevo)</h4>
+      <ol class="list-decimal ml-5 text-sm space-y-1">
+        <li><a href="https://brevo.com" class="text-purple-600 underline">brevo.com</a> → Free tier</li>
+        <li>SMTP & API → Generate SMTP key</li>
+        <li>Host: smtp-relay.brevo.com, Port: 587</li>
+        <li>ฟรี 300 emails/วัน</li>
+      </ol>
+    </div>
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">ใส่ค่าเข้า Admin Settings</h3>
+  <p class="text-sm">หลังสร้าง admin (Step 9) → Login → <code>https://yourdomain.com/admin/settings</code> → กรอกทุกค่า</p>
+</section>
+
+<!-- ═══ STEP 9 ═══ -->
+<section id="step-9">
+  <div class="flex items-center mb-4">
+    <span class="step-badge">9</span>
+    <h2 class="text-3xl font-bold">สร้าง Admin + ทดสอบ</h2>
+    <span class="ml-auto pill pill-time">⏱ ~5 นาที</span>
+  </div>
+
+  <h3 class="text-xl font-semibold mt-4 mb-3">9.1 สร้าง admin user</h3>
+
+  <div class="code-block">
+    <button class="copy-btn" data-copy>คัดลอก</button>
+<pre><span class="cmd">cd</span> /var/www/photo-gallery
+<span class="cmd">sudo -u</span> www-data php artisan tinker
+
+<span class="prompt">&gt;&gt;&gt;</span> \App\Models\User::create([
+        <span class="string">'name'</span> =&gt; <span class="string">'Admin'</span>,
+        <span class="string">'email'</span> =&gt; <span class="string">'you@yourdomain.com'</span>,
+        <span class="string">'password'</span> =&gt; \Hash::make(<span class="string">'STRONG_PASSWORD_HERE'</span>),
+        <span class="string">'is_admin'</span> =&gt; <span class="keyword">true</span>,
+        <span class="string">'email_verified_at'</span> =&gt; now(),
+    ]);
+<span class="prompt">&gt;&gt;&gt;</span> <span class="cmd">exit</span></pre>
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">9.2 เปิดเว็บ + Login</h3>
+
+  <ol class="list-decimal ml-6 space-y-2 text-sm">
+    <li>เปิด browser → <code>https://yourdomain.com</code></li>
+    <li>ควรเห็นหน้า home ของ Photo Gallery + padlock 🔒 (SSL ใช้งานได้)</li>
+    <li>Login ด้วย email + password ที่เพิ่งสร้าง</li>
+    <li>ไปที่ <code>/admin</code> → ถ้า redirect ไปหน้า dashboard = ใช้งานได้</li>
+  </ol>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">9.3 รัน Smoke Test</h3>
+
+  <div class="code-block">
+    <button class="copy-btn" data-copy>คัดลอก</button>
+<pre><span class="cmd">cd</span> /var/www/photo-gallery
+<span class="cmd">sudo -u</span> www-data php artisan app:smoke-test</pre>
+  </div>
+
+  <p class="text-sm mt-3">ควรได้:</p>
+  <div class="code-block text-xs">
+<pre>  <span class="cmd">✓ Passed  : 95</span>
+  ✗ Failed  : 0
+  ○ Skipped : 0
+  Success   : 100% (95/95)
+
+<span class="cmd">All tests passed.</span></pre>
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">9.4 ทดสอบ Flow จริง</h3>
+
+  <ul class="list-disc ml-6 text-sm space-y-1">
+    <li>☐ สมัครสมาชิกใหม่ (เช็ค email ยืนยัน)</li>
+    <li>☐ Login ด้วย Google</li>
+    <li>☐ Login ด้วย LINE</li>
+    <li>☐ เลือกภาพ → สั่งซื้อ → อัปสลิป (ถ้า SlipOK ตั้งแล้ว)</li>
+    <li>☐ Admin approve order → download test</li>
+  </ul>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">9.5 เปิด Cloudflare Proxy</h3>
+
+  <p class="text-sm">หลังยืนยันว่าทุกอย่าง work:</p>
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>Cloudflare → DNS → เปิด Proxy (☁️ ส้ม) ทั้ง 2 records</li>
+    <li>SSL/TLS → Full (strict)</li>
+    <li>Always Use HTTPS: ON</li>
+  </ol>
+
+  <div class="callout callout-success mt-6">
+    🎉 <strong>เว็บเปิดใช้งาน Online แล้ว!</strong><br>
+    <span class="text-sm">ตอนนี้มี: HTTPS ✓ · CDN ✓ · DDoS Protection ✓ · Queue workers running ✓ · Auto backup (Hostinger snapshot)</span>
+  </div>
+</section>
+
+<!-- ═══ HPANEL TIPS ═══ -->
+<section id="hpanel-tips">
+  <h2 class="text-3xl font-bold mb-6">🎁 Hostinger-Specific Tips</h2>
+
+  <h3 class="text-xl font-semibold mt-4 mb-3">📸 เปิด Auto Snapshots</h3>
+  <p class="text-sm">Hostinger แถม backup รายสัปดาห์ฟรี — ต้องเปิดเอง:</p>
+  <ol class="list-decimal ml-6 text-sm space-y-1">
+    <li>hPanel → VPS → เลือก server</li>
+    <li>เมนูซ้าย → <strong>Snapshots</strong> → <strong>Create snapshot</strong></li>
+    <li>ตั้ง schedule: Weekly (ฟรี)</li>
+  </ol>
+  <div class="callout callout-info mt-3 text-sm">
+    💡 Snapshots ใช้ restore full server ได้ — ใช้แก้ปัญหาถ้า VPS พัง แต่ไม่แทน DB backup ปกติ
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">🛡 Malware Scanner (Monarx)</h3>
+  <p class="text-sm">ฟรีในทุกแผน KVM — สแกนไฟล์ PHP หา backdoor:</p>
+  <ol class="list-decimal ml-6 text-sm space-y-1">
+    <li>hPanel → VPS → <strong>Security</strong> → <strong>Monarx</strong></li>
+    <li>Enable → ตั้ง scan daily</li>
+    <li>แจ้งเตือนผ่าน email ถ้าเจอ malware</li>
+  </ol>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">📊 Monitoring Graphs</h3>
+  <p class="text-sm">hPanel → VPS → <strong>Overview</strong> — เห็นกราฟ:</p>
+  <ul class="list-disc ml-6 text-sm space-y-1">
+    <li>CPU usage</li>
+    <li>RAM usage</li>
+    <li>Disk I/O</li>
+    <li>Network in/out</li>
+  </ul>
+  <p class="text-sm mt-2">ถ้า CPU &gt; 80% ต่อเนื่อง หรือ RAM เกือบเต็ม → เป็นเวลาอัพเกรดแผน</p>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">🤖 Kodee AI Assistant</h3>
+  <p class="text-sm">hPanel มี AI chatbot ช่วยตอบคำถาม Linux/VPS — คลิกไอคอนมุมล่างขวา</p>
+  <div class="callout callout-tip mt-2 text-sm">
+    ใช้ถามเรื่องคำสั่ง Linux พื้นฐาน, วิธี config nginx, debug basic — ได้คำตอบเร็วกว่ารอ support
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">⚙️ อัพเกรด / ดาวน์เกรดแผน</h3>
+  <p class="text-sm">hPanel → VPS → <strong>Overview</strong> → <strong>Upgrade plan</strong></p>
+  <ul class="list-disc ml-6 text-sm space-y-1">
+    <li><strong>Upgrade:</strong> ทำได้ทันที downtime ~5 นาที</li>
+    <li><strong>Downgrade:</strong> ต้องรอรอบบิลใหม่</li>
+    <li>Storage ขยายได้เฉพาะทาง upgrade plan (ย้ายข้าม plan)</li>
+  </ul>
+</section>
+
+<!-- ═══ TROUBLESHOOT ═══ -->
+<section id="troubleshoot">
+  <h2 class="text-3xl font-bold mb-6">🛠 แก้ปัญหาที่พบบ่อยกับ Hostinger</h2>
+
+  <div class="space-y-4">
+    <div class="border border-slate-200 rounded-lg p-4">
+      <h4 class="font-semibold text-red-600 mb-2">❌ SSH connect ไม่ได้หลัง reinstall OS</h4>
+      <p class="text-sm mb-2">Host key เปลี่ยนเพราะ OS ใหม่:</p>
+      <div class="code-block text-xs">
+<pre><span class="cmd">ssh-keygen</span> <span class="flag">-R</span> <span class="string">YOUR_VPS_IP</span>
+<span class="cmd">ssh</span> root@<span class="string">YOUR_VPS_IP</span></pre>
+      </div>
+    </div>
+
+    <div class="border border-slate-200 rounded-lg p-4">
+      <h4 class="font-semibold text-red-600 mb-2">❌ Certbot fails — "Connection timeout"</h4>
+      <p class="text-sm mb-2">Cloudflare proxy ยังเปิดอยู่ หรือ DNS ยังไม่ propagate:</p>
+      <ol class="list-decimal ml-6 text-sm space-y-1">
+        <li>ปิด Cloudflare proxy (☁️ เทา)</li>
+        <li>รอ DNS propagate (5-30 นาที)</li>
+        <li>เช็ค: <code>dig +short yourdomain.com</code> ตรงกับ VPS IP</li>
+        <li>รัน certbot ใหม่: <code>sudo certbot --nginx -d yourdomain.com</code></li>
+      </ol>
+    </div>
+
+    <div class="border border-slate-200 rounded-lg p-4">
+      <h4 class="font-semibold text-red-600 mb-2">❌ "Too many requests" จาก Let's Encrypt</h4>
+      <p class="text-sm mb-2">โดน rate limit (5 ครั้ง/สัปดาห์ต่อ domain):</p>
+      <ul class="list-disc ml-6 text-sm space-y-1">
+        <li>รอ 7 วัน</li>
+        <li>หรือใช้ staging cert ทดสอบก่อน: <code>certbot --staging</code></li>
+      </ul>
+    </div>
+
+    <div class="border border-slate-200 rounded-lg p-4">
+      <h4 class="font-semibold text-red-600 mb-2">❌ Out of Memory (OOM killer)</h4>
+      <p class="text-sm mb-2">KVM 1 อาจมี RAM ไม่พอถ้ามี traffic เยอะ:</p>
+      <div class="code-block text-xs">
+<pre><span class="comment"># ดู memory usage</span>
+<span class="cmd">free -h</span>
+
+<span class="comment"># ดู process ใช้ RAM เยอะ</span>
+<span class="cmd">ps aux --sort=-%mem</span> | head
+
+<span class="comment"># เพิ่ม swap (workaround)</span>
+<span class="cmd">fallocate -l 2G</span> /swapfile
+<span class="cmd">chmod</span> 600 /swapfile
+<span class="cmd">mkswap</span> /swapfile && <span class="cmd">swapon</span> /swapfile
+<span class="cmd">echo</span> <span class="string">'/swapfile none swap sw 0 0'</span> &gt;&gt; /etc/fstab</pre>
+      </div>
+      <p class="text-sm mt-2">ถ้าเกิดซ้ำ → อัพเกรดเป็น KVM 2</p>
+    </div>
+
+    <div class="border border-slate-200 rounded-lg p-4">
+      <h4 class="font-semibold text-red-600 mb-2">❌ Disk full</h4>
+      <div class="code-block text-xs">
+<pre><span class="comment"># ดูไฟล์ที่กิน disk</span>
+<span class="cmd">du -sh</span> /* 2&gt;/dev/null | sort -h
+
+<span class="comment"># ล้าง apt cache</span>
+<span class="cmd">apt clean</span>
+<span class="cmd">apt autoremove</span>
+
+<span class="comment"># ล้าง log เก่า</span>
+<span class="cmd">journalctl --vacuum-time=7d</span>
+<span class="cmd">find</span> /var/www/photo-gallery/storage/logs <span class="flag">-mtime</span> +30 <span class="flag">-delete</span></pre>
+      </div>
+    </div>
+
+    <div class="border border-slate-200 rounded-lg p-4">
+      <h4 class="font-semibold text-red-600 mb-2">❌ Hostinger support ตอบช้า</h4>
+      <p class="text-sm">
+        Support ตอบช้า → ลองวิธีนี้ก่อน:
+      </p>
+      <ol class="list-decimal ml-6 text-sm space-y-1">
+        <li>ถาม <strong>Kodee AI</strong> ใน hPanel</li>
+        <li>Search <a href="https://support.hostinger.com" class="text-purple-600 underline">support.hostinger.com</a></li>
+        <li>ถาม Claude (เรา!) เราช่วย debug ได้</li>
+        <li>Last resort: Live chat — แนบ logs + error messages</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ COST ═══ -->
+<section id="cost">
+  <h2 class="text-3xl font-bold mb-6">💰 สรุปค่าใช้จ่าย (Hostinger KVM 2)</h2>
+
+  <table class="info">
+    <thead>
+      <tr><th>รายการ</th><th>ต่อเดือน</th><th>ต่อปี</th><th>หมายเหตุ</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Hostinger KVM 2 (48-mo plan)</td>
+        <td>$6.99 (~฿250)</td>
+        <td>~฿3,000</td>
+        <td>จ่ายเต็ม 48 เดือน = ประหยัดสุด</td>
+      </tr>
+      <tr>
+        <td>Domain (.com)</td>
+        <td>~฿30</td>
+        <td>~฿350</td>
+        <td>Porkbun หรือ Cloudflare Registrar</td>
+      </tr>
+      <tr>
+        <td>Cloudflare Free</td>
+        <td>฿0</td>
+        <td>฿0</td>
+        <td>CDN + DNS + WAF basic</td>
+      </tr>
+      <tr>
+        <td>Brevo Email (Free)</td>
+        <td>฿0</td>
+        <td>฿0</td>
+        <td>300 emails/วัน</td>
+      </tr>
+      <tr>
+        <td>Let's Encrypt SSL</td>
+        <td>฿0</td>
+        <td>฿0</td>
+        <td>ฟรี auto-renew</td>
+      </tr>
+      <tr>
+        <td>UptimeRobot (Free)</td>
+        <td>฿0</td>
+        <td>฿0</td>
+        <td>ping ทุก 5 นาที</td>
+      </tr>
+      <tr>
+        <td>SlipOK (50 free/mo)</td>
+        <td>฿0 (ต่ำกว่า 50 ครั้ง)</td>
+        <td>฿0-720</td>
+        <td>฿2/ครั้งเกินโควต้า</td>
+      </tr>
+      <tr class="bg-purple-50 font-bold">
+        <td>รวมทั้งหมด</td>
+        <td>~฿280</td>
+        <td>~฿3,350</td>
+        <td>(~฿278/เดือน average)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-brand mt-6">
+    <strong>💡 ประหยัดเพิ่มได้อีก:</strong>
+    <ul class="mt-2 ml-6 list-disc text-sm space-y-1">
+      <li>ซื้อ KVM 1 แทน KVM 2 (ถ้า traffic &lt;100/วัน) → ลด ~฿70/เดือน</li>
+      <li>ใช้ promo code ช่วง Black Friday → ลดเพิ่ม 10-20%</li>
+      <li>ซื้อผ่าน referral link → ลด 20% first term</li>
+      <li>ใช้ Hostinger domain ฟรี (ถ้าได้แถม) → ประหยัด ฿350/ปี แรก</li>
+    </ul>
+  </div>
+
+  <h3 class="text-xl font-semibold mt-6 mb-3">⚠ ระวัง Renewal Price</h3>
+  <p class="text-sm">หลัง 48 เดือนแรก renewal จะขึ้นเป็นราคาเต็ม (~$13.99/mo)</p>
+  <ul class="list-disc ml-6 text-sm space-y-1">
+    <li>ทางเลือก 1: ย้ายไป provider อื่น (Contabo, Vultr) ตอนครบ term</li>
+    <li>ทางเลือก 2: ต่ออายุก่อนหมดด้วย coupon promo</li>
+    <li>ทางเลือก 3: จ่าย renewal ราคาเต็ม — ก็ยังถูกกว่า DO</li>
+  </ul>
+</section>
+
+<!-- ═══ NEXT STEPS ═══ -->
+<section>
+  <h2 class="text-3xl font-bold mb-6">🎯 ขั้นตอนถัดไป</h2>
+
+  <div class="grid md:grid-cols-3 gap-4">
+    <a href="./guide.html#post-deploy" class="block border border-slate-200 rounded-lg p-5 hover:border-purple-500 hover:shadow-lg transition">
+      <div class="text-3xl mb-3">✅</div>
+      <h3 class="font-bold mb-2">Post-Deploy Checklist</h3>
+      <p class="text-sm text-slate-600">48 รายการต้องทำก่อนเปิด public</p>
+    </a>
+    <a href="./guide.html#operations" class="block border border-slate-200 rounded-lg p-5 hover:border-purple-500 hover:shadow-lg transition">
+      <div class="text-3xl mb-3">🔄</div>
+      <h3 class="font-bold mb-2">Operations Guide</h3>
+      <p class="text-sm text-slate-600">Re-deploy, backup, scale, maintain</p>
+    </a>
+    <a href="../SCALING.html" class="block border border-slate-200 rounded-lg p-5 hover:border-purple-500 hover:shadow-lg transition">
+      <div class="text-3xl mb-3">📈</div>
+      <h3 class="font-bold mb-2">Scaling Guide</h3>
+      <p class="text-sm text-slate-600">เมื่อ traffic โตถึง 50k users</p>
+    </a>
+  </div>
+</section>
+
+<!-- ═══ FOOTER ═══ -->
+<footer class="border-t border-slate-200 pt-8 mt-12 text-center text-sm text-slate-500">
+  <p class="mb-2">🟣 Hostinger VPS Guide — Photo Gallery Deployment</p>
+  <p>Last updated: <span id="gen-date"></span></p>
+  <div class="mt-4 flex justify-center gap-4 flex-wrap">
+    <a href="../index.html" class="text-purple-600 hover:underline">← Documentation Hub</a>
+    <a href="./guide.html" class="text-purple-600 hover:underline">General Deployment Guide</a>
+    <a href="https://www.hostinger.com/vps-hosting" target="_blank" class="text-purple-600 hover:underline">Hostinger VPS ↗</a>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<!-- ═══ SCRIPTS ═══ -->
+<script>
+  // Copy button
+  document.querySelectorAll('[data-copy]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pre = btn.parentElement.querySelector('pre');
+      const text = pre.innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.classList.add('copied');
+        btn.textContent = '✓ คัดลอกแล้ว';
+        setTimeout(() => {
+          btn.classList.remove('copied');
+          btn.textContent = 'คัดลอก';
+        }, 1500);
+      });
+    });
+  });
+
+  // Active sidebar link on scroll
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('.sidebar-link');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        navLinks.forEach(link => {
+          link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -75% 0px' });
+  sections.forEach(s => observer.observe(s));
+
+  // Date
+  document.getElementById('gen-date').textContent = new Date().toLocaleDateString('th-TH', {
+    year: 'numeric', month: 'long', day: 'numeric'
+  });
+</script>
+
+</body>
+</html>

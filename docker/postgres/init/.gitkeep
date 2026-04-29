@@ -1,0 +1,11 @@
+# Drop *.sql or *.sh files into this directory and they'll run on the first
+# Postgres container init (i.e. fresh `docker compose up` with no volume).
+#
+# Examples:
+#   01-extensions.sql      -- enable pg_trgm, unaccent, citext, etc.
+#   02-seed-data.sql       -- import data from the MySQL fork (post-migration)
+#
+# Useful extensions for this project:
+#   CREATE EXTENSION IF NOT EXISTS pg_trgm;     -- trigram fuzzy search (better than ILIKE)
+#   CREATE EXTENSION IF NOT EXISTS unaccent;    -- accent-insensitive search
+#   CREATE EXTENSION IF NOT EXISTS citext;      -- case-insensitive text columns

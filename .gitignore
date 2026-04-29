@@ -1,0 +1,56 @@
+# ─── Secrets — never commit ──────────────────────
+.env
+.env.*
+!.env.example
+!.env.production.example
+auth.json
+*.pem
+*.key
+*.crt
+secrets.local.*
+
+# ─── Backups & dumps ─────────────────────────────
+*.sql
+*.sql.gz
+storage/app/backups/
+storage/app/private/backups/
+backup_*.zip
+
+# ─── Logs ────────────────────────────────────────
+*.log
+storage/logs/
+storage/pail/
+
+# ─── Build artifacts & caches ────────────────────
+/public/build
+/public/hot
+/public/storage
+/storage/*.key
+/.phpunit.cache
+.phpunit.result.cache
+.phpactor.json
+
+# ─── Dependencies ────────────────────────────────
+/vendor
+/node_modules
+
+# ─── Editor / IDE ────────────────────────────────
+.DS_Store
+Thumbs.db
+/.fleet
+/.idea
+/.nova
+/.vscode
+/.zed
+.editorconfig.bak
+
+# ─── Local dev ───────────────────────────────────
+Homestead.json
+Homestead.yaml
+docker-compose.override.yml
+.docker-data/
+".env" 
+"node_modules/" 
+"vendor/" 
+"storage/logs/*" 
+"public/build/" 

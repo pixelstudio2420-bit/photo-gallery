@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scaling to 50,000+ Concurrent Users</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2230;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-2: #7ee787;
+    --warn: #f0883e;
+    --code-bg: #0b1020;
+    --table-alt: #1a2130;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #ffffff;
+      --panel: #f6f8fa;
+      --panel-2: #eef1f5;
+      --border: #d0d7de;
+      --text: #1f2328;
+      --muted: #656d76;
+      --accent: #0969da;
+      --accent-2: #1a7f37;
+      --warn: #bc4c00;
+      --code-bg: #f6f8fa;
+      --table-alt: #f6f8fa;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    margin: 0;
+    padding: 0;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  aside {
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 28px 20px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  aside h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    margin: 0 0 12px;
+  }
+  aside ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    counter-reset: item;
+  }
+  aside ol li {
+    counter-increment: item;
+    margin: 0;
+  }
+  aside a {
+    display: block;
+    padding: 7px 10px;
+    color: var(--text);
+    text-decoration: none;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: background .15s;
+  }
+  aside a:hover { background: var(--panel-2); color: var(--accent); }
+  aside a::before {
+    content: counter(item) ". ";
+    color: var(--muted);
+    margin-right: 6px;
+  }
+  main {
+    padding: 48px 56px 96px;
+    max-width: 1100px;
+  }
+  h1 {
+    font-size: 34px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  h2 {
+    font-size: 24px;
+    font-weight: 600;
+    margin: 52px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 28px 0 12px;
+    color: var(--accent);
+  }
+  h4 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 20px 0 8px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  p, li { font-size: 15px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    background: var(--code-bg);
+    color: var(--accent-2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    border: 1px solid var(--border);
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    position: relative;
+  }
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--text);
+    font-size: inherit;
+  }
+  pre .c { color: var(--muted); font-style: italic; }
+  pre .k { color: #ff7b72; }
+  pre .s { color: var(--accent-2); }
+  pre .v { color: var(--warn); }
+  blockquote {
+    border-left: 4px solid var(--accent);
+    background: var(--panel-2);
+    padding: 14px 20px;
+    margin: 20px 0;
+    border-radius: 0 8px 8px 0;
+    color: var(--text);
+  }
+  blockquote strong { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 24px;
+    font-size: 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--panel-2);
+    font-weight: 600;
+    color: var(--text);
+  }
+  tbody tr:nth-child(even) { background: var(--table-alt); }
+  tbody tr:last-child td { border-bottom: none; }
+  .ascii-art {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.3;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--accent-2);
+  }
+  ul.checklist {
+    list-style: none;
+    padding: 0;
+  }
+  ul.checklist li {
+    padding: 6px 0 6px 28px;
+    position: relative;
+  }
+  ul.checklist li::before {
+    content: "☐";
+    position: absolute;
+    left: 4px;
+    top: 6px;
+    color: var(--accent);
+    font-size: 16px;
+  }
+  ul.checklist input[type="checkbox"] {
+    position: absolute;
+    left: 2px;
+    top: 9px;
+    margin: 0;
+    accent-color: var(--accent-2);
+    cursor: pointer;
+  }
+  ul.checklist.with-inputs li::before { content: none; }
+  .tldr {
+    background: linear-gradient(135deg, rgba(88, 166, 255, 0.08), rgba(126, 231, 135, 0.08));
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: 18px 24px;
+    margin: 24px 0 32px;
+  }
+  .tldr .tldr-label {
+    display: inline-block;
+    font-weight: 700;
+    color: var(--accent);
+    margin-right: 6px;
+  }
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 40px 0;
+  }
+  .pill {
+    display: inline-block;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 32px 20px 64px; }
+    h1 { font-size: 26px; }
+    h2 { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <h2>Table of Contents</h2>
+    <ol>
+      <li><a href="#overview">Architecture Overview</a></li>
+      <li><a href="#cdn">CDN Edge Cache</a></li>
+      <li><a href="#octane">Laravel Octane</a></li>
+      <li><a href="#redis">Redis Cluster</a></li>
+      <li><a href="#replicas">MySQL Read Replicas</a></li>
+      <li><a href="#queues">Queue Workers</a></li>
+      <li><a href="#lb">Load Balancer</a></li>
+      <li><a href="#nginx">Nginx Tuning</a></li>
+      <li><a href="#observability">Observability</a></li>
+      <li><a href="#cost">Cost Estimate</a></li>
+      <li><a href="#checklist">Deployment Checklist</a></li>
+      <li><a href="#loadtest">Load Testing</a></li>
+    </ol>
+  </aside>
+
+  <main>
+    <h1>Scaling to 50,000+ Concurrent Users</h1>
+    <p style="color: var(--muted); font-size: 15px;">
+      Operational recipe for running the photo-gallery app at 50k+ concurrent users.
+    </p>
+
+    <p>
+      This document is the operational recipe for running the photo-gallery app at
+      <strong>50k+ concurrent users</strong>. The application code has already been prepared
+      (edge cache headers, queue jobs, cache invalidation, read-replica support);
+      this guide covers the <strong>infrastructure</strong> needed to actually reach that tier.
+    </p>
+
+    <div class="tldr">
+      <span class="tldr-label">TL;DR —</span>
+      A single PHP-FPM box caps out around 2k–5k concurrent requests.
+      To handle 50k concurrent you must do both of these things:
+      <ol style="margin: 10px 0 0;">
+        <li><strong>Serve 95%+ of public pages from a CDN edge</strong> so PHP is not on the hot path.</li>
+        <li><strong>Horizontally scale</strong> PHP, Redis, and MySQL so the remaining 5% doesn't pile up.</li>
+      </ol>
+    </div>
+
+    <hr>
+
+    <h2 id="overview">Architecture Overview</h2>
+<pre class="ascii-art">           ┌──────────────┐
+ Client ──▶│  Cloudflare  │───── static assets (CDN_BASE_URL)
+           │     (CDN)    │───── cached HTML (EdgeCache middleware)
+           └──────┬───────┘
+                  │ cache miss or authenticated
+                  ▼
+           ┌──────────────┐
+           │ Load Balancer│  (Cloudflare LB, HAProxy, or AWS ALB)
+           └──────┬───────┘
+                  │
+        ┌─────────┼─────────┐
+        ▼         ▼         ▼
+     ┌─────┐  ┌─────┐   ┌─────┐
+     │ App │  │ App │   │ App │   3–10 Laravel Octane workers
+     └──┬──┘  └──┬──┘   └──┬──┘
+        └────────┼─────────┘
+                 ▼
+        ┌────────────────┐
+        │  Redis Cluster │  sessions, cache, queue, locks
+        └────────────────┘
+                 │
+        ┌────────┴────────┐
+        ▼                 ▼
+  ┌──────────┐      ┌──────────┐
+  │ MySQL W  │◀───▶ │ MySQL R  │  primary + 2-3 replicas
+  └──────────┘      └──────────┘
+
+  ┌────────────────────────────────────────┐
+  │ Queue Workers (separate host pool)     │
+  │  • downloads queue  (ZIP builds)       │
+  │  • mail queue       (SMTP)             │
+  │  • photos queue     (thumb/watermark)  │
+  └────────────────────────────────────────┘</pre>
+
+    <hr>
+
+    <h2 id="cdn">1. CDN Edge Cache <span class="pill">biggest lever</span></h2>
+    <p>
+      The <code>EdgeCache</code> middleware is already applied to every public GET route in
+      <code>routes/web.php</code>. It emits
+      <code>Cache-Control: s-maxage=X, stale-while-revalidate=Y</code>
+      plus CDN-specific headers (<code>CDN-Cache-Control</code>,
+      <code>Cloudflare-CDN-Cache-Control</code>, <code>Surrogate-Control</code>).
+    </p>
+
+    <h3>Cloudflare setup</h3>
+    <ol>
+      <li><strong>Add the site</strong> and point DNS at Cloudflare (proxied / orange cloud).</li>
+      <li><strong>Caching → Configuration</strong>:
+        <ul>
+          <li>Caching Level: <em>Standard</em></li>
+          <li>Browser Cache TTL: <em>Respect Existing Headers</em> (required!)</li>
+        </ul>
+      </li>
+      <li><strong>Cache Rules</strong> (new): create one rule:
+        <ul>
+          <li>Match: <code>http.request.method eq "GET"</code></li>
+          <li>Action: <em>Eligible for cache</em></li>
+          <li>Edge TTL: <em>Use cache-control header from origin</em></li>
+        </ul>
+      </li>
+      <li><strong>Page Rules</strong> (optional belt-and-braces): add a rule for <code>example.com/*</code> with <code>Cache Level: Cache Everything</code>.</li>
+      <li><strong>Cache → Cache Analytics</strong>: watch <em>Cache Hit Ratio</em>. Target: <strong>90%+</strong>.</li>
+    </ol>
+
+    <h3>CloudFront alternative</h3>
+    <p>If you prefer AWS:</p>
+    <ol>
+      <li>Create a distribution with the Laravel origin.</li>
+      <li>Use the managed <code>CachingOptimized</code> policy and the <code>CORS-S3Origin</code> origin request policy.</li>
+      <li><strong>Behaviors</strong>:
+        <ul>
+          <li>Default (<code>/*</code>): cache based on headers <code>Accept-Encoding, Accept-Language</code> and cookie <code>remember_*</code> (allow-list, not forward-all).</li>
+          <li><code>/assets/*</code>, <code>/build/*</code>: max TTL 1 year (already fingerprinted by Vite).</li>
+        </ul>
+      </li>
+    </ol>
+
+    <h3>Invalidating the edge cache</h3>
+    <p>
+      The <code>CacheInvalidationObserver</code> already forgets Laravel cache keys when a
+      model changes. To also purge the CDN edge, extend the observer with a
+      Cloudflare API call:
+    </p>
+<pre><code><span class="c">// In CacheInvalidationObserver::invalidate() — add after Cache::forget loop:</span>
+<span class="k">if</span> (config(<span class="s">'services.cloudflare.zone_id'</span>)) {
+    dispatch(<span class="k">new</span> \App\Jobs\PurgeCloudflareCacheJob($urls))->onQueue(<span class="s">'purge'</span>);
+}</code></pre>
+    <p>
+      The Cloudflare purge-by-URL endpoint is rate-limited to 30 req/s — that's
+      why it belongs in a queued job.
+    </p>
+
+    <hr>
+
+    <h2 id="octane">2. Laravel Octane <span class="pill">persistent workers</span></h2>
+    <p>
+      Stock PHP-FPM bootstraps the framework on every request (10–30ms overhead).
+      Octane keeps the app in memory and handles requests like Node — cuts median
+      latency roughly 4x.
+    </p>
+<pre><code>composer require laravel/octane
+php artisan octane:install --server=swoole   <span class="c"># or --server=frankenphp</span></code></pre>
+
+    <h3>Run as a systemd service</h3>
+    <p><code>/etc/systemd/system/octane.service</code>:</p>
+<pre><code><span class="c">[Unit]</span>
+Description=Laravel Octane (Swoole)
+After=network.target
+
+<span class="c">[Service]</span>
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/app
+ExecStart=/usr/bin/php artisan octane:start \
+  --server=swoole \
+  --host=127.0.0.1 --port=8000 \
+  --workers=4 --task-workers=2 \
+  --max-requests=500
+Restart=always
+RestartSec=1
+
+<span class="c">[Install]</span>
+WantedBy=multi-user.target</code></pre>
+    <p>
+      Tune <code>--workers</code> to roughly <code>CPU cores × 2</code>,
+      <code>--max-requests=500</code> recycles workers before memory fragmentation builds up.
+    </p>
+
+    <h3>Caveats</h3>
+    <ul>
+      <li>Singletons live across requests — audit for leaks. <code>AppServiceProvider</code> already registers services as singletons, which is fine.</li>
+      <li><code>Auth::user()</code> must be cleared — Octane does this automatically but custom middleware using static state will leak. Grep for <code>static $</code> in middleware.</li>
+    </ul>
+
+    <hr>
+
+    <h2 id="redis">3. Redis Cluster <span class="pill">sessions / cache / queue / locks</span></h2>
+    <p>
+      File-based sessions <strong>will not work</strong> on multiple app servers (sticky sessions
+      help but break when a pod dies). Single-node Redis caps around 30k ops/sec;
+      Redis Cluster is horizontally scalable.
+    </p>
+
+    <h3>Managed options (recommended)</h3>
+    <ul>
+      <li><strong>AWS ElastiCache</strong> — 3-node cluster, <code>cache.r6g.large</code>.</li>
+      <li><strong>DigitalOcean Managed Redis</strong> — cheaper, same topology.</li>
+      <li><strong>Upstash Redis</strong> — per-request billing, zero ops.</li>
+    </ul>
+
+    <h3><code>.env</code> for cluster mode</h3>
+<pre><code><span class="v">CACHE_STORE</span>=redis
+<span class="v">SESSION_DRIVER</span>=redis
+<span class="v">QUEUE_CONNECTION</span>=redis
+
+<span class="v">REDIS_CLIENT</span>=phpredis
+<span class="v">REDIS_CLUSTER</span>=redis
+<span class="v">REDIS_HOST</span>=10.0.1.20,10.0.1.21,10.0.1.22
+<span class="v">REDIS_PORT</span>=6379
+<span class="v">REDIS_PASSWORD</span>=xxx</code></pre>
+    <p>
+      <code>config/database.php</code> already reads <code>REDIS_CLUSTER</code>; the <code>phpredis</code>
+      client handles slot routing transparently.
+    </p>
+
+    <h3>Hot-key audit</h3>
+    <p>
+      Under load, a single Redis key hit 10k+ times per second (e.g. <code>app_settings_all</code>)
+      becomes a hot spot. Use <code>RedisReplicated</code> connection or add a small in-process
+      cache layer (<code>AppSetting::get()</code> already memoizes in-request — good).
+    </p>
+
+    <hr>
+
+    <h2 id="replicas">4. MySQL Read Replicas</h2>
+    <p>
+      Reads outnumber writes ~50:1 in this app (browsing events &gt;&gt; placing orders).
+      The <code>mysql</code> connection in <code>config/database.php</code> is now <strong>already configured</strong>
+      to split when <code>DB_READ_HOST</code> is set.
+    </p>
+
+    <h3>AWS RDS setup</h3>
+    <ol>
+      <li>Create an <code>r6g.xlarge</code> primary (writer).</li>
+      <li>Add 2–3 read replicas in the same region, different AZs.</li>
+      <li>Put them behind a single DNS name:
+        <ul>
+          <li>RDS Proxy (simpler, adds connection pooling), or</li>
+          <li>HAProxy for round-robin.</li>
+        </ul>
+      </li>
+      <li><code>.env</code>:
+<pre><code><span class="v">DB_HOST</span>=primary.cluster-xxx.rds.amazonaws.com
+<span class="v">DB_READ_HOST</span>=reader.cluster-ro-xxx.rds.amazonaws.com
+<span class="v">DB_READ_USERNAME</span>=app_read      <span class="c"># optional, lower privileges</span></code></pre>
+      </li>
+    </ol>
+
+    <h3>Verify the split works</h3>
+<pre><code><span class="c">// tinker</span>
+DB::statement(<span class="s">'SELECT 1'</span>);
+DB::connection()->getReadPdo();   <span class="c">// → read replica</span>
+DB::connection()->getPdo();       <span class="c">// → primary</span></code></pre>
+    <p>
+      Or enable query log briefly: writes should go to <code>DB_HOST</code>, reads (after a
+      non-sticky request) should land on <code>DB_READ_HOST</code>.
+    </p>
+
+    <h3>Replication lag</h3>
+    <p>
+      <code>sticky=true</code> in <code>config/database.php</code> ensures read-your-own-writes within
+      a single request. But cross-request lag (AWS RDS typically &lt;100ms) will
+      show up as "I placed an order and the receipt page says my order doesn't
+      exist yet." Mitigations:
+    </p>
+    <ul>
+      <li>Use <code>DB::connection('mysql')->enableQueryLog()</code> to spot replica-lag bugs.</li>
+      <li>For critical reads (order confirmation page), force the primary:
+<pre><code>$order = Order::on(<span class="s">'mysql'</span>)->usingConnection(<span class="k">function</span> () { ... })->find($id);
+<span class="c">// or simpler: just use ->from(DB::raw('orders FORCE INDEX ...')) on writer</span></code></pre>
+      </li>
+    </ul>
+
+    <hr>
+
+    <h2 id="queues">5. Queue Workers</h2>
+    <p>Three queue jobs are already wired:</p>
+    <table>
+      <thead>
+        <tr><th>Queue</th><th>Job</th><th>What it does</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>mail</code></td><td><code>SendMailJob</code></td><td>All transactional email</td></tr>
+        <tr><td><code>downloads</code></td><td><code>BuildOrderZipJob</code></td><td>Build order ZIPs asynchronously</td></tr>
+        <tr><td><code>photos</code></td><td><code>ProcessUploadedPhotoJob</code></td><td>Watermark, thumb, EXIF strip</td></tr>
+      </tbody>
+    </table>
+
+    <h3>supervisord config</h3>
+    <p><code>/etc/supervisor/conf.d/laravel-workers.conf</code>:</p>
+<pre><code><span class="c">[program:mail-worker]</span>
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/app/artisan queue:work redis --queue=mail --tries=3 --timeout=60 --sleep=1
+numprocs=4
+autostart=true
+autorestart=true
+user=www-data
+redirect_stderr=true
+stdout_logfile=/var/log/laravel/mail.log
+stopwaitsecs=60
+
+<span class="c">[program:downloads-worker]</span>
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/app/artisan queue:work redis --queue=downloads --tries=2 --timeout=1800 --sleep=3
+numprocs=2
+autostart=true
+autorestart=true
+user=www-data
+redirect_stderr=true
+stdout_logfile=/var/log/laravel/downloads.log
+stopwaitsecs=1801
+
+<span class="c">[program:photos-worker]</span>
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/app/artisan queue:work redis --queue=photos --tries=3 --timeout=300 --sleep=1
+numprocs=6
+autostart=true
+autorestart=true
+user=www-data
+redirect_stderr=true
+stdout_logfile=/var/log/laravel/photos.log
+stopwaitsecs=300</code></pre>
+    <p>
+      Tuning: <code>numprocs</code> scales with expected job rate. A ZIP job holds a worker
+      for minutes, so 2 workers = 2 concurrent ZIP builds; if you see the
+      <code>downloads</code> queue depth grow during peak, bump it up.
+    </p>
+
+    <h3>Horizon (optional)</h3>
+    <p>
+      Laravel Horizon gives you a dashboard + auto-scaling based on queue length.
+      Worth installing once you have &gt;10 worker processes.
+    </p>
+<pre><code>composer require laravel/horizon
+php artisan horizon:install
+<span class="c"># route: /horizon (protect with admin middleware)</span></code></pre>
+
+    <hr>
+
+    <h2 id="lb">6. Load Balancer</h2>
+    <ul>
+      <li><strong>Cloudflare Load Balancer</strong> is the simplest — health-checked round-robin with automatic failover across regions. ~$5/mo per pool.</li>
+      <li><strong>HAProxy</strong> if you want to self-host. Stick-table for session affinity is only needed if you skip Redis sessions.</li>
+      <li><strong>AWS ALB</strong> — pairs well with CloudFront and RDS.</li>
+    </ul>
+
+    <h3>Session affinity</h3>
+    <p>
+      With Redis sessions (recommended) you don't need sticky sessions — any pod
+      can handle any request. Omit affinity rules from your load balancer to
+      maximize fleet utilization.
+    </p>
+
+    <hr>
+
+    <h2 id="nginx">7. Nginx tuning</h2>
+    <p>Even with Octane, you still want Nginx in front for TLS + static files.</p>
+
+    <p><code>/etc/nginx/nginx.conf</code> (excerpt):</p>
+<pre><code>worker_processes auto;
+worker_rlimit_nofile 65535;
+events {
+    worker_connections 16384;
+    multi_accept on;
+    use epoll;
+}
+http {
+    keepalive_timeout 65;
+    keepalive_requests 1000;
+    client_max_body_size 100M;    <span class="c"># photo uploads</span>
+
+    <span class="c"># Let CDN do the gzip — Nginx only compresses for direct hits.</span>
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript;
+
+    <span class="c"># Rate-limit at Nginx layer as a second line of defense.</span>
+    limit_req_zone $binary_remote_addr zone=public:10m rate=30r/s;
+    limit_req_zone $binary_remote_addr zone=api:10m    rate=10r/s;
+
+    upstream octane {
+        server 127.0.0.1:8000;
+        keepalive 32;
+    }
+}</code></pre>
+
+    <p><code>/etc/nginx/sites-enabled/app</code>:</p>
+<pre><code>server {
+    listen 443 ssl http2;
+    server_name example.com;
+
+    <span class="c"># Static assets → served directly, bypass PHP entirely.</span>
+    location ~* \.(css|js|jpg|jpeg|png|webp|svg|woff2)$ {
+        root /var/www/app/public;
+        expires 1y;
+        add_header Cache-Control <span class="s">"public, immutable"</span>;
+        try_files $uri @octane;
+    }
+
+    location / {
+        limit_req zone=public burst=20 nodelay;
+        try_files $uri @octane;
+    }
+
+    location /api/ {
+        limit_req zone=api burst=5 nodelay;
+        try_files $uri @octane;
+    }
+
+    location @octane {
+        proxy_pass http://octane;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Connection <span class="s">""</span>;
+    }
+}</code></pre>
+
+    <hr>
+
+    <h2 id="observability">8. Observability</h2>
+    <p>You cannot scale what you cannot measure.</p>
+    <ul>
+      <li><strong>Logs</strong>: stream to CloudWatch / Datadog / Loki. <code>LOG_CHANNEL=stderr</code> when running under systemd + journald.</li>
+      <li><strong>Metrics</strong>: <code>laravel/pulse</code> package gives you a free-ish Grafana-lite.</li>
+      <li><strong>APM</strong>: NewRelic or Datadog APM — pin expensive queries and jobs.</li>
+      <li><strong>Error tracking</strong>: Sentry. <code>composer require sentry/sentry-laravel</code>.</li>
+    </ul>
+
+    <h3>Key dashboards to build first</h3>
+    <ol>
+      <li><strong>Cache hit ratio</strong> at the CDN (goal: 90%+).</li>
+      <li><strong>Queue depth</strong> per queue (alert on <code>mail &gt; 1000</code> or <code>downloads &gt; 50</code>).</li>
+      <li><strong>Redis ops/sec + slowlog</strong> (alert on any command &gt;50ms).</li>
+      <li><strong>MySQL replica lag</strong> (alert on &gt; 5s).</li>
+      <li><strong>Nginx 5xx rate</strong> (alert on &gt;1% over 5 minutes).</li>
+    </ol>
+
+    <hr>
+
+    <h2 id="cost">9. Cost estimate <span class="pill">AWS, rough</span></h2>
+    <p>For a <strong>steady-state 50k concurrent</strong> deployment (~5k rps after CDN):</p>
+    <table>
+      <thead>
+        <tr><th>Component</th><th style="text-align:right">Cost / month</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>4× <code>c6g.xlarge</code> EC2 (Octane)</td><td style="text-align:right">$420</td></tr>
+        <tr><td>2× <code>c6g.large</code> EC2 (queue workers)</td><td style="text-align:right">$90</td></tr>
+        <tr><td>RDS <code>r6g.xlarge</code> + 2 read replicas</td><td style="text-align:right">$650</td></tr>
+        <tr><td>ElastiCache 3-node <code>r6g.large</code></td><td style="text-align:right">$540</td></tr>
+        <tr><td>CloudFront (1TB egress)</td><td style="text-align:right">$85</td></tr>
+        <tr><td>ALB + data transfer</td><td style="text-align:right">$40</td></tr>
+        <tr><td>S3 (photos) + R2 (ZIPs)</td><td style="text-align:right">$100</td></tr>
+        <tr><td style="font-weight:700">Total</td><td style="text-align:right; font-weight:700; color: var(--accent-2)">~$1,925</td></tr>
+      </tbody>
+    </table>
+    <p>Cloudflare (no per-request charges) can cut the CloudFront line by ~70%.</p>
+
+    <hr>
+
+    <h2 id="checklist">10. Deployment checklist</h2>
+    <p>Copy-paste this into your runbook before going live:</p>
+    <ul class="checklist with-inputs">
+      <li><input type="checkbox"><code>APP_ENV=production</code>, <code>APP_DEBUG=false</code></li>
+      <li><input type="checkbox"><code>php artisan config:cache route:cache view:cache event:cache</code></li>
+      <li><input type="checkbox"><code>php artisan optimize</code></li>
+      <li><input type="checkbox"><code>php artisan storage:link</code></li>
+      <li><input type="checkbox"><code>composer install --no-dev --optimize-autoloader</code></li>
+      <li><input type="checkbox"><code>npm run build</code> (Vite / assets)</li>
+      <li><input type="checkbox"><code>CACHE_STORE=redis</code>, <code>SESSION_DRIVER=redis</code>, <code>QUEUE_CONNECTION=redis</code></li>
+      <li><input type="checkbox"><code>DB_READ_HOST</code> set, verified reads go to replica</li>
+      <li><input type="checkbox"><code>CDN_BASE_URL</code> set, verified assets load from CDN</li>
+      <li><input type="checkbox">Cloudflare cache rules active, hit ratio &gt; 80% after 24h</li>
+      <li><input type="checkbox">Queue workers running under supervisord, all 3 queues draining</li>
+      <li><input type="checkbox">Octane running under systemd, <code>max-requests=500</code></li>
+      <li><input type="checkbox">Nginx rate limits in place</li>
+      <li><input type="checkbox">Error tracking (Sentry) capturing a test exception</li>
+      <li><input type="checkbox">Load test: <code>k6</code> or <code>wrk</code> hits 10k rps without 5xx</li>
+    </ul>
+
+    <hr>
+
+    <h2 id="loadtest">Appendix: Load testing</h2>
+<pre><code><span class="c"># Smoke test with k6 — adjust VUs upwards</span>
+cat &gt; loadtest.js &lt;&lt;<span class="s">'EOF'</span>
+<span class="k">import</span> http <span class="k">from</span> <span class="s">'k6/http'</span>;
+<span class="k">import</span> { sleep } <span class="k">from</span> <span class="s">'k6'</span>;
+
+<span class="k">export const</span> options = {
+  stages: [
+    { duration: <span class="s">'2m'</span>, target: 500 },    <span class="c">// ramp</span>
+    { duration: <span class="s">'5m'</span>, target: 5000 },   <span class="c">// steady</span>
+    { duration: <span class="s">'2m'</span>, target: 0 },      <span class="c">// cool</span>
+  ],
+};
+
+<span class="k">export default function</span> () {
+  <span class="k">const</span> urls = [<span class="s">'/'</span>, <span class="s">'/events'</span>, <span class="s">'/events/summer-festival-2026'</span>, <span class="s">'/photographers/1'</span>];
+  http.get(`https://example.com${urls[Math.floor(Math.random()*urls.length)]}`);
+  sleep(Math.random() * 3);
+}
+EOF
+
+k6 run loadtest.js</code></pre>
+
+    <h3>Read the result</h3>
+    <ul>
+      <li><code>http_req_duration{p(95)}</code> — should stay under 500ms even at peak.</li>
+      <li><code>http_req_failed</code> — should stay below 1%.</li>
+      <li>If both hold, the Cloudflare cache is doing its job; PHP is barely touched.</li>
+    </ul>
+
+    <hr>
+    <p style="color: var(--muted); font-size: 13px; text-align: center; margin-top: 48px;">
+      Pair with <code>docs/SCALING.md</code> — same content, Markdown source.
+    </p>
+  </main>
+</div>
+
+<script>
+  // Persist checklist state in localStorage so the runbook survives reloads.
+  document.querySelectorAll('ul.checklist input[type="checkbox"]').forEach((cb, idx) => {
+    const key = 'scaling-checklist-' + idx;
+    cb.checked = localStorage.getItem(key) === '1';
+    cb.addEventListener('change', () => {
+      localStorage.setItem(key, cb.checked ? '1' : '0');
+      cb.parentElement.style.opacity = cb.checked ? '0.55' : '1';
+    });
+    if (cb.checked) cb.parentElement.style.opacity = '0.55';
+  });
+
+  // Highlight active ToC entry on scroll.
+  const links = document.querySelectorAll('aside a');
+  const sections = Array.from(links).map(l => document.querySelector(l.getAttribute('href')));
+  const onScroll = () => {
+    const y = window.scrollY + 120;
+    let active = 0;
+    sections.forEach((s, i) => { if (s && s.offsetTop <= y) active = i; });
+    links.forEach((l, i) => {
+      l.style.background = i === active ? 'var(--panel-2)' : '';
+      l.style.color      = i === active ? 'var(--accent)' : '';
+    });
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+</script>
+</body>
+</html>

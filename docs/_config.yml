@@ -1,0 +1,31 @@
+# ─────────────────────────────────────────────────────────────
+#  GitHub Pages — Jekyll Configuration (minimal)
+# ─────────────────────────────────────────────────────────────
+#  Served as: https://<username>.github.io/<repo>/
+#  Source:    /docs directory (set in repo Settings → Pages)
+#
+#  We use .nojekyll alongside this file so GitHub Pages serves
+#  raw HTML + markdown as-is (no Jekyll processing). The
+#  _config.yml here only sets site metadata for reference.
+# ─────────────────────────────────────────────────────────────
+
+title: "Photo Gallery — Documentation"
+description: "คู่มือและเอกสารทั้งหมดสำหรับระบบ Photo Gallery (Laravel 12 + Tailwind)"
+lang: th
+
+# Files that should NOT be served
+exclude:
+  - "*.sh"
+  - "*.conf"
+  - "crontab.txt"
+  - "Gemfile"
+  - "Gemfile.lock"
+  - "node_modules"
+  - "vendor"
+
+# Default values for all pages
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default

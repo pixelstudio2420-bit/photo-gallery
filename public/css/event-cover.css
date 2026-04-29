@@ -1,0 +1,148 @@
+/* =============================================
+ *  Event Cover Component — event-cover.css
+ *  Professional cover image + initial fallback
+ *  Supports: cards, thumbnails, hero banners
+ * ============================================= */
+
+/* ── Base Container ── */
+.ec-cover {
+    position: relative;
+    overflow: hidden;
+    display: block;
+    width: 100%;
+}
+
+/* ── Image Layer ── */
+.ec-cover-img {
+    position: relative;
+    width: 100%;
+    z-index: 2;
+}
+.ec-cover.ec-fallback .ec-cover-img {
+    display: none !important;
+}
+
+/* ── Fallback Layer (always behind image) ── */
+.ec-cover-fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    overflow: hidden;
+}
+
+/* When fallback active (no image or broken) → bring to front */
+.ec-cover.ec-fallback .ec-cover-fallback,
+.ec-cover:not(:has(.ec-cover-img)) .ec-cover-fallback {
+    z-index: 2;
+}
+
+/* ── Thumbnail Mode ── */
+.ec-thumb {
+    display: inline-flex;
+    flex-shrink: 0;
+}
+.ec-thumb .ec-cover-img {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    object-fit: cover;
+}
+.ec-thumb .ec-cover-fallback {
+    position: absolute;
+}
+
+/* ── Decorative Pattern Overlay ── */
+.ec-pattern {
+    position: absolute;
+    inset: 0;
+    background-image:
+        radial-gradient(circle at 20% 80%, rgba(255,255,255,0.06) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(255,255,255,0.08) 0%, transparent 50%),
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03) 0%, transparent 70%);
+    z-index: 0;
+}
+/* Subtle dot pattern */
+.ec-pattern::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px);
+    background-size: 16px 16px;
+    z-index: 0;
+}
+
+/* ── Decorative Icon (large, faded) ── */
+.ec-deco-icon {
+    position: absolute;
+    top: -10%;
+    right: -5%;
+    font-size: 8rem;
+    color: rgba(255, 255, 255, 0.06);
+    transform: rotate(15deg);
+    z-index: 0;
+    line-height: 1;
+    pointer-events: none;
+}
+
+/* ── Content (initials + name) ── */
+.ec-content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    z-index: 1;
+    text-align: center;
+    padding: 0 12px;
+}
+
+.ec-initials {
+    color: #fff;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    opacity: 0.95;
+}
+
+.ec-name {
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 500;
+    line-height: 1.3;
+    max-width: 90%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Date Badge ── */
+.ec-date-badge {
+    z-index: 5;
+}
+
+/* ── Hover Effects (for event cards) ── */
+.event-card .ec-cover-fallback {
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.event-card:hover .ec-cover-fallback {
+    transform: scale(1.04);
+}
+.event-card:hover .ec-deco-icon {
+    animation: ec-float 3s ease-in-out infinite;
+}
+@keyframes ec-float {
+    0%, 100% { transform: rotate(15deg) translateY(0); }
+    50%      { transform: rotate(15deg) translateY(-6px); }
+}
+
+/* ── Dark Mode ── */
+[data-theme="dark"] .ec-pattern::after {
+    background-image: radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px);
+}
+[data-theme="dark"] .ec-name {
+    color: rgba(255, 255, 255, 0.7);
+}

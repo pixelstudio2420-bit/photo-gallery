@@ -1,0 +1,704 @@
+/* ============================================
+   Photo Gallery — Admin CSS (Minimal)
+   Only styles that Tailwind can't handle:
+   - Component card hover effects
+   - Notification animations
+   - Table/form compact responsive
+   - Print styles
+   ============================================ */
+
+/* ============================================
+   Admin Filter Bar — Shared Styles
+   ============================================ */
+.af-bar {
+  
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  padding: 16px 20px;
+  margin-bottom: 12px;
+}
+.af-grid {
+  display: grid;
+  gap: 10px;
+  align-items: end;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.af-grid .af-search { grid-column: span 2; min-width: 240px; }
+@media (max-width: 768px) {
+  .af-grid { grid-template-columns: 1fr; }
+  .af-grid .af-search { grid-column: span 1; }
+}
+.af-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin-bottom: 5px;
+}
+.af-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  color: #1e293b;
+  
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+.af-input:focus {
+  border-color: #818cf8;
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+}
+.af-input::placeholder { color: #94a3b8; }
+.af-search-wrap {
+  position: relative;
+}
+.af-search-wrap .af-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+.af-search-wrap .af-input { padding-left: 36px; }
+.af-search-wrap .af-spinner {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e2e8f0;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: af-spin 0.6s linear infinite;
+}
+@keyframes af-spin { to { transform: translateY(-50%) rotate(360deg); } }
+.af-actions {
+  display: flex;
+  gap: 6px;
+  align-items: end;
+}
+.af-btn-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  
+  color: #64748b;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.af-btn-clear:hover { border-color: #f43f5e; color: #f43f5e; background: #fff1f2; }
+.af-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: rgba(99,102,241,0.08);
+  color: #6366f1;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* Fade-in for table swap */
+#admin-table-area { transition: opacity 0.2s ease; }
+
+/* ============================================
+   Scrollbar — Sidebar & Notification
+   ============================================ */
+.admin-scrollbar::-webkit-scrollbar { width: 4px; }
+.admin-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+.admin-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+
+#notifyList::-webkit-scrollbar { width: 4px; }
+#notifyList::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+
+/* ============================================
+   Dashboard & Common Cards
+   ============================================ */
+.stat-card {
+    border: none;
+    border-radius: 12px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+}
+
+.dashboard-card {
+    border-radius: 12px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.dashboard-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+
+.dashboard-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+/* ============================================
+   Tables
+   ============================================ */
+.table th {
+    font-weight: 600;
+    font-size: 0.85rem;
+    background: #f8f9fa;
+}
+.dark .table th {
+    background: rgba(255,255,255,0.04);
+}
+
+/* ============================================
+   Notification Animations
+   ============================================ */
+@keyframes slideInRight {
+    from { opacity: 0; transform: translateX(100px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideOutRight {
+    from { opacity: 1; transform: translateX(0); }
+    to   { opacity: 0; transform: translateX(100px); }
+}
+.animate-slide-in { animation: slideInRight 0.3s ease-out; }
+.animate-slide-out { animation: slideOutRight 0.3s ease-in forwards; }
+
+@keyframes bellShake {
+    0%, 100% { transform: rotate(0); }
+    15% { transform: rotate(15deg); }
+    30% { transform: rotate(-10deg); }
+    45% { transform: rotate(8deg); }
+    60% { transform: rotate(-5deg); }
+    75% { transform: rotate(3deg); }
+}
+#notifyBell.bell-ring i { animation: bellShake 0.6s ease; }
+
+.notify-panel-item { transition: background 0.15s; }
+.notify-panel-item:hover { background: rgba(59,130,246,0.05); }
+
+/* ============================================
+   Event Cards
+   ============================================ */
+.event-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+    overflow: hidden;
+}
+.event-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+.event-card-cover { overflow: hidden; }
+.event-card-cover img { transition: transform 0.3s; }
+.event-card:hover .event-card-cover img { transform: scale(1.05); }
+
+/* ============================================
+   Order & Photo Items
+   ============================================ */
+.order-photo-item {
+    border-radius: 8px;
+    overflow: hidden;
+    transition: transform 0.2s;
+}
+.order-photo-item:hover { transform: scale(1.05); z-index: 1; }
+.order-photo-price {
+    position: absolute;
+    bottom: 4px; right: 4px;
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.order-row { transition: background 0.15s; }
+.order-row:hover { background: rgba(99,102,241,0.03); }
+
+/* Bulk action bar */
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+#bulkBar { animation: slideDown 0.2s ease; }
+
+/* ============================================
+   iOS auto-zoom prevention
+   ============================================ */
+@media screen and (max-width: 768px) {
+    input[type="text"], input[type="email"], input[type="password"],
+    input[type="number"], input[type="tel"], input[type="url"],
+    input[type="search"], input[type="date"], input[type="datetime-local"],
+    input[type="time"], select, textarea {
+        font-size: 16px !important;
+    }
+}
+
+/* ============================================
+   Mobile (≤767px) — Compact
+   ============================================ */
+@media (max-width: 767.98px) {
+    .dashboard-card { border-radius: 10px; }
+    .dashboard-card .fs-4 { font-size: 1rem !important; }
+    .dashboard-icon { width: 36px; height: 36px; font-size: 0.95rem; }
+    .stat-card .card-body { padding: 0.75rem !important; }
+
+    .table { font-size: 0.8rem; }
+    .table th, .table td { padding: 0.5rem 0.4rem; white-space: nowrap; }
+
+    .card-body { padding: 0.85rem; }
+    .card-header { padding: 0.65rem 0.85rem; }
+
+    .nav-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .nav-tabs::-webkit-scrollbar { display: none; }
+    .nav-tabs .nav-link { white-space: nowrap; font-size: 0.82rem; padding: 0.5rem 0.75rem; }
+
+    canvas { max-width: 100% !important; }
+    .event-card-cover img { height: 140px !important; object-fit: cover; }
+    .order-photo-item { border-radius: 6px; }
+}
+
+/* ============================================
+   Small Mobile (≤480px)
+   ============================================ */
+@media (max-width: 480px) {
+    .dashboard-card .card-body { padding: 0.6rem !important; }
+    .dashboard-card .fs-4 { font-size: 0.95rem !important; }
+    .dashboard-icon { width: 32px; height: 32px; font-size: 0.85rem; border-radius: 8px; }
+
+    .table { font-size: 0.75rem; }
+    .table th, .table td { padding: 0.35rem 0.3rem; }
+    .card { border-radius: 10px; }
+    .card-body { padding: 0.75rem; }
+}
+
+/* ============================================
+   Touch-Friendly
+   ============================================ */
+@media (hover: none) and (pointer: coarse) {
+    .stat-card:hover, .dashboard-card:hover,
+    .event-card:hover, .order-photo-item:hover {
+        transform: none;
+        box-shadow: none;
+    }
+}
+
+/* ============================================
+   Dark Mode Overrides
+   ============================================ */
+.dark .card { background: #1e293b; border-color: rgba(255,255,255,0.06); }
+.dark .card-header { background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.06); }
+.dark .stat-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+.dark .order-row:hover { background: rgba(99,102,241,0.06); }
+
+/* ============================================
+   GLOBAL ADMIN DARK MODE — Base
+   ============================================ */
+.dark body,
+.dark main,
+.dark .bg-gray-50 {
+    background: #0f1419 !important;
+    color: #e2e8f0 !important;
+}
+
+/* ============================================
+   GLOBAL ADMIN DARK MODE — Cards
+   ============================================ */
+.dark .bg-white {
+    background: linear-gradient(145deg, #1e293b 0%, #1a2332 100%) !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.dark .border-gray-100,
+.dark .border-gray-200 {
+    border-color: rgba(255,255,255,0.08) !important;
+}
+.dark .border-gray-300 {
+    border-color: rgba(255,255,255,0.12) !important;
+}
+
+/* ============================================
+   GLOBAL ADMIN DARK MODE — Typography
+   ============================================ */
+.dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6 {
+    color: #f1f5f9 !important;
+}
+.dark .font-bold,
+.dark .font-semibold {
+    color: #f1f5f9;
+}
+.dark .text-gray-700 {
+    color: #cbd5e1 !important;
+}
+.dark .text-gray-600 {
+    color: #94a3b8 !important;
+}
+.dark .text-gray-500 {
+    color: #94a3b8 !important;
+}
+.dark .text-gray-800 {
+    color: #e2e8f0 !important;
+}
+.dark .text-slate-800 {
+    color: #e2e8f0 !important;
+}
+.dark label {
+    color: #e2e8f0 !important;
+}
+.dark small, .dark .text-xs {
+    color: #94a3b8;
+}
+
+/* ============================================
+   GLOBAL ADMIN DARK MODE — Form Inputs
+   ============================================ */
+.dark input[type="text"],
+.dark input[type="email"],
+.dark input[type="password"],
+.dark input[type="number"],
+.dark input[type="tel"],
+.dark input[type="url"],
+.dark input[type="search"],
+.dark input[type="date"],
+.dark input[type="datetime-local"],
+.dark input[type="time"],
+.dark select,
+.dark textarea {
+    background: rgba(255,255,255,0.05) !important;
+    border-color: rgba(255,255,255,0.12) !important;
+    color: #e2e8f0 !important;
+}
+.dark input::placeholder,
+.dark textarea::placeholder {
+    color: #64748b !important;
+}
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus {
+    background: rgba(255,255,255,0.08) !important;
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15) !important;
+}
+/* Select dropdown arrow — keep visible in dark */
+.dark select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8.825a.7.7 0 0 1-.5-.2L2.3 5.4a.7.7 0 1 1 1-.975L6 7.15l2.7-2.725a.7.7 0 1 1 1 .975L6.5 8.625a.7.7 0 0 1-.5.2z'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 0.75rem center !important;
+    background-size: 12px !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    padding-right: 2.5rem !important;
+}
+
+/* Checkbox & Radio */
+.dark input[type="checkbox"],
+.dark input[type="radio"] {
+    background: rgba(255,255,255,0.06) !important;
+    border-color: rgba(255,255,255,0.2) !important;
+}
+
+/* Search input groups (icon + input combined) */
+.dark .flex.rounded-lg.overflow-hidden.border {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.12) !important;
+}
+.dark .flex.rounded-lg.overflow-hidden.border input {
+    background: transparent !important;
+}
+
+/* File upload drop zone */
+.dark .border-dashed {
+    border-color: rgba(255,255,255,0.15) !important;
+    background: rgba(255,255,255,0.03) !important;
+}
+.dark .border-dashed:hover {
+    border-color: #6366f1 !important;
+    background: rgba(99,102,241,0.06) !important;
+}
+
+/* Error state */
+.dark .border-red-500 {
+    border-color: #ef4444 !important;
+}
+.dark .bg-red-50 {
+    background: rgba(239,68,68,0.1) !important;
+    color: #fca5a5 !important;
+}
+.dark .bg-blue-50 {
+    background: rgba(59,130,246,0.1) !important;
+}
+.dark .text-blue-700 {
+    color: #93c5fd !important;
+}
+
+/* ============================================
+   GLOBAL ADMIN DARK MODE — Tables
+   ============================================ */
+.dark table {
+    color: #e2e8f0;
+}
+.dark thead,
+.dark .bg-gray-50\/80,
+.dark .bg-gray-50 {
+    background: rgba(99,102,241,0.08) !important;
+}
+.dark thead th,
+.dark thead th.text-gray-500 {
+    color: #c7d2fe !important;
+    border-bottom: 1px solid rgba(99,102,241,0.15);
+}
+.dark tbody tr {
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.dark tbody tr:hover,
+.dark [class*="hover\:bg-gray-50"]:hover {
+    background: rgba(99,102,241,0.06) !important;
+}
+.dark tbody td {
+    color: #e2e8f0;
+}
+.dark tbody td.text-gray-500,
+.dark tbody .text-gray-500 {
+    color: #94a3b8 !important;
+}
+.dark tbody a.text-gray-800,
+.dark tbody .font-medium {
+    color: #f1f5f9 !important;
+}
+.dark tbody a:hover {
+    color: #818cf8 !important;
+}
+
+/* Empty state in tables */
+.dark .text-gray-300 {
+    color: rgba(255,255,255,0.2) !important;
+}
+
+/* ============================================
+   GLOBAL ADMIN DARK MODE — Badges & Pills
+   ============================================ */
+.dark .bg-indigo-50 {
+    background: rgba(99,102,241,0.15) !important;
+}
+.dark .text-indigo-600 {
+    color: #a5b4fc !important;
+}
+.dark .bg-indigo-50.text-indigo-600 {
+    background: rgba(99,102,241,0.15) !important;
+    color: #a5b4fc !important;
+}
+
+/* Action buttons */
+.dark .bg-indigo-50.text-indigo-500 {
+    background: rgba(99,102,241,0.15) !important;
+    color: #a5b4fc !important;
+}
+.dark .bg-blue-50.text-blue-500 {
+    background: rgba(59,130,246,0.15) !important;
+    color: #93c5fd !important;
+}
+.dark .bg-red-50.text-red-500 {
+    background: rgba(239,68,68,0.12) !important;
+    color: #fca5a5 !important;
+}
+.dark .bg-green-50, .dark .bg-emerald-50 {
+    background: rgba(16,185,129,0.1) !important;
+}
+
+/* ============================================
+   GLOBAL ADMIN DARK MODE — Buttons
+   ============================================ */
+.dark .border-gray-300.text-gray-600 {
+    border-color: rgba(255,255,255,0.15) !important;
+    color: #cbd5e1 !important;
+    background: rgba(255,255,255,0.05);
+}
+.dark .border-gray-300.text-gray-600:hover {
+    background: rgba(255,255,255,0.1) !important;
+}
+
+/* ============================================
+   GLOBAL ADMIN DARK MODE — Card Headers
+   ============================================ */
+.dark .border-b.border-gray-100 {
+    border-color: rgba(255,255,255,0.06) !important;
+}
+.dark .px-5.py-4.border-b h6 {
+    color: #f1f5f9 !important;
+}
+
+/* ============================================
+   GLOBAL ADMIN DARK MODE — Pagination
+   ============================================ */
+.dark nav[aria-label="Pagination"] a,
+.dark nav[aria-label="Pagination"] span {
+    background: rgba(255,255,255,0.05) !important;
+    border-color: rgba(255,255,255,0.1) !important;
+    color: #cbd5e1 !important;
+}
+.dark nav[aria-label="Pagination"] span[aria-current="page"] span {
+    background: #6366f1 !important;
+    border-color: #6366f1 !important;
+    color: #fff !important;
+}
+
+/* ============================================
+   Bootstrap Grid Fallback (for pages using row/col)
+   ============================================ */
+.row { display: flex; flex-wrap: wrap; margin-left: -0.5rem; margin-right: -0.5rem; }
+.row > [class*="col"] { padding-left: 0.5rem; padding-right: 0.5rem; box-sizing: border-box; }
+.g-2 { gap: 0.5rem; }
+.g-3 { gap: 0.75rem; }
+.col-xl { flex: 1 0 0%; min-width: 160px; }
+@media (max-width: 767.98px) {
+    .col-xl { flex: 0 0 50%; max-width: 50%; }
+}
+@media (max-width: 479px) {
+    .col-xl { flex: 0 0 100%; max-width: 100%; }
+}
+
+/* Bootstrap .card fallback */
+.card {
+    
+    border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.06);
+}
+.card .card-body { padding: 1.25rem; }
+
+/* Bootstrap .table fallback */
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td { padding: 0.75rem 1rem; text-align: left; vertical-align: middle; }
+.table thead th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; color: #64748b; }
+.table-hover tbody tr:hover { background: rgba(99,102,241,0.03); }
+
+/* Bootstrap .btn fallback */
+.btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 1rem; border-radius: 10px; font-weight: 500; font-size: 0.875rem; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; text-decoration: none; }
+.btn:hover { opacity: 0.9; }
+
+/* Bootstrap pagination fallback */
+.pagination { display: flex; list-style: none; padding: 0; margin: 0; gap: 0.25rem; }
+.page-item { display: inline-block; }
+.page-link { display: flex; align-items: center; justify-content: center; min-width: 32px; height: 32px; padding: 0 0.5rem; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.82rem; color: #475569; text-decoration: none; transition: all 0.15s; }
+.page-link:hover { background: rgba(99,102,241,0.06); border-color: #6366f1; color: #6366f1; }
+.page-item.active .page-link { background: #6366f1; border-color: #6366f1; color: #fff; }
+.page-item.disabled .page-link { opacity: 0.5; pointer-events: none; }
+
+/* Dark mode — Bootstrap .card */
+.dark .card {
+    background: linear-gradient(145deg, #1e293b 0%, #1a2332 100%) !important;
+    border-color: rgba(255,255,255,0.08) !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+/* Dark mode — inline color overrides for common patterns */
+.dark [style*="color:#1e293b"],
+.dark [style*="color: #1e293b"] {
+    color: #f1f5f9 !important;
+}
+.dark [style*="color:#475569"],
+.dark [style*="color: #475569"] {
+    color: #cbd5e1 !important;
+}
+.dark [style*="color:#64748b"],
+.dark [style*="color: #64748b"] {
+    color: #94a3b8 !important;
+}
+.dark [style*="color:#94a3b8"],
+.dark [style*="color: #94a3b8"] {
+    color: #94a3b8 !important;
+}
+
+/* Dark mode — Bootstrap .table */
+.dark .table { color: #e2e8f0; }
+.dark .table thead { background: rgba(99,102,241,0.08) !important; }
+.dark .table thead th { color: #c7d2fe !important; }
+.dark .table-hover tbody tr:hover { background: rgba(99,102,241,0.06) !important; }
+.dark .table tbody td { color: #e2e8f0; }
+
+/* Dark mode — Bootstrap .btn outline */
+.dark .btn[style*="border-color:#e2e8f0"],
+.dark .btn[style*="border-color: #e2e8f0"] {
+    border-color: rgba(255,255,255,0.15) !important;
+    color: #cbd5e1 !important;
+}
+
+/* Dark mode — Pagination */
+.dark .page-link {
+    background: rgba(255,255,255,0.05) !important;
+    border-color: rgba(255,255,255,0.1) !important;
+    color: #cbd5e1 !important;
+}
+.dark .page-link:hover {
+    background: rgba(99,102,241,0.15) !important;
+    border-color: #6366f1 !important;
+    color: #a5b4fc !important;
+}
+.dark .page-item.active .page-link {
+    background: #6366f1 !important;
+    border-color: #6366f1 !important;
+    color: #fff !important;
+}
+
+/* Dark mode — Action dropdown menus */
+.dark .absolute.bg-white,
+.dark [x-show] .bg-white,
+.dark div[x-show].bg-white {
+    background: #1e293b !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+.dark .block.hover\:bg-gray-50:hover {
+    background: rgba(99,102,241,0.1) !important;
+}
+.dark .block.hover\:bg-red-50:hover {
+    background: rgba(239,68,68,0.1) !important;
+}
+
+/* Dark mode — code snippets */
+.dark code {
+    background: rgba(99,102,241,0.15) !important;
+    color: #a5b4fc !important;
+}
+
+/* Dark mode — border-t pagination section */
+.dark .bg-white.border-0[style*="border-t"],
+.dark .border-t.bg-white {
+    background: rgba(255,255,255,0.02) !important;
+}
+
+/* Dark mode — .bg-gray-50 input addon */
+.dark .bg-gray-50 {
+    background: rgba(255,255,255,0.05) !important;
+}
+
+/* ============================================
+   Print
+   ============================================ */
+@media print {
+    #admin-sidebar, header, .no-print { display: none !important; }
+    body {  }
+    .card { break-inside: avoid; border: 1px solid #ddd !important; box-shadow: none !important; }
+}

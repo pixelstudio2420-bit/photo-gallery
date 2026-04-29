@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🟠 Cloudflare + R2 — Setup Guide | Photo Gallery</title>
+<meta name="description" content="คู่มือตั้งค่า Cloudflare (CDN / DNS / Cache) และ R2 Object Storage สำหรับเก็บรูปภาพของระบบ Photo Gallery">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cf: #F6821F;
+    --cf-dark: #D96C10;
+    --cf-light: #FFE8D1;
+    --cf-ink: #232733;
+    --r2: #7B3AED;
+    --r2-dark: #5B21B6;
+  }
+  html { scroll-behavior: smooth; scroll-padding-top: 2rem; }
+  body { font-family: 'Prompt', ui-sans-serif, system-ui, sans-serif; }
+  code, pre { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+  .hero-bg {
+    background:
+      radial-gradient(ellipse 70% 40% at 50% 0%, rgba(246,130,31,0.35) 0%, transparent 60%),
+      radial-gradient(ellipse at bottom right, #3a1d05 0%, #0f172a 70%);
+  }
+  .brand-text    { color: #fbbf24; }
+  .brand-bg      { background-color: #F6821F; }
+  .brand-bg:hover{ background-color: #D96C10; }
+  .r2-text       { color: #a78bfa; }
+
+  .code-block {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    font-size: 0.875rem;
+    line-height: 1.7;
+    border: 1px solid #1e293b;
+    position: relative;
+  }
+  .code-block .comment { color: #64748b; font-style: italic; }
+  .code-block .keyword { color: #fbbf24; }
+  .code-block .string  { color: #a3e635; }
+  .code-block .cmd     { color: #4ade80; }
+  .code-block .flag    { color: #60a5fa; }
+  .code-block .path    { color: #f472b6; }
+  .code-block .prompt  { color: #94a3b8; user-select: none; }
+
+  .copy-btn {
+    position: absolute; top: 0.5rem; right: 0.5rem;
+    background: #1e293b; color: #94a3b8;
+    border: 1px solid #334155;
+    padding: 0.25rem 0.625rem; border-radius: 0.375rem;
+    font-size: 0.75rem; cursor: pointer;
+    font-family: 'Prompt', sans-serif;
+    opacity: 0; transition: opacity .15s;
+  }
+  .code-block:hover .copy-btn { opacity: 1; }
+  .copy-btn:hover { background: #334155; color: #f1f5f9; }
+  .copy-btn.copied { background: #065f46; color: #a7f3d0; border-color: #059669; }
+
+  .sidebar-link {
+    display: block; padding: 0.375rem 0.75rem;
+    border-radius: 0.375rem; color: #475569;
+    font-size: 0.875rem; transition: all .15s;
+    border-left: 2px solid transparent;
+  }
+  .sidebar-link:hover { background: #fff7ed; color: #D96C10; }
+  .sidebar-link.active {
+    color: #D96C10; background: #ffedd5;
+    border-left-color: #F6821F; font-weight: 500;
+  }
+  .sidebar-link.sub { padding-left: 1.5rem; font-size: 0.8125rem; color: #64748b; }
+
+  .callout { border-left: 4px solid; padding: 1rem 1.25rem; border-radius: 0.5rem; margin: 1rem 0; }
+  .callout-info    { background: #eff6ff; border-color: #3b82f6; color: #1e3a8a; }
+  .callout-warn    { background: #fffbeb; border-color: #f59e0b; color: #78350f; }
+  .callout-danger  { background: #fef2f2; border-color: #ef4444; color: #7f1d1d; }
+  .callout-success { background: #f0fdf4; border-color: #22c55e; color: #14532d; }
+  .callout-tip     { background: #faf5ff; border-color: #a855f7; color: #581c87; }
+  .callout-brand   { background: #fff7ed; border-color: #F6821F; color: #7c2d12; }
+
+  .step-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 2.5rem; height: 2.5rem; border-radius: 9999px;
+    background: #F6821F; color: white; font-weight: 700;
+    font-size: 1rem; margin-right: 0.75rem;
+    box-shadow: 0 4px 12px rgb(246 130 31 / 0.4);
+  }
+  .step-badge-r2 {
+    background: #7B3AED;
+    box-shadow: 0 4px 12px rgb(123 58 237 / 0.4);
+  }
+  .time-badge {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    background: #f1f5f9; color: #475569;
+    padding: 0.25rem 0.625rem; border-radius: 9999px;
+    font-size: 0.75rem; font-weight: 500;
+  }
+
+  .ui-mockup {
+    background: white; border: 1px solid #e2e8f0;
+    border-radius: 0.5rem; padding: 1rem;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+    font-size: 0.875rem;
+    margin: 0.75rem 0;
+  }
+  .ui-mockup .ui-header {
+    background: #F6821F; color: white;
+    padding: 0.5rem 1rem; margin: -1rem -1rem 1rem -1rem;
+    border-radius: 0.5rem 0.5rem 0 0;
+    font-weight: 600;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .ui-mockup .ui-header.r2 { background: #7B3AED; }
+  .ui-mockup .ui-row {
+    display: flex; justify-content: space-between;
+    padding: 0.5rem 0; border-bottom: 1px solid #f1f5f9;
+    gap: 1rem;
+  }
+  .ui-mockup .ui-row:last-child { border-bottom: none; }
+  .ui-mockup .ui-label { color: #64748b; font-size: 0.8125rem; flex-shrink: 0; }
+  .ui-mockup .ui-value { font-weight: 500; font-family: 'JetBrains Mono', monospace; font-size: 0.8125rem; word-break: break-all; text-align: right; }
+
+  table.info { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+  table.info th, table.info td { padding: 0.75rem; border: 1px solid #e2e8f0; text-align: left; font-size: 0.875rem; vertical-align: top; }
+  table.info thead th { background: #fff7ed; font-weight: 600; color: #9a3412; }
+  table.info tbody tr:hover { background: #fffbf5; }
+  table.info td code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.8125rem; color: #D96C10; }
+
+  .pill { display: inline-block; padding: 0.125rem 0.625rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+  .pill-time    { background: #e0e7ff; color: #3730a3; }
+  .pill-cost    { background: #fef3c7; color: #92400e; }
+  .pill-req     { background: #fee2e2; color: #991b1b; }
+  .pill-free    { background: #dcfce7; color: #166534; }
+  .pill-optional{ background: #f3e8ff; color: #6b21a8; }
+
+  h2 { scroll-margin-top: 2rem; }
+  h3 { scroll-margin-top: 2rem; }
+
+  @media print {
+    .no-print, aside, .copy-btn { display: none !important; }
+    main { padding: 0 !important; max-width: none !important; }
+  }
+
+  .big-num {
+    font-size: 3rem; font-weight: 800; line-height: 1;
+    background: linear-gradient(135deg, #F6821F 0%, #D96C10 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .key-card {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    border: 1px solid #334155; border-radius: 0.5rem;
+    padding: 1rem 1.25rem; color: #e2e8f0;
+    position: relative;
+  }
+  .key-card .label { color: #94a3b8; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .key-card .value { font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; color: #fbbf24; word-break: break-all; margin-top: 0.25rem; }
+
+  .tab-head { display: flex; gap: 0.25rem; border-bottom: 2px solid #e2e8f0; margin-bottom: 0; }
+  .tab-btn {
+    padding: 0.625rem 1rem; font-size: 0.875rem; font-weight: 500;
+    color: #64748b; border-bottom: 2px solid transparent; margin-bottom: -2px;
+    cursor: pointer; transition: all .15s;
+  }
+  .tab-btn:hover { color: #D96C10; }
+  .tab-btn.active { color: #D96C10; border-bottom-color: #F6821F; }
+  .tab-panel { display: none; padding: 1rem 0; }
+  .tab-panel.active { display: block; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+
+<!-- ═══ HERO ═══ -->
+<header class="hero-bg text-white">
+  <div class="max-w-7xl mx-auto px-6 py-16 md:py-20">
+    <div class="flex items-center gap-3 mb-4">
+      <a href="../index.html" class="text-orange-300 hover:text-white text-sm flex items-center gap-1">
+        ← กลับไปยัง Documentation Hub
+      </a>
+    </div>
+    <div class="flex items-center gap-2 text-orange-300 text-sm mb-4">
+      <span>🟠</span>
+      <span>SERVICE INTEGRATION</span>
+      <span class="mx-2">•</span>
+      <span>Cloudflare + R2 Object Storage</span>
+    </div>
+    <h1 class="text-4xl md:text-6xl font-bold mb-4 leading-tight">
+      ตั้งค่า <span class="brand-text">Cloudflare</span> +<br>
+      <span class="r2-text">R2 Storage</span> สำหรับ Photo Gallery
+    </h1>
+    <p class="text-lg md:text-xl text-slate-300 max-w-3xl mb-6">
+      จาก <strong class="text-white">สมัครบัญชีฟรี</strong> ถึง
+      <strong class="text-white">อัปโหลดรูปผ่าน R2</strong> ได้จริง ใน <strong class="text-white">~45 นาที</strong>
+      — CDN กับ Storage ในระบบเดียว ค่าใช้จ่ายเริ่มที่ฟรี
+    </p>
+    <div class="flex flex-wrap gap-3 text-sm">
+      <span class="time-badge" style="background:rgba(255,255,255,0.1); color:#fde68a;">⏱ ~45 นาที</span>
+      <span class="time-badge" style="background:rgba(255,255,255,0.1); color:#a7f3d0;">💸 Free tier พร้อมใช้</span>
+      <span class="time-badge" style="background:rgba(255,255,255,0.1); color:#c4b5fd;">🔐 ต้องมีบัตรเครดิตเพื่อเปิด R2</span>
+      <span class="time-badge" style="background:rgba(255,255,255,0.1); color:#fca5a5;">🌐 ต้องมีโดเมนของตัวเอง</span>
+    </div>
+  </div>
+</header>
+
+<div class="max-w-7xl mx-auto px-6 py-10 flex gap-8">
+
+  <!-- ═══ SIDEBAR ═══ -->
+  <aside class="hidden lg:block w-64 flex-shrink-0">
+    <div class="sticky top-6 space-y-1">
+      <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">
+        บนหน้านี้
+      </div>
+      <a href="#overview" class="sidebar-link">ภาพรวม & เหตุผล</a>
+      <a href="#prereq" class="sidebar-link">สิ่งที่ต้องเตรียม</a>
+
+      <div class="text-xs font-semibold text-orange-600 uppercase tracking-wider mt-4 mb-2 px-3">
+        Part A · Cloudflare
+      </div>
+      <a href="#step-1" class="sidebar-link">1 · สร้างบัญชี Cloudflare</a>
+      <a href="#step-2" class="sidebar-link">2 · Add Site + Nameservers</a>
+      <a href="#step-3" class="sidebar-link">3 · DNS Records</a>
+      <a href="#step-4" class="sidebar-link">4 · SSL / TLS</a>
+      <a href="#step-5" class="sidebar-link">5 · Cache & Page Rules</a>
+
+      <div class="text-xs font-semibold text-violet-600 uppercase tracking-wider mt-4 mb-2 px-3">
+        Part B · R2 Storage
+      </div>
+      <a href="#step-6" class="sidebar-link">6 · เปิด R2 & สร้าง Bucket</a>
+      <a href="#step-7" class="sidebar-link">7 · API Token</a>
+      <a href="#step-8" class="sidebar-link">8 · Public URL / Custom Domain</a>
+      <a href="#step-9" class="sidebar-link">9 · CORS</a>
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-4 mb-2 px-3">
+        Part C · Laravel
+      </div>
+      <a href="#step-10" class="sidebar-link">10 · ตั้งค่า .env</a>
+      <a href="#step-11" class="sidebar-link">11 · ทดสอบ</a>
+      <a href="#step-12" class="sidebar-link">12 · Migrate ของเดิม</a>
+
+      <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-4 mb-2 px-3">
+        ปิดท้าย
+      </div>
+      <a href="#pricing" class="sidebar-link">ราคา & ประมาณการ</a>
+      <a href="#troubleshoot" class="sidebar-link">Troubleshooting</a>
+      <a href="#checklist" class="sidebar-link">Checklist</a>
+    </div>
+  </aside>
+
+  <!-- ═══ MAIN ═══ -->
+  <main class="flex-1 min-w-0 space-y-12">
+
+    <!-- OVERVIEW -->
+    <section id="overview">
+      <h2 class="text-3xl font-bold mb-4">ภาพรวม — ทำไมต้อง Cloudflare + R2?</h2>
+      <p class="text-slate-600 mb-4 leading-relaxed">
+        โปรเจกต์ Photo Gallery เก็บภาพถ่ายเยอะมาก (ต้นฉบับ + thumbnail + watermark + preview)
+        ถ้าเก็บลงดิสก์เซิร์ฟเวอร์โดยตรงจะเจอ 2 ปัญหา:
+        <strong>(1) ค่าดิสก์แพง</strong>เมื่อโตขึ้น
+        <strong>(2) เซิร์ฟเวอร์รับทราฟฟิกดาวน์โหลดรูปไม่ไหว</strong>ตอนงานยอดเข้า
+      </p>
+      <div class="grid md:grid-cols-2 gap-4 mt-6">
+        <div class="bg-white border border-orange-200 rounded-xl p-5">
+          <div class="text-2xl mb-2">🟠</div>
+          <h3 class="font-semibold text-lg mb-1">Cloudflare (CDN / DNS / Cache)</h3>
+          <p class="text-sm text-slate-600">
+            รับหน้าเว็บแทน server — แคชหน้า HTML, CSS, JS, รูปภาพที่ edge ทั่วโลก
+            แถม DDoS protection + SSL ฟรี + DNS จัดการง่าย
+          </p>
+        </div>
+        <div class="bg-white border border-violet-200 rounded-xl p-5">
+          <div class="text-2xl mb-2">🟣</div>
+          <h3 class="font-semibold text-lg mb-1">R2 Object Storage</h3>
+          <p class="text-sm text-slate-600">
+            เก็บไฟล์รูปต้นฉบับ — API เหมือน AWS S3 เป๊ะ แต่
+            <strong>ไม่มีค่า egress (bandwidth ดาวน์โหลด)</strong>
+            ถูกกว่า S3 มากสำหรับไฟล์มีเดีย
+          </p>
+        </div>
+      </div>
+      <div class="callout callout-info mt-6">
+        <strong>💡 สำคัญ:</strong>
+        คู่มือนี้เขียนเฉพาะสำหรับโปรเจกต์ photo-gallery-tailwind
+        (Laravel 12) — config ทุกอย่างตรงกับ <code>config/filesystems.php</code> ที่มีอยู่แล้ว
+        (disk ชื่อ <code>r2</code>) ไม่ต้องแก้โค้ด
+      </div>
+    </section>
+
+    <!-- PREREQ -->
+    <section id="prereq">
+      <h2 class="text-3xl font-bold mb-4">สิ่งที่ต้องเตรียม</h2>
+      <table class="info">
+        <thead>
+          <tr><th>รายการ</th><th>จำเป็น?</th><th>หมายเหตุ</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>โดเมนของตัวเอง</strong></td>
+            <td><span class="pill pill-req">ต้องมี</span></td>
+            <td>ซื้อจาก Namecheap / GoDaddy / ดอทไทย ได้ทุกที่ — ต้องมีสิทธิ์เปลี่ยน nameservers</td>
+          </tr>
+          <tr>
+            <td><strong>บัญชี Cloudflare</strong></td>
+            <td><span class="pill pill-free">Free</span></td>
+            <td>สมัครด้วยอีเมลธรรมดา ใช้งานฟรีได้ถาวร</td>
+          </tr>
+          <tr>
+            <td><strong>บัตรเครดิต / เดบิต</strong></td>
+            <td><span class="pill pill-req">ต้องมี</span></td>
+            <td>แค่สำหรับ <em>เปิดใช้งาน</em> R2 — ถ้าใช้อยู่ใน free tier (10 GB) ไม่โดนเก็บเงิน</td>
+          </tr>
+          <tr>
+            <td><strong>Access ไปที่ DNS เดิม</strong></td>
+            <td><span class="pill pill-req">ต้องมี</span></td>
+            <td>ต้องเข้าไปเปลี่ยน nameservers ที่ registrar ที่ซื้อโดเมน</td>
+          </tr>
+          <tr>
+            <td><strong>PHP composer package</strong></td>
+            <td><span class="pill pill-req">ติดตั้งแล้ว</span></td>
+            <td><code>league/flysystem-aws-s3-v3</code> — คู่มือนี้ถือว่าติดตั้งไว้แล้ว</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ══════════ PART A: CLOUDFLARE ══════════ -->
+    <div class="border-t-2 border-orange-200 pt-8">
+      <div class="text-xs font-bold uppercase tracking-widest text-orange-600 mb-1">Part A</div>
+      <h2 class="text-2xl font-bold text-slate-900">🟠 Cloudflare — CDN, DNS, Cache</h2>
+    </div>
+
+    <!-- STEP 1 -->
+    <section id="step-1">
+      <h3 class="flex items-center text-2xl font-bold mt-4 mb-4">
+        <span class="step-badge">1</span> สร้างบัญชี Cloudflare
+      </h3>
+      <ol class="list-decimal list-inside space-y-2 text-slate-700 ml-2">
+        <li>เข้า <a href="https://dash.cloudflare.com/sign-up" target="_blank" rel="noopener" class="text-orange-600 underline font-medium">dash.cloudflare.com/sign-up</a></li>
+        <li>กรอกอีเมลและรหัสผ่าน (แนะนำใช้อีเมลหลักของธุรกิจ ไม่ใช่ gmail ส่วนตัว)</li>
+        <li>ยืนยันอีเมลในกล่องข้อความ (2FA แนะนำให้เปิดทันที ที่ <em>My Profile → Authentication</em>)</li>
+      </ol>
+      <div class="callout callout-tip">
+        <strong>🔑 Pro tip:</strong>
+        เปิด 2FA ด้วย TOTP (Google Authenticator / Authy) ก่อนทำอะไรต่อ
+        เพราะ Cloudflare จะถือ DNS ของคุณ ถ้าโดน takeover = โดนขโมยทราฟฟิกเว็บทั้งหมด
+      </div>
+    </section>
+
+    <!-- STEP 2 -->
+    <section id="step-2">
+      <h3 class="flex items-center text-2xl font-bold mb-4">
+        <span class="step-badge">2</span> Add Site + ย้าย Nameservers
+      </h3>
+      <ol class="list-decimal list-inside space-y-3 text-slate-700 ml-2">
+        <li>ใน dashboard กด <strong>+ Add a site</strong></li>
+        <li>กรอกชื่อโดเมน (เช่น <code>yourgallery.com</code>) แบบไม่มี <code>www</code> และไม่มี <code>https://</code></li>
+        <li>เลือกแพ็ก <strong>Free</strong> → Continue</li>
+        <li>
+          Cloudflare จะ scan DNS records เดิมของคุณให้อัตโนมัติ — ตรวจสอบให้ครบ
+          (โดยเฉพาะ MX records ถ้าใช้อีเมลโดเมน เช่น Google Workspace)
+        </li>
+        <li>
+          จดชื่อ nameservers 2 ตัวที่ Cloudflare ให้ (เช่น <code>alan.ns.cloudflare.com</code> /
+          <code>carly.ns.cloudflare.com</code>) — ของทุกคนไม่เหมือนกัน
+        </li>
+        <li>
+          ไปที่ registrar ที่ซื้อโดเมน → DNS / Nameservers → <strong>เปลี่ยนจาก default ของ registrar เป็น Cloudflare</strong>
+        </li>
+      </ol>
+
+      <div class="callout callout-warn">
+        <strong>⚠️ รอ propagation:</strong>
+        การเปลี่ยน nameservers ใช้เวลา 5 นาที ถึง 24 ชั่วโมง
+        (ปกติในไทย ~15-30 นาที) Cloudflare จะส่งอีเมลยืนยันเมื่อ active
+      </div>
+
+      <div class="ui-mockup">
+        <div class="ui-header">☁️ Cloudflare Dashboard — Websites</div>
+        <div class="ui-row"><span class="ui-label">Domain</span> <span class="ui-value">yourgallery.com</span></div>
+        <div class="ui-row"><span class="ui-label">Status</span> <span class="ui-value text-green-600">● Active</span></div>
+        <div class="ui-row"><span class="ui-label">Plan</span> <span class="ui-value">Free</span></div>
+        <div class="ui-row"><span class="ui-label">Nameservers</span> <span class="ui-value">alan.ns.cloudflare.com<br>carly.ns.cloudflare.com</span></div>
+      </div>
+    </section>
+
+    <!-- STEP 3 -->
+    <section id="step-3">
+      <h3 class="flex items-center text-2xl font-bold mb-4">
+        <span class="step-badge">3</span> DNS Records
+      </h3>
+      <p class="text-slate-600 mb-4">
+        ไปที่ <em>Websites → yourgallery.com → DNS → Records</em>
+        ตรวจสอบว่ามี records เหล่านี้ครบแล้ว (ถ้าไม่มีก็กด <strong>+ Add record</strong>):
+      </p>
+
+      <table class="info">
+        <thead>
+          <tr><th>Type</th><th>Name</th><th>Content</th><th>Proxy</th><th>หมายเหตุ</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>A</code></td>
+            <td><code>@</code></td>
+            <td>IP เซิร์ฟเวอร์<br>(เช่น <code>203.0.113.10</code>)</td>
+            <td>🟠 Proxied</td>
+            <td>โดเมนหลัก</td>
+          </tr>
+          <tr>
+            <td><code>CNAME</code></td>
+            <td><code>www</code></td>
+            <td><code>yourgallery.com</code></td>
+            <td>🟠 Proxied</td>
+            <td>redirect www → apex</td>
+          </tr>
+          <tr>
+            <td><code>CNAME</code></td>
+            <td><code>cdn</code> <span class="pill pill-optional">optional</span></td>
+            <td><code>public-&lt;hash&gt;.r2.dev</code><br>หรือ public bucket</td>
+            <td>🟠 Proxied</td>
+            <td>subdomain สำหรับ R2 (ทำใน Step 8)</td>
+          </tr>
+          <tr>
+            <td><code>TXT</code></td>
+            <td><code>@</code></td>
+            <td>SPF record (ถ้าส่งอีเมล)</td>
+            <td>⚪ DNS only</td>
+            <td>อย่า proxy TXT records</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-info">
+        <strong>🟠 Proxied vs ⚪ DNS only:</strong><br>
+        <strong>Proxied</strong> = ทราฟฟิกผ่าน Cloudflare → ได้ CDN / cache / DDoS protection แต่ <em>ซ่อน IP server</em><br>
+        <strong>DNS only</strong> = ทราฟฟิกวิ่งตรงไป server → เปิดเผย IP + ไม่มี cache
+        — ใช้กับ MX, TXT, SRV, และ subdomain ที่ต้องการต่อ SSH
+      </div>
+    </section>
+
+    <!-- STEP 4 -->
+    <section id="step-4">
+      <h3 class="flex items-center text-2xl font-bold mb-4">
+        <span class="step-badge">4</span> SSL / TLS
+      </h3>
+      <ol class="list-decimal list-inside space-y-2 text-slate-700 ml-2">
+        <li>ไปที่ <em>SSL/TLS → Overview</em></li>
+        <li>
+          เลือก <strong>Full (strict)</strong> — บังคับ encryption ตั้งแต่ browser ถึง origin
+          <div class="callout callout-warn my-2">
+            ถ้าเซิร์ฟเวอร์ยังไม่มี SSL cert ของตัวเอง ให้เลือก <strong>Full</strong> (ไม่ strict) ไปก่อน
+            แล้วค่อยสลับเป็น strict ตอนติดตั้ง Let's Encrypt บน origin เรียบร้อย
+          </div>
+        </li>
+        <li>
+          ไปที่ <em>Edge Certificates</em> → เปิด:
+          <ul class="list-disc list-inside ml-6 mt-1 space-y-1">
+            <li><strong>Always Use HTTPS</strong> — redirect HTTP → HTTPS อัตโนมัติ</li>
+            <li><strong>Automatic HTTPS Rewrites</strong> — แก้ mixed content ให้</li>
+            <li><strong>Minimum TLS Version: 1.2</strong></li>
+          </ul>
+        </li>
+      </ol>
+    </section>
+
+    <!-- STEP 5 -->
+    <section id="step-5">
+      <h3 class="flex items-center text-2xl font-bold mb-4">
+        <span class="step-badge">5</span> Cache & Page Rules
+      </h3>
+      <p class="text-slate-600 mb-4">
+        โปรเจกต์นี้มี middleware <code>EdgeCache</code> ตั้ง <code>Cache-Control</code> header
+        ที่ route <code>/events/{slug}</code> แล้ว (60s browser / 600s edge)
+        — Cloudflare จะเคารพ header นี้อัตโนมัติ ไม่ต้องทำอะไรเพิ่ม
+      </p>
+
+      <h4 class="font-semibold text-lg mt-6 mb-2">5.1 Caching Configuration</h4>
+      <p class="text-slate-600 mb-3">ไปที่ <em>Caching → Configuration</em>:</p>
+      <table class="info">
+        <tbody>
+          <tr><td><strong>Caching Level</strong></td><td>Standard</td></tr>
+          <tr><td><strong>Browser Cache TTL</strong></td><td>Respect Existing Headers</td></tr>
+          <tr><td><strong>Always Online</strong></td><td>On</td></tr>
+          <tr><td><strong>Development Mode</strong></td><td>Off (เปิดตอน debug เท่านั้น — auto-off ใน 3 ชม.)</td></tr>
+        </tbody>
+      </table>
+
+      <h4 class="font-semibold text-lg mt-6 mb-2">5.2 Cache Rules (แนะนำ)</h4>
+      <p class="text-slate-600 mb-3">
+        ไปที่ <em>Caching → Cache Rules</em> → <strong>Create rule</strong>
+        (สำหรับ static assets ที่ต้องการแคชหนัก):
+      </p>
+      <div class="ui-mockup">
+        <div class="ui-header">📋 Cache Rule: Static Assets</div>
+        <div class="ui-row"><span class="ui-label">If URL Path</span> <span class="ui-value">matches wildcard<br><code>*/build/*</code> or <code>*/storage/*</code></span></div>
+        <div class="ui-row"><span class="ui-label">Cache eligibility</span> <span class="ui-value">Eligible for cache</span></div>
+        <div class="ui-row"><span class="ui-label">Edge TTL</span> <span class="ui-value">1 year</span></div>
+        <div class="ui-row"><span class="ui-label">Browser TTL</span> <span class="ui-value">1 month</span></div>
+      </div>
+
+      <h4 class="font-semibold text-lg mt-6 mb-2">5.3 Bypass Cache สำหรับ admin</h4>
+      <div class="ui-mockup">
+        <div class="ui-header">📋 Cache Rule: Bypass Admin</div>
+        <div class="ui-row"><span class="ui-label">If URL Path starts with</span> <span class="ui-value"><code>/admin</code> or <code>/photographer</code></span></div>
+        <div class="ui-row"><span class="ui-label">Cache eligibility</span> <span class="ui-value">Bypass cache</span></div>
+      </div>
+
+      <div class="callout callout-tip">
+        <strong>💡 Purge Cache:</strong>
+        เวลาอัปเดตโค้ดแล้วอยาก clear แคชทันที →
+        <em>Caching → Configuration → Purge Everything</em>
+        (หรือ Purge by URL สำหรับบาง path)
+      </div>
+    </section>
+
+    <!-- ══════════ PART B: R2 ══════════ -->
+    <div class="border-t-2 border-violet-200 pt-8 mt-12">
+      <div class="text-xs font-bold uppercase tracking-widest text-violet-600 mb-1">Part B</div>
+      <h2 class="text-2xl font-bold text-slate-900">🟣 R2 Object Storage — เก็บรูปภาพ</h2>
+    </div>
+
+    <!-- STEP 6 -->
+    <section id="step-6">
+      <h3 class="flex items-center text-2xl font-bold mt-4 mb-4">
+        <span class="step-badge step-badge-r2">6</span> เปิด R2 & สร้าง Bucket
+      </h3>
+
+      <h4 class="font-semibold text-lg mb-2">6.1 เปิดใช้งาน R2</h4>
+      <ol class="list-decimal list-inside space-y-2 text-slate-700 ml-2">
+        <li>ใน Cloudflare dashboard → sidebar ซ้าย → <strong>R2 Object Storage</strong></li>
+        <li>
+          ครั้งแรกจะขึ้นหน้า <em>Purchase R2</em> — ต้องใส่บัตรเครดิต/เดบิต
+          <div class="callout callout-success my-2">
+            <strong>✅ ยังฟรีอยู่ถ้าไม่เกิน:</strong> 10 GB storage, 1M Class A ops, 10M Class B ops ต่อเดือน
+          </div>
+        </li>
+        <li>ยืนยันบัตร → ได้ R2 account ID (ต้องใช้ตอนทำ endpoint URL)</li>
+      </ol>
+
+      <h4 class="font-semibold text-lg mt-6 mb-2">6.2 สร้าง Bucket</h4>
+      <ol class="list-decimal list-inside space-y-2 text-slate-700 ml-2">
+        <li>R2 → <strong>Create bucket</strong></li>
+        <li>
+          ชื่อ bucket — แนะนำ <code>yourgallery-photos</code>
+          <div class="callout callout-warn my-2">
+            <strong>⚠️ กฎชื่อ bucket:</strong> ตัวเล็ก + ตัวเลข + ขีดกลาง (-) เท่านั้น,
+            3-63 ตัวอักษร, ห้ามเริ่ม/ลงท้ายด้วยขีด, <em>ชื่อที่ตั้งแล้วเปลี่ยนไม่ได้</em>
+          </div>
+        </li>
+        <li>
+          <strong>Location</strong> — เลือก <em>Automatic</em> (Cloudflare เลือกให้)
+          หรือ <em>APAC</em> ถ้าอยากล็อกฝั่งเอเชีย
+        </li>
+        <li>
+          <strong>Default storage class</strong> — Standard (ใช้ประจำ) หรือ Infrequent Access (ถูกกว่า แต่ดึงแพง)
+          <br>→ แนะนำ <strong>Standard</strong>
+        </li>
+        <li>กด <strong>Create bucket</strong></li>
+      </ol>
+    </section>
+
+    <!-- STEP 7 -->
+    <section id="step-7">
+      <h3 class="flex items-center text-2xl font-bold mb-4">
+        <span class="step-badge step-badge-r2">7</span> สร้าง API Token
+      </h3>
+      <p class="text-slate-600 mb-4">
+        Laravel ต้องใช้ <strong>Access Key ID</strong> + <strong>Secret Access Key</strong>
+        เพื่อเขียน/อ่าน bucket ผ่าน S3 API
+      </p>
+      <ol class="list-decimal list-inside space-y-3 text-slate-700 ml-2">
+        <li>R2 Overview → แถบ <strong>Manage R2 API Tokens</strong> (ขวาบน) → <strong>Create API token</strong></li>
+        <li>
+          <strong>Token name:</strong> <code>photo-gallery-production</code>
+          (ตั้งชื่อให้รู้ว่าใช้ที่ไหน)
+        </li>
+        <li>
+          <strong>Permissions:</strong> <code>Object Read &amp; Write</code>
+          (ไม่ต้องให้ Admin Read &amp; Write — อันตราย)
+        </li>
+        <li>
+          <strong>Specify bucket:</strong>
+          เลือก <em>Apply to specific buckets only</em> → เลือก bucket ที่สร้างในขั้นที่ 6
+          <div class="callout callout-danger my-2">
+            <strong>🔒 Security:</strong> ห้าม สร้าง token <em>Apply to all buckets</em> ในโปรดักชัน —
+            ถ้า token หลุดจะลบ bucket อื่นได้ทั้งหมด
+          </div>
+        </li>
+        <li>
+          <strong>TTL:</strong> ถ้าอยาก rotate ทุกปี ใส่ 1 year / ไม่ใส่ = ไม่หมดอายุ
+        </li>
+        <li>
+          <strong>Client IP Address Filtering</strong> (optional):
+          ใส่ IP ของ server เพื่อให้ token ใช้ได้เฉพาะจาก IP นั้น
+        </li>
+        <li>กด <strong>Create API Token</strong></li>
+      </ol>
+
+      <div class="callout callout-danger mt-6">
+        <strong>🚨 หน้าจอหลังกด Create:</strong>
+        Cloudflare จะโชว์ Secret Access Key <strong>ครั้งเดียว</strong> —
+        ก๊อปเก็บลงที่ปลอดภัยทันที (password manager) ถ้าปิดหน้าไปแล้วต้องสร้างใหม่
+      </div>
+
+      <div class="mt-4 space-y-3">
+        <div class="key-card">
+          <div class="label">Access Key ID (ก๊อปใส่ .env)</div>
+          <div class="value">xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</div>
+        </div>
+        <div class="key-card">
+          <div class="label">Secret Access Key</div>
+          <div class="value">yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy</div>
+        </div>
+        <div class="key-card">
+          <div class="label">Endpoint (S3-compatible)</div>
+          <div class="value">https://&lt;account_id&gt;.r2.cloudflarestorage.com</div>
+        </div>
+        <div class="key-card">
+          <div class="label">Jurisdiction-specific endpoint (ถ้าเลือก EU)</div>
+          <div class="value">https://&lt;account_id&gt;.eu.r2.cloudflarestorage.com</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STEP 8 -->
+    <section id="step-8">
+      <h3 class="flex items-center text-2xl font-bold mb-4">
+        <span class="step-badge step-badge-r2">8</span> Public URL / Custom Domain
+      </h3>
+      <p class="text-slate-600 mb-4">
+        ไฟล์รูปต้อง <em>เปิดให้ browser ของผู้ใช้โหลดได้</em>
+        — มี 2 แบบ เลือกตามความเหมาะสม:
+      </p>
+
+      <div class="tab-head" id="publicTabs">
+        <button class="tab-btn active" data-target="tab-rdev">A · R2.dev (ง่าย ใช้ test)</button>
+        <button class="tab-btn" data-target="tab-custom">B · Custom Domain (โปรดักชัน)</button>
+      </div>
+
+      <div class="tab-panel active" id="tab-rdev">
+        <ol class="list-decimal list-inside space-y-2 text-slate-700 ml-2">
+          <li>เปิด bucket → <em>Settings</em> tab</li>
+          <li>ส่วน <strong>Public access</strong> → <strong>R2.dev subdomain</strong> → <em>Allow Access</em></li>
+          <li>
+            ได้ URL แบบ <code>https://pub-&lt;hash&gt;.r2.dev</code>
+            — นำไปใส่ <code>CLOUDFLARE_R2_URL</code> ใน .env
+          </li>
+        </ol>
+        <div class="callout callout-warn">
+          <strong>⚠️ ข้อจำกัด R2.dev:</strong>
+          <ul class="list-disc list-inside ml-4 mt-1">
+            <li>Rate limit — Cloudflare อาจ throttle ถ้ามีทราฟฟิกสูง</li>
+            <li>ไม่มี cache rules / WAF control</li>
+            <li>ห้ามใช้ในโปรดักชันตามข้อกำหนดของ Cloudflare</li>
+          </ul>
+          → ใช้ได้แค่ตอน dev / staging
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-custom">
+        <p class="text-slate-600 mb-3">
+          <strong>แนะนำสำหรับโปรดักชัน</strong> — ได้ cache, DDoS, WAF เต็มรูปแบบ ไม่มี rate limit
+        </p>
+        <ol class="list-decimal list-inside space-y-2 text-slate-700 ml-2">
+          <li>bucket → <em>Settings</em> → <strong>Public access</strong> → <strong>Connect Domain</strong></li>
+          <li>
+            ใส่ subdomain ที่ต้องการ เช่น <code>cdn.yourgallery.com</code> หรือ <code>img.yourgallery.com</code>
+          </li>
+          <li>
+            Cloudflare จะสร้าง CNAME record ให้อัตโนมัติ (ชี้ไปที่ bucket) — กด confirm
+          </li>
+          <li>
+            รอ ~1-2 นาที ให้ propagate → ทดสอบเข้า <code>https://cdn.yourgallery.com/&lt;test-file&gt;</code>
+          </li>
+          <li>ใส่ URL นี้ใน <code>CLOUDFLARE_R2_URL</code> ของ .env</li>
+        </ol>
+        <div class="callout callout-success">
+          <strong>✅ ข้อดี custom domain:</strong>
+          ไม่มี rate limit, ได้ edge cache (ภาพที่โหลดซ้ำจะเร็วเหมือน static CDN),
+          ใส่ Cache Rules ได้ (เช่น browser TTL 30 วัน), โดเมนอยู่ภายใต้แบรนด์
+        </div>
+      </div>
+    </section>
+
+    <!-- STEP 9 -->
+    <section id="step-9">
+      <h3 class="flex items-center text-2xl font-bold mb-4">
+        <span class="step-badge step-badge-r2">9</span> CORS Policy
+      </h3>
+      <p class="text-slate-600 mb-4">
+        ถ้ามี JS ฝั่ง browser เรียก R2 ตรง (เช่น direct upload, fetch() ข้ามโดเมน)
+        ต้องตั้ง CORS ให้ bucket
+      </p>
+      <ol class="list-decimal list-inside space-y-2 text-slate-700 ml-2">
+        <li>bucket → <em>Settings</em> → <strong>CORS policy</strong> → <em>Add CORS policy</em></li>
+        <li>วาง JSON ด้านล่างนี้ (แทน <code>yourgallery.com</code> ด้วยโดเมนจริง):</li>
+      </ol>
+      <div class="code-block">
+<button class="copy-btn" onclick="copyCode(this)">📋 Copy</button>
+<pre>[
+  {
+    "AllowedOrigins": [
+      "https://yourgallery.com",
+      "https://www.yourgallery.com"
+    ],
+    "AllowedMethods": ["GET", "HEAD", "PUT", "POST"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]</pre>
+      </div>
+      <div class="callout callout-info">
+        <strong>💡 อย่าใช้ <code>"*"</code> ใน AllowedOrigins</strong>
+        ในโปรดักชัน — จะเปิดให้เว็บใครก็ได้ embed รูปของคุณได้ (leech bandwidth)
+      </div>
+    </section>
+
+    <!-- ══════════ PART C: LARAVEL ══════════ -->
+    <div class="border-t-2 border-slate-200 pt-8 mt-12">
+      <div class="text-xs font-bold uppercase tracking-widest text-slate-600 mb-1">Part C</div>
+      <h2 class="text-2xl font-bold text-slate-900">⚙️ ตั้งค่าใน Laravel</h2>
+    </div>
+
+    <!-- STEP 10 -->
+    <section id="step-10">
+      <h3 class="flex items-center text-2xl font-bold mt-4 mb-4">
+        <span class="step-badge">10</span> แก้ไขไฟล์ <code>.env</code>
+      </h3>
+      <p class="text-slate-600 mb-4">
+        เปิดไฟล์ <code>.env</code> ของโปรเจกต์ แล้วแก้ค่าเหล่านี้:
+      </p>
+      <div class="code-block">
+<button class="copy-btn" onclick="copyCode(this)">📋 Copy</button>
+<pre><span class="comment"># ═══ Default disk ═══</span>
+<span class="keyword">FILESYSTEM_DISK</span>=<span class="string">r2</span>
+
+<span class="comment"># ═══ Cloudflare R2 credentials ═══</span>
+<span class="keyword">CLOUDFLARE_R2_ACCESS_KEY_ID</span>=<span class="string">xxxxxxxxxxxxxxxxxxxxxxxx</span>
+<span class="keyword">CLOUDFLARE_R2_SECRET_ACCESS_KEY</span>=<span class="string">yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy</span>
+<span class="keyword">CLOUDFLARE_R2_BUCKET</span>=<span class="string">yourgallery-photos</span>
+<span class="keyword">CLOUDFLARE_R2_ENDPOINT</span>=<span class="string">https://&lt;account_id&gt;.r2.cloudflarestorage.com</span>
+<span class="keyword">CLOUDFLARE_R2_URL</span>=<span class="string">https://cdn.yourgallery.com</span>
+<span class="comment"># (หรือ https://pub-xxx.r2.dev ถ้ายังไม่ได้ตั้ง custom domain)</span></pre>
+      </div>
+
+      <div class="callout callout-brand">
+        <strong>📌 ทำความเข้าใจแต่ละ key:</strong>
+        <table class="info mt-2">
+          <tbody>
+            <tr><td><code>CLOUDFLARE_R2_ACCESS_KEY_ID</code></td><td>Access Key ID ที่ได้จาก Step 7</td></tr>
+            <tr><td><code>CLOUDFLARE_R2_SECRET_ACCESS_KEY</code></td><td>Secret ที่โชว์ครั้งเดียวหลังกด Create token</td></tr>
+            <tr><td><code>CLOUDFLARE_R2_BUCKET</code></td><td>ชื่อ bucket จาก Step 6</td></tr>
+            <tr><td><code>CLOUDFLARE_R2_ENDPOINT</code></td><td>S3 API endpoint — ใส่ account_id ของคุณแทน <code>&lt;account_id&gt;</code></td></tr>
+            <tr><td><code>CLOUDFLARE_R2_URL</code></td><td>Public URL สำหรับให้ browser ของผู้ใช้โหลดรูป (จาก Step 8)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout callout-danger">
+        <strong>🔒 ห้าม commit ไฟล์ .env ลง git!</strong>
+        (โปรเจกต์นี้มี <code>.env</code> ใน <code>.gitignore</code> แล้ว — แค่เตือนไว้)
+      </div>
+
+      <p class="mt-4 text-slate-600">หลังแก้ .env เสร็จ ให้ clear cache:</p>
+      <div class="code-block">
+<button class="copy-btn" onclick="copyCode(this)">📋 Copy</button>
+<pre><span class="prompt">$</span> <span class="cmd">php</span> artisan config:clear
+<span class="prompt">$</span> <span class="cmd">php</span> artisan cache:clear</pre>
+      </div>
+    </section>
+
+    <!-- STEP 11 -->
+    <section id="step-11">
+      <h3 class="flex items-center text-2xl font-bold mb-4">
+        <span class="step-badge">11</span> ทดสอบว่าเชื่อมต่อได้
+      </h3>
+
+      <h4 class="font-semibold text-lg mb-2">11.1 Tinker (เร็วที่สุด)</h4>
+      <div class="code-block">
+<button class="copy-btn" onclick="copyCode(this)">📋 Copy</button>
+<pre><span class="prompt">$</span> <span class="cmd">php</span> artisan tinker
+
+<span class="comment">// ทดสอบเขียน</span>
+&gt;&gt;&gt; Storage::disk(<span class="string">'r2'</span>)-&gt;put(<span class="string">'test.txt'</span>, <span class="string">'hello r2'</span>);
+=&gt; <span class="flag">true</span>
+
+<span class="comment">// ทดสอบอ่าน</span>
+&gt;&gt;&gt; Storage::disk(<span class="string">'r2'</span>)-&gt;get(<span class="string">'test.txt'</span>);
+=&gt; <span class="string">"hello r2"</span>
+
+<span class="comment">// ทดสอบ URL สาธารณะ</span>
+&gt;&gt;&gt; Storage::disk(<span class="string">'r2'</span>)-&gt;url(<span class="string">'test.txt'</span>);
+=&gt; <span class="string">"https://cdn.yourgallery.com/test.txt"</span>
+
+<span class="comment">// ลบทิ้ง</span>
+&gt;&gt;&gt; Storage::disk(<span class="string">'r2'</span>)-&gt;delete(<span class="string">'test.txt'</span>);
+=&gt; <span class="flag">true</span></pre>
+      </div>
+
+      <div class="callout callout-success">
+        <strong>✅ ถ้าเห็น <code>true</code> และ <code>"hello r2"</code></strong>
+        แปลว่าเชื่อมต่อได้แล้ว — ใช้งานได้จริง
+      </div>
+
+      <h4 class="font-semibold text-lg mt-6 mb-2">11.2 ผ่าน Dashboard (เห็นภาพ)</h4>
+      <ol class="list-decimal list-inside space-y-1 text-slate-700 ml-2">
+        <li>กลับไปที่ Cloudflare R2 → bucket ของคุณ → tab <em>Objects</em></li>
+        <li>ควรเห็นไฟล์ <code>test.txt</code> ที่เพิ่งอัปโหลด</li>
+        <li>ถ้ายังไม่เห็น → กด refresh; ถ้ายังไม่มา → ดู Troubleshooting</li>
+      </ol>
+
+      <h4 class="font-semibold text-lg mt-6 mb-2">11.3 อัปโหลดรูปจริงผ่าน UI</h4>
+      <ol class="list-decimal list-inside space-y-1 text-slate-700 ml-2">
+        <li>ล็อกอินเป็นช่างภาพ → สร้าง event ใหม่</li>
+        <li>อัปโหลดรูป 1 ภาพ</li>
+        <li>
+          เช็คที่ R2 bucket → tab <em>Objects</em> → ควรเห็นไฟล์ในโฟลเดอร์
+          <code>events/{event_id}/photos/</code> (ตามโครงสร้างของโปรเจกต์)
+        </li>
+      </ol>
+    </section>
+
+    <!-- STEP 12 -->
+    <section id="step-12">
+      <h3 class="flex items-center text-2xl font-bold mb-4">
+        <span class="step-badge">12</span> ย้ายรูปเก่าจาก local → R2 <span class="pill pill-optional ml-2">optional</span>
+      </h3>
+      <p class="text-slate-600 mb-4">
+        ถ้ามีรูปเก่าใน <code>storage/app/public</code> อยู่แล้ว
+        และต้องการย้ายไป R2 ทั้งหมด:
+      </p>
+
+      <div class="callout callout-warn">
+        <strong>⚠️ ก่อนย้าย:</strong>
+        (1) <em>backup ฐานข้อมูลก่อน</em>
+        (2) path ในตารางอาจต้องอัปเดต ถ้า logic เก่าอ้างถึง disk <code>public</code> โดยตรง
+        (3) ทดสอบใน staging ก่อน
+      </div>
+
+      <p class="text-slate-600 mb-2">ใช้ AWS CLI (ติดตั้ง S3 adapter กับ R2 endpoint):</p>
+      <div class="code-block">
+<button class="copy-btn" onclick="copyCode(this)">📋 Copy</button>
+<pre><span class="comment"># 1. ตั้ง credential profile สำหรับ R2</span>
+<span class="prompt">$</span> <span class="cmd">aws</span> configure <span class="flag">--profile</span> r2
+AWS Access Key ID: <span class="string">&lt;CLOUDFLARE_R2_ACCESS_KEY_ID&gt;</span>
+AWS Secret Access Key: <span class="string">&lt;CLOUDFLARE_R2_SECRET_ACCESS_KEY&gt;</span>
+Default region: <span class="string">auto</span>
+Default output format: <span class="string">json</span>
+
+<span class="comment"># 2. sync ทั้งโฟลเดอร์ (dry-run ก่อน!)</span>
+<span class="prompt">$</span> <span class="cmd">aws</span> s3 sync <span class="path">./storage/app/public</span> <span class="path">s3://yourgallery-photos</span> \
+    <span class="flag">--endpoint-url</span> https://&lt;account_id&gt;.r2.cloudflarestorage.com \
+    <span class="flag">--profile</span> r2 \
+    <span class="flag">--dryrun</span>
+
+<span class="comment"># 3. เอา --dryrun ออกเมื่อดูแล้วถูก</span>
+<span class="prompt">$</span> <span class="cmd">aws</span> s3 sync <span class="path">./storage/app/public</span> <span class="path">s3://yourgallery-photos</span> \
+    <span class="flag">--endpoint-url</span> https://&lt;account_id&gt;.r2.cloudflarestorage.com \
+    <span class="flag">--profile</span> r2</pre>
+      </div>
+    </section>
+
+    <!-- PRICING -->
+    <section id="pricing" class="pt-8">
+      <h2 class="text-3xl font-bold mb-4">💸 ราคา & ประมาณการ</h2>
+
+      <h3 class="text-xl font-semibold mb-2">Cloudflare (Free plan)</h3>
+      <table class="info">
+        <thead><tr><th>ฟีเจอร์</th><th>Free</th></tr></thead>
+        <tbody>
+          <tr><td>CDN ไม่จำกัด bandwidth</td><td>✅</td></tr>
+          <tr><td>DNS + SSL</td><td>✅</td></tr>
+          <tr><td>DDoS protection</td><td>✅</td></tr>
+          <tr><td>Cache Rules (จำกัด 10 rules)</td><td>✅</td></tr>
+          <tr><td>Always Online (archive)</td><td>✅</td></tr>
+          <tr><td>WAF custom rules</td><td>อัปเกรด Pro ($25/mo) ถึงจะได้</td></tr>
+        </tbody>
+      </table>
+
+      <h3 class="text-xl font-semibold mt-6 mb-2">R2 Object Storage</h3>
+      <table class="info">
+        <thead>
+          <tr><th>รายการ</th><th>Free tier</th><th>เกิน Free tier</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Storage</td><td>10 GB ฟรี</td><td>$0.015 / GB / เดือน</td></tr>
+          <tr><td>Class A ops (write/list)</td><td>1,000,000 ฟรี</td><td>$4.50 / ล้านครั้ง</td></tr>
+          <tr><td>Class B ops (read)</td><td>10,000,000 ฟรี</td><td>$0.36 / ล้านครั้ง</td></tr>
+          <tr><td><strong>Egress (bandwidth)</strong></td><td colspan="2" class="text-center"><strong class="text-green-700">ฟรีไม่จำกัด</strong> 🎉</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-success mt-4">
+        <strong>ตัวอย่างค่าใช้จ่าย</strong> — เว็บ gallery กลางๆ:
+        <ul class="list-disc list-inside ml-4 mt-2 space-y-1">
+          <li>เก็บรูป 500 GB → <strong>~$7.35/เดือน</strong> (~฿260)</li>
+          <li>มีคนโหลดรูป 5 TB/เดือน → <strong>฿0</strong> (เทียบกับ AWS S3 ~$450)</li>
+          <li>ยอด ops ปกติไม่เกิน free tier (ขอยืนยันจาก logs)</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- TROUBLESHOOTING -->
+    <section id="troubleshoot">
+      <h2 class="text-3xl font-bold mb-4">🛠 Troubleshooting</h2>
+
+      <details class="bg-white border border-slate-200 rounded-lg p-4 mb-3">
+        <summary class="font-semibold cursor-pointer">
+          <code>Class "League\Flysystem\AwsS3V3\PortableVisibilityConverter" not found</code>
+        </summary>
+        <div class="mt-3 text-slate-700 text-sm">
+          <p>ขาด package <code>league/flysystem-aws-s3-v3</code> — ติดตั้งด้วย:</p>
+          <div class="code-block mt-2"><pre><span class="prompt">$</span> <span class="cmd">composer</span> require league/flysystem-aws-s3-v3:<span class="string">"^3.0"</span></pre></div>
+        </div>
+      </details>
+
+      <details class="bg-white border border-slate-200 rounded-lg p-4 mb-3">
+        <summary class="font-semibold cursor-pointer">
+          <code>Error: The bucket does not exist</code>
+        </summary>
+        <div class="mt-3 text-slate-700 text-sm">
+          <ul class="list-disc list-inside space-y-1">
+            <li>ตรวจชื่อใน <code>CLOUDFLARE_R2_BUCKET</code> ตรงกับ dashboard เป๊ะ (case-sensitive)</li>
+            <li>ตรวจว่า API token ให้ <em>บัง bucket นี้</em> — บางครั้ง scope ผิด</li>
+            <li>ลอง <code>php artisan config:clear</code></li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="bg-white border border-slate-200 rounded-lg p-4 mb-3">
+        <summary class="font-semibold cursor-pointer">
+          <code>Error: Access Denied / SignatureDoesNotMatch</code>
+        </summary>
+        <div class="mt-3 text-slate-700 text-sm">
+          <ul class="list-disc list-inside space-y-1">
+            <li>Secret key อาจถูกก๊อปผิด — สร้าง token ใหม่</li>
+            <li>ถ้า token มี IP filter → ตรวจ IP server ตรงกับ filter ไหม</li>
+            <li>
+              เช็คว่า <code>CLOUDFLARE_R2_ENDPOINT</code>
+              มี <code>https://</code> นำหน้าและ <em>ไม่มี</em> <code>/</code> ปิดท้าย
+            </li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="bg-white border border-slate-200 rounded-lg p-4 mb-3">
+        <summary class="font-semibold cursor-pointer">
+          รูปอัปโหลดได้ แต่ browser โหลดไม่เห็น (403)
+        </summary>
+        <div class="mt-3 text-slate-700 text-sm">
+          <ul class="list-disc list-inside space-y-1">
+            <li>Bucket ยังไม่ได้เปิด public access → Step 8</li>
+            <li><code>CLOUDFLARE_R2_URL</code> ชี้ผิด (ชี้ endpoint แทน public URL)</li>
+            <li>
+              Custom domain ยังไม่ propagate — ลอง
+              <code>dig cdn.yourgallery.com</code> ดูว่า CNAME ผูกถูกไหม
+            </li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="bg-white border border-slate-200 rounded-lg p-4 mb-3">
+        <summary class="font-semibold cursor-pointer">
+          CORS error ใน browser console
+        </summary>
+        <div class="mt-3 text-slate-700 text-sm">
+          ไปที่ bucket → Settings → CORS policy → ใส่โดเมนจริงใน <code>AllowedOrigins</code> (Step 9)
+        </div>
+      </details>
+
+      <details class="bg-white border border-slate-200 rounded-lg p-4 mb-3">
+        <summary class="font-semibold cursor-pointer">
+          Cloudflare แสดง Error 525 / 526 (SSL handshake failed)
+        </summary>
+        <div class="mt-3 text-slate-700 text-sm">
+          Origin server ยังไม่มี SSL cert → เปลี่ยน SSL mode เป็น <strong>Full</strong>
+          (ไม่ strict) ชั่วคราว แล้วติดตั้ง Let's Encrypt บน origin ก่อนจะกลับเป็น Full (strict)
+        </div>
+      </details>
+
+      <details class="bg-white border border-slate-200 rounded-lg p-4 mb-3">
+        <summary class="font-semibold cursor-pointer">
+          เว็บโหลดช้า / Cloudflare ไม่ได้ cache ให้
+        </summary>
+        <div class="mt-3 text-slate-700 text-sm">
+          <ul class="list-disc list-inside space-y-1">
+            <li>เช็ค response header — ถ้ามี <code>cache-control: no-store</code> Cloudflare จะไม่แคช</li>
+            <li>Dynamic routes (<code>/admin</code>, <code>/api</code>) ไม่ควรถูก cache — ถูกต้องแล้ว</li>
+            <li>ใช้ <code>cf-cache-status</code> header: HIT = ถูก cache, MISS = ไม่ใช่, DYNAMIC = ไม่แคชเลย</li>
+          </ul>
+        </div>
+      </details>
+    </section>
+
+    <!-- CHECKLIST -->
+    <section id="checklist" class="pt-8">
+      <h2 class="text-3xl font-bold mb-4">✅ Checklist สรุป</h2>
+      <div class="bg-white border border-slate-200 rounded-xl p-6 space-y-2">
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" class="rounded"> <span>บัญชี Cloudflare สร้างแล้ว + เปิด 2FA</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" class="rounded"> <span>โดเมน active ใน Cloudflare (nameservers ย้ายแล้ว)</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" class="rounded"> <span>DNS records ครบ (A, CNAME www, MX ถ้าจำเป็น)</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" class="rounded"> <span>SSL/TLS = Full (strict) + Always Use HTTPS เปิด</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" class="rounded"> <span>Cache Rules ตั้งสำหรับ static + bypass admin</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" class="rounded"> <span>R2 เปิดใช้งานแล้ว (ใส่บัตร)</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" class="rounded"> <span>Bucket สร้างแล้ว ชื่อตรง .env</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" class="rounded"> <span>API Token สร้าง (Object Read &amp; Write, scope bucket เดียว)</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" class="rounded"> <span>Custom domain ผูกกับ bucket (หรือเปิด R2.dev ชั่วคราว)</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" class="rounded"> <span>CORS policy ใส่ origin จริง</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" class="rounded"> <span><code>.env</code> ใส่ครบทั้ง 5 keys + FILESYSTEM_DISK=r2</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" class="rounded"> <span>ทดสอบ <code>Storage::disk('r2')->put()</code> ผ่าน tinker สำเร็จ</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" class="rounded"> <span>อัปโหลดผ่าน UI แล้วเห็นไฟล์ใน R2 dashboard</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" class="rounded"> <span>รูปโหลดใน browser ผ่าน public URL ได้ (status 200)</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- FOOTER -->
+    <div class="pt-8 mt-12 border-t border-slate-200 text-center text-sm text-slate-500">
+      <p>
+        คู่มือนี้เขียนสำหรับโปรเจกต์ <strong>photo-gallery-tailwind</strong> —
+        config ตรงกับ <code>config/filesystems.php</code> ในโปรเจกต์
+      </p>
+      <p class="mt-2">
+        ถ้ามีปัญหาที่ไม่อยู่ในคู่มือ ลองถามที่
+        <a href="https://community.cloudflare.com" target="_blank" rel="noopener" class="text-orange-600 underline">community.cloudflare.com</a>
+        หรือ Laravel Discord
+      </p>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  // Copy-to-clipboard for code blocks
+  function copyCode(btn) {
+    const code = btn.parentElement.querySelector('pre').innerText;
+    navigator.clipboard.writeText(code).then(() => {
+      btn.textContent = '✓ Copied';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = '📋 Copy';
+        btn.classList.remove('copied');
+      }, 1500);
+    });
+  }
+
+  // Sidebar active state based on scroll
+  const sections = document.querySelectorAll('section[id], div[id]');
+  const sideLinks = document.querySelectorAll('.sidebar-link');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        sideLinks.forEach(l => l.classList.remove('active'));
+        const active = document.querySelector(`.sidebar-link[href="#${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(s => observer.observe(s));
+
+  // Tabs (Public URL section)
+  document.querySelectorAll('#publicTabs .tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.target;
+      document.querySelectorAll('#publicTabs .tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(target).classList.add('active');
+    });
+  });
+</script>
+
+</body>
+</html>

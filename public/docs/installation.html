@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>คู่มือการติดตั้ง · Photo Gallery</title>
+<meta name="description" content="คู่มือการติดตั้ง Photo Gallery (Laravel 12 + Tailwind v4) ตั้งแต่ Local Dev ถึง Production">
+<link rel="icon" href="/favicon.ico">
+
+<!-- Tailwind CDN -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['"IBM Plex Sans Thai"', '"Inter"', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+      },
+      colors: {
+        brand: {
+          50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',
+          400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca',
+          800:'#3730a3',900:'#312e81'
+        }
+      }
+    }
+  }
+}
+</script>
+
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- Prism.js Syntax Highlight -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
+
+<style>
+  html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+  body { font-family: 'IBM Plex Sans Thai', 'Inter', sans-serif; }
+  pre[class*="language-"] {
+    border-radius: 12px !important;
+    font-size: 13.5px !important;
+    padding: 1.1rem 1.25rem !important;
+    margin: 0.5rem 0 !important;
+  }
+  code:not([class*="language-"]) {
+    background: rgb(241 245 249);
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.875em;
+    color: #4338ca;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .dark code:not([class*="language-"]) {
+    background: rgb(30 41 59);
+    color: #a5b4fc;
+  }
+  .toc-link.active {
+    color: rgb(99 102 241);
+    background: rgba(99,102,241,0.08);
+    font-weight: 600;
+    border-left-color: rgb(99 102 241);
+  }
+  .dark .toc-link.active {
+    color: rgb(165 180 252);
+    background: rgba(99,102,241,0.15);
+  }
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] > summary .chev { transform: rotate(90deg); }
+  .chev { transition: transform .2s; }
+  .step-num {
+    background: linear-gradient(135deg,#6366f1,#8b5cf6);
+    color: white; width: 2.25rem; height: 2.25rem;
+    border-radius: 0.75rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 1rem;
+    box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+  }
+  .copy-btn {
+    position: absolute; top: 8px; right: 8px;
+    background: rgba(255,255,255,0.08);
+    color: #cbd5e1;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px; padding: 4px 10px;
+    font-size: 12px; cursor: pointer;
+    transition: all .15s;
+    backdrop-filter: blur(4px);
+    font-family: 'Inter', sans-serif;
+  }
+  .copy-btn:hover { background: rgba(255,255,255,0.18); color:white; }
+  .code-wrap { position: relative; }
+  @media print {
+    aside, .no-print, .topbar { display: none !important; }
+    main { margin: 0 !important; padding: 0 !important; max-width: 100% !important; }
+  }
+</style>
+</head>
+
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 antialiased">
+
+<!-- ═══ Top Bar ═══ -->
+<header class="topbar sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800">
+  <div class="max-w-[1400px] mx-auto flex items-center justify-between px-4 h-14">
+    <div class="flex items-center gap-3">
+      <button id="btnSidebar" class="lg:hidden w-9 h-9 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+        <i class="bi bi-list text-xl"></i>
+      </button>
+      <a href="/" class="flex items-center gap-2 font-bold">
+        <span class="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-500 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-brand-500/30">
+          <i class="bi bi-camera-fill"></i>
+        </span>
+        <span>Photo Gallery</span>
+        <span class="hidden sm:inline text-slate-400 font-normal text-sm">/ Installation Guide</span>
+      </a>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="hidden md:block relative">
+        <i class="bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+        <input id="searchInput" type="text" placeholder="ค้นหาในคู่มือ..."
+               class="pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm w-64 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
+      </div>
+      <button onclick="window.print()" class="hidden sm:inline-flex w-9 h-9 items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800" title="พิมพ์">
+        <i class="bi bi-printer"></i>
+      </button>
+      <button id="btnTheme" class="w-9 h-9 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+        <i class="bi bi-moon-stars dark:hidden"></i>
+        <i class="bi bi-sun-fill hidden dark:inline text-amber-400"></i>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="max-w-[1400px] mx-auto flex">
+
+  <!-- ═══ Sidebar ═══ -->
+  <aside id="sidebar" class="hidden lg:block fixed lg:sticky top-14 left-0 w-72 h-[calc(100vh-3.5rem)] overflow-y-auto p-5 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 z-30">
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-3">สารบัญ</div>
+    <nav class="text-sm space-y-0.5" id="tocNav">
+      <a href="#overview" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-grid-1x2 mr-2 text-brand-500"></i>1. ภาพรวมระบบ</a>
+      <a href="#requirements" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-clipboard-check mr-2 text-brand-500"></i>2. Requirements</a>
+      <a href="#local" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-laptop mr-2 text-brand-500"></i>3. ติดตั้ง Local (XAMPP)</a>
+      <a href="#env" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-file-earmark-text mr-2 text-brand-500"></i>4. ตั้งค่า .env</a>
+      <a href="#database" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-database mr-2 text-brand-500"></i>5. Database & Migration</a>
+      <a href="#storage" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-hdd mr-2 text-brand-500"></i>6. Storage & Permissions</a>
+      <a href="#oauth" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-key mr-2 text-brand-500"></i>7. OAuth</a>
+      <a href="#payment" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-credit-card mr-2 text-brand-500"></i>8. Payment Gateway</a>
+      <a href="#s3" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-cloud mr-2 text-brand-500"></i>9. AWS S3 + CloudFront</a>
+      <a href="#mail" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-envelope mr-2 text-brand-500"></i>10. Mail · LINE · Delivery</a>
+      <a href="#admin" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-shield-lock mr-2 text-brand-500"></i>11. สร้าง Admin</a>
+      <a href="#build" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-box-seam mr-2 text-brand-500"></i>12. Build Assets</a>
+      <a href="#smoke" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-bug mr-2 text-brand-500"></i>13. Smoke Test</a>
+      <a href="#deploy" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-cloud-upload mr-2 text-brand-500"></i>14. Deploy Production</a>
+      <a href="#nginx" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-globe mr-2 text-brand-500"></i>15. Nginx + SSL</a>
+      <a href="#supervisor" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-cpu mr-2 text-brand-500"></i>16. Queue + Cron</a>
+      <a href="#checklist" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-check2-square mr-2 text-brand-500"></i>17. Checklist</a>
+      <a href="#troubleshoot" class="toc-link block px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border-l-2 border-transparent transition"><i class="bi bi-exclamation-diamond mr-2 text-brand-500"></i>18. Troubleshooting</a>
+    </nav>
+
+    <div class="mt-6 pt-6 border-t border-slate-200 dark:border-slate-800">
+      <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-3">ลิงก์ที่เกี่ยวข้อง</div>
+      <nav class="text-sm space-y-0.5">
+        <a href="https://laravel.com/docs/12.x" target="_blank" class="block px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"><i class="bi bi-book mr-2"></i>Laravel Docs</a>
+        <a href="https://tailwindcss.com/docs" target="_blank" class="block px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"><i class="bi bi-palette mr-2"></i>Tailwind CSS</a>
+        <a href="https://alpinejs.dev" target="_blank" class="block px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"><i class="bi bi-lightning mr-2"></i>Alpine.js</a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- ═══ Main Content ═══ -->
+  <main class="flex-1 px-4 sm:px-8 py-8 min-w-0 max-w-4xl mx-auto">
+
+    <!-- Hero -->
+    <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 via-purple-600 to-pink-500 p-8 sm:p-12 mb-10 text-white">
+      <div class="absolute -top-20 -right-20 w-72 h-72 bg-white/10 rounded-full blur-3xl"></div>
+      <div class="absolute -bottom-16 -left-16 w-64 h-64 bg-pink-300/20 rounded-full blur-3xl"></div>
+      <div class="relative">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur text-xs font-semibold mb-4">
+          <i class="bi bi-bookmark-star"></i> Installation Guide · v1.1
+        </div>
+        <h1 class="text-3xl sm:text-5xl font-bold mb-3 leading-tight">คู่มือการติดตั้ง<br>Photo Gallery</h1>
+        <p class="text-lg text-indigo-100 max-w-2xl">
+          ครบจบตั้งแต่ติดตั้งบน XAMPP ใน 5 นาที จนถึง Deploy ขึ้น Server พร้อมเปิดโดเมนและ HTTPS
+        </p>
+        <div class="flex flex-wrap gap-3 mt-6">
+          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 backdrop-blur text-sm"><i class="bi bi-code-slash"></i> Laravel 12</span>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 backdrop-blur text-sm"><i class="bi bi-filetype-php"></i> PHP 8.2+</span>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 backdrop-blur text-sm"><i class="bi bi-wind"></i> Tailwind v4</span>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 backdrop-blur text-sm"><i class="bi bi-database"></i> MySQL 8</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Start Box -->
+    <div class="rounded-2xl border-2 border-emerald-200 dark:border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-500/5 p-5 mb-10">
+      <h3 class="font-bold text-emerald-700 dark:text-emerald-400 mb-2"><i class="bi bi-rocket-takeoff mr-1"></i> Quick Start (5 นาที)</h3>
+      <ol class="list-decimal list-inside text-sm space-y-1 text-emerald-900 dark:text-emerald-200">
+        <li><code>git clone</code> → <code>composer install</code> → <code>npm install</code></li>
+        <li><code>copy .env.example .env</code> → <code>php artisan key:generate</code></li>
+        <li>สร้าง database ใน phpMyAdmin ชื่อ <code>photo_gallery</code></li>
+        <li><code>php artisan migrate --seed</code> → <code>php artisan storage:link</code></li>
+        <li><code>composer dev</code> → เปิด http://127.0.0.1:8000</li>
+      </ol>
+    </div>
+
+    <!-- ═══ 1. ภาพรวม ═══ -->
+    <section id="overview" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">1</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">ภาพรวมระบบและ Stack</h2>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-4 mb-6">
+        <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-800/50">
+          <div class="text-xs text-slate-400 uppercase font-semibold mb-2">Backend</div>
+          <ul class="text-sm space-y-1">
+            <li><i class="bi bi-dot"></i> Laravel 12 + PHP 8.2</li>
+            <li><i class="bi bi-dot"></i> MySQL 8 / MariaDB 10.6+</li>
+            <li><i class="bi bi-dot"></i> Queue/Cache: Database</li>
+            <li><i class="bi bi-dot"></i> Socialite (Google/FB/LINE)</li>
+            <li><i class="bi bi-dot"></i> AWS SDK + Stripe + DomPDF</li>
+          </ul>
+        </div>
+        <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-800/50">
+          <div class="text-xs text-slate-400 uppercase font-semibold mb-2">Frontend</div>
+          <ul class="text-sm space-y-1">
+            <li><i class="bi bi-dot"></i> Tailwind CSS v4</li>
+            <li><i class="bi bi-dot"></i> Alpine.js</li>
+            <li><i class="bi bi-dot"></i> Bootstrap Icons 1.11</li>
+            <li><i class="bi bi-dot"></i> Vite bundler</li>
+            <li><i class="bi bi-dot"></i> IBM Plex Sans Thai</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3 class="font-bold text-lg mb-3">โมดูลหลัก</h3>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div class="rounded-xl bg-indigo-50 dark:bg-indigo-500/10 p-4"><div class="text-indigo-600 dark:text-indigo-400 font-bold mb-1"><i class="bi bi-image mr-1"></i>Gallery</div><div class="text-sm text-slate-600 dark:text-slate-400">หน้าบ้าน ดูรูป/อีเวนต์/ช่างภาพ</div></div>
+        <div class="rounded-xl bg-purple-50 dark:bg-purple-500/10 p-4"><div class="text-purple-600 dark:text-purple-400 font-bold mb-1"><i class="bi bi-camera mr-1"></i>Photographer</div><div class="text-sm text-slate-600 dark:text-slate-400">ช่างภาพอัพโหลด/ดูยอดขาย</div></div>
+        <div class="rounded-xl bg-pink-50 dark:bg-pink-500/10 p-4"><div class="text-pink-600 dark:text-pink-400 font-bold mb-1"><i class="bi bi-bag mr-1"></i>Digital Products</div><div class="text-sm text-slate-600 dark:text-slate-400">พรีเซ็ต/ฟิลเตอร์/คอร์ส</div></div>
+        <div class="rounded-xl bg-emerald-50 dark:bg-emerald-500/10 p-4"><div class="text-emerald-600 dark:text-emerald-400 font-bold mb-1"><i class="bi bi-credit-card mr-1"></i>Payment</div><div class="text-sm text-slate-600 dark:text-slate-400">Stripe/Omise/PromptPay + SlipOK</div></div>
+        <div class="rounded-xl bg-amber-50 dark:bg-amber-500/10 p-4"><div class="text-amber-600 dark:text-amber-400 font-bold mb-1"><i class="bi bi-speedometer mr-1"></i>Admin Panel</div><div class="text-sm text-slate-600 dark:text-slate-400">Dashboard + CRUD Users/Orders</div></div>
+        <div class="rounded-xl bg-sky-50 dark:bg-sky-500/10 p-4"><div class="text-sky-600 dark:text-sky-400 font-bold mb-1"><i class="bi bi-bell mr-1"></i>Notifications</div><div class="text-sm text-slate-600 dark:text-slate-400">Realtime bell + LINE + Email</div></div>
+      </div>
+    </section>
+
+    <!-- ═══ 2. Requirements ═══ -->
+    <section id="requirements" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">2</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">Requirements</h2>
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-6">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 dark:bg-slate-800/50">
+            <tr>
+              <th class="text-left px-4 py-3 font-semibold">Component</th>
+              <th class="text-left px-4 py-3 font-semibold">Minimum</th>
+              <th class="text-left px-4 py-3 font-semibold">Recommended</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+            <tr><td class="px-4 py-3 font-medium"><i class="bi bi-filetype-php text-indigo-500 mr-1"></i>PHP</td><td class="px-4 py-3">8.2</td><td class="px-4 py-3">8.3</td></tr>
+            <tr><td class="px-4 py-3 font-medium"><i class="bi bi-box text-emerald-500 mr-1"></i>Composer</td><td class="px-4 py-3">2.5</td><td class="px-4 py-3">Latest</td></tr>
+            <tr><td class="px-4 py-3 font-medium"><i class="bi bi-node-minus text-green-600 mr-1"></i>Node.js</td><td class="px-4 py-3">20.x</td><td class="px-4 py-3">22.x LTS</td></tr>
+            <tr><td class="px-4 py-3 font-medium"><i class="bi bi-database text-blue-500 mr-1"></i>MySQL</td><td class="px-4 py-3">8.0</td><td class="px-4 py-3">8.0+</td></tr>
+            <tr><td class="px-4 py-3 font-medium"><i class="bi bi-cpu text-pink-500 mr-1"></i>RAM</td><td class="px-4 py-3">1 GB</td><td class="px-4 py-3">2 GB+</td></tr>
+            <tr><td class="px-4 py-3 font-medium"><i class="bi bi-hdd text-amber-500 mr-1"></i>Disk</td><td class="px-4 py-3">10 GB</td><td class="px-4 py-3">20 GB+</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="font-bold mb-2">PHP Extensions ที่ต้องเปิด</h3>
+      <div class="flex flex-wrap gap-2 mb-4">
+        <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-mono">bcmath</span>
+        <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-mono">ctype</span>
+        <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-mono">curl</span>
+        <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-mono">dom</span>
+        <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-mono">fileinfo</span>
+        <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-mono">gd</span>
+        <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-mono">intl</span>
+        <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-mono">mbstring</span>
+        <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-mono">openssl</span>
+        <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-mono">pdo_mysql</span>
+        <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-mono">tokenizer</span>
+        <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-mono">xml</span>
+        <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-mono">zip</span>
+        <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-mono">exif</span>
+      </div>
+    </section>
+
+    <!-- ═══ 3. Local ═══ -->
+    <section id="local" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">3</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">ติดตั้งบน Windows + XAMPP</h2>
+      </div>
+
+      <div class="space-y-4">
+        <details open class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50">
+          <summary class="p-4 flex items-center gap-3 font-semibold"><i class="bi bi-chevron-right chev"></i>3.1 ติดตั้ง Tools</summary>
+          <div class="px-5 pb-5 pt-0 text-sm text-slate-600 dark:text-slate-400">
+            <ul class="space-y-2">
+              <li><i class="bi bi-download text-brand-500 mr-1"></i> <a href="https://www.apachefriends.org/" target="_blank" class="text-brand-600 hover:underline">XAMPP 8.2+</a></li>
+              <li><i class="bi bi-download text-brand-500 mr-1"></i> <a href="https://getcomposer.org/download/" target="_blank" class="text-brand-600 hover:underline">Composer</a></li>
+              <li><i class="bi bi-download text-brand-500 mr-1"></i> <a href="https://nodejs.org/" target="_blank" class="text-brand-600 hover:underline">Node.js LTS</a></li>
+              <li><i class="bi bi-download text-brand-500 mr-1"></i> <a href="https://git-scm.com/" target="_blank" class="text-brand-600 hover:underline">Git</a></li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50">
+          <summary class="p-4 flex items-center gap-3 font-semibold"><i class="bi bi-chevron-right chev"></i>3.2 เปิด PHP Extensions ใน <code>php.ini</code></summary>
+          <div class="px-5 pb-5 text-sm">
+            <p class="mb-2 text-slate-600 dark:text-slate-400">เปิด <code>C:\xampp\php\php.ini</code> และลบ <code>;</code> หน้าบรรทัด:</p>
+            <div class="code-wrap"><pre><code class="language-ini">extension=bcmath
+extension=curl
+extension=fileinfo
+extension=gd
+extension=intl
+extension=mbstring
+extension=openssl
+extension=pdo_mysql
+extension=exif
+extension=zip</code></pre></div>
+          </div>
+        </details>
+
+        <details class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50">
+          <summary class="p-4 flex items-center gap-3 font-semibold"><i class="bi bi-chevron-right chev"></i>3.3 Clone + Install</summary>
+          <div class="px-5 pb-5 text-sm">
+            <div class="code-wrap"><pre><code class="language-bash">cd C:\xampp\htdocs
+git clone &lt;repo-url&gt; photo-gallery-tailwind
+cd photo-gallery-tailwind
+composer install
+npm install
+copy .env.example .env
+php artisan key:generate</code></pre></div>
+          </div>
+        </details>
+
+        <details class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50">
+          <summary class="p-4 flex items-center gap-3 font-semibold"><i class="bi bi-chevron-right chev"></i>3.4 สร้าง Database + Migrate</summary>
+          <div class="px-5 pb-5 text-sm">
+            <p class="mb-2 text-slate-600 dark:text-slate-400">เปิด <a href="http://localhost/phpmyadmin" class="text-brand-600 hover:underline">phpMyAdmin</a> → สร้าง DB ชื่อ <code>photo_gallery</code> (charset utf8mb4)</p>
+            <div class="code-wrap"><pre><code class="language-bash">php artisan migrate --seed
+php artisan storage:link
+composer dev</code></pre></div>
+            <div class="mt-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-300 text-xs">
+              <i class="bi bi-info-circle mr-1"></i> <code>composer dev</code> จะรัน server + queue + vite + logs พร้อมกันในหน้าต่างเดียว
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <!-- ═══ 4. .env ═══ -->
+    <section id="env" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">4</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">ตั้งค่า <code>.env</code></h2>
+      </div>
+
+      <p class="text-slate-600 dark:text-slate-400 mb-4">ไฟล์ <code>.env</code> คือศูนย์กลางการตั้งค่าทั้งหมด สำคัญมาก <strong class="text-red-500">ห้าม commit ขึ้น Git</strong></p>
+
+      <h3 class="font-bold mb-2 mt-4">App Settings</h3>
+      <div class="code-wrap"><pre><code class="language-ini">APP_NAME="Photo Gallery"
+APP_ENV=local                  # production ใช้ "production"
+APP_KEY=base64:...             # ได้จาก php artisan key:generate
+APP_DEBUG=true                 # production ใช้ false
+APP_URL=http://127.0.0.1:8000
+
+APP_LOCALE=th
+APP_FALLBACK_LOCALE=en
+APP_TIMEZONE=Asia/Bangkok</code></pre></div>
+
+      <h3 class="font-bold mb-2 mt-6">Database</h3>
+      <div class="code-wrap"><pre><code class="language-ini">DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=photo_gallery
+DB_USERNAME=root
+DB_PASSWORD=</code></pre></div>
+
+      <h3 class="font-bold mb-2 mt-6">Session / Cache / Queue</h3>
+      <div class="code-wrap"><pre><code class="language-ini">SESSION_DRIVER=database
+SESSION_LIFETIME=120
+CACHE_STORE=database
+QUEUE_CONNECTION=database
+FILESYSTEM_DISK=public         # ใช้ s3 ถ้าต่อ S3
+BCRYPT_ROUNDS=12               # dev=10, production=12</code></pre></div>
+    </section>
+
+    <!-- ═══ 5. Database ═══ -->
+    <section id="database" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">5</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">Database & Migration</h2>
+      </div>
+
+      <p class="text-slate-600 dark:text-slate-400 mb-4">โปรเจคมี <strong>38 migrations</strong> ครอบคลุมทุกโมดูล</p>
+
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-6 text-xs">
+        <span class="px-2 py-1.5 rounded bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-mono">auth_users</span>
+        <span class="px-2 py-1.5 rounded bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-mono">auth_admins</span>
+        <span class="px-2 py-1.5 rounded bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-mono">social_logins</span>
+        <span class="px-2 py-1.5 rounded bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 font-mono">photographer_profiles</span>
+        <span class="px-2 py-1.5 rounded bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 font-mono">commission_logs</span>
+        <span class="px-2 py-1.5 rounded bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 font-mono">photographer_payouts</span>
+        <span class="px-2 py-1.5 rounded bg-pink-50 dark:bg-pink-500/10 text-pink-700 dark:text-pink-400 font-mono">event_events</span>
+        <span class="px-2 py-1.5 rounded bg-pink-50 dark:bg-pink-500/10 text-pink-700 dark:text-pink-400 font-mono">event_photos</span>
+        <span class="px-2 py-1.5 rounded bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-mono">orders</span>
+        <span class="px-2 py-1.5 rounded bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-mono">digital_orders</span>
+        <span class="px-2 py-1.5 rounded bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-mono">payments</span>
+        <span class="px-2 py-1.5 rounded bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 font-mono">admin_notifications</span>
+        <span class="px-2 py-1.5 rounded bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 font-mono">app_settings</span>
+        <span class="px-2 py-1.5 rounded bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 font-mono">security_rate_limits</span>
+      </div>
+
+      <div class="code-wrap"><pre><code class="language-bash"># รัน migration ทั้งหมด
+php artisan migrate
+
+# Reset + re-run (ลบข้อมูล!)
+php artisan migrate:fresh --seed
+
+# ดูสถานะ
+php artisan migrate:status</code></pre></div>
+    </section>
+
+    <!-- ═══ 6. Storage ═══ -->
+    <section id="storage" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">6</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">Storage & Permissions</h2>
+      </div>
+
+      <h3 class="font-bold mb-2">Symlink</h3>
+      <div class="code-wrap"><pre><code class="language-bash">php artisan storage:link</code></pre></div>
+
+      <h3 class="font-bold mb-2 mt-6">Linux Permissions</h3>
+      <div class="code-wrap"><pre><code class="language-bash">sudo chown -R www-data:www-data storage bootstrap/cache
+sudo chmod -R 775 storage bootstrap/cache</code></pre></div>
+
+      <h3 class="font-bold mb-2 mt-6">โครงสร้างโฟลเดอร์</h3>
+      <div class="code-wrap"><pre><code class="language-text">storage/app/public/
+├── photos/           # รูปต้นฉบับ
+├── photos/thumbs/    # thumbnail
+├── photos/watermark/ # preview + watermark
+├── slips/            # สลิปโอนเงิน
+├── avatars/          # รูปโปรไฟล์
+└── digital/          # ไฟล์สินค้าดิจิทัล</code></pre></div>
+    </section>
+
+    <!-- ═══ 7. OAuth ═══ -->
+    <section id="oauth" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">7</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">OAuth (Google / Facebook / LINE / Apple)</h2>
+      </div>
+
+      <!-- v1.1 Architecture Notice -->
+      <div class="rounded-xl bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-500/10 dark:to-purple-500/10 border-2 border-indigo-200 dark:border-indigo-500/30 p-5 mb-5">
+        <h3 class="font-bold text-base mb-2 flex items-center gap-2 text-indigo-700 dark:text-indigo-300">
+          <i class="bi bi-stars"></i> สถาปัตยกรรมใหม่ (v1.1)
+        </h3>
+        <p class="text-sm text-slate-700 dark:text-slate-300 mb-3">
+          ตั้งแต่เมษายน 2026 credentials ของทุก provider ถูกย้ายออกจาก <code>.env</code> ไปจัดการผ่านหน้า Admin
+          (เก็บใน <code>app_settings</code> table แบบเข้ารหัส) เปลี่ยนค่าได้ทันทีโดยไม่ต้อง redeploy
+        </p>
+        <ul class="text-sm space-y-1 text-slate-700 dark:text-slate-300">
+          <li>🔑 <strong>หน้าหลัก</strong>: <code>/admin/settings/social-auth</code></li>
+          <li>📂 Google Drive (ใช้ key ร่วม): <code>/admin/settings/google-drive</code></li>
+          <li>💬 LINE Messaging (ใช้ channel ร่วม): <code>/admin/settings/line</code></li>
+        </ul>
+      </div>
+
+      <!-- Google -->
+      <div class="rounded-2xl border-2 border-red-100 dark:border-red-500/20 bg-white dark:bg-slate-800/50 p-5 mb-4">
+        <h3 class="font-bold text-lg mb-3 flex items-center gap-2"><i class="bi bi-google text-red-500"></i>Google OAuth + Drive</h3>
+        <ol class="list-decimal list-inside text-sm space-y-1.5 mb-3 text-slate-600 dark:text-slate-400">
+          <li>ไป <a href="https://console.cloud.google.com/" class="text-brand-600 hover:underline" target="_blank">Google Cloud Console</a> → สร้าง Project</li>
+          <li>APIs &amp; Services → OAuth Consent Screen → ตั้งชื่อแอป</li>
+          <li>Credentials → Create OAuth Client ID → Web Application</li>
+          <li>Authorized redirect URIs (copy จากหน้า admin):
+            <ul class="list-disc list-inside ml-4 text-xs mt-1">
+              <li><code>http://127.0.0.1:8001/auth/google/callback</code></li>
+              <li><code>https://yourdomain.com/auth/google/callback</code></li>
+            </ul>
+          </li>
+          <li>นำ Client ID + Secret ไปใส่ที่ <strong><code>/admin/settings/social-auth</code></strong> → การ์ด Google</li>
+        </ol>
+        <div class="rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-3 text-xs text-amber-800 dark:text-amber-300">
+          💡 Key นี้ใช้ร่วมกันระหว่าง OAuth Login และ Google Drive Storage — แก้ที่ใดที่หนึ่งพอ
+        </div>
+      </div>
+
+      <!-- Facebook -->
+      <div class="rounded-2xl border-2 border-blue-100 dark:border-blue-500/20 bg-white dark:bg-slate-800/50 p-5 mb-4">
+        <h3 class="font-bold text-lg mb-3 flex items-center gap-2"><i class="bi bi-facebook text-blue-600"></i>Facebook Login</h3>
+        <ol class="list-decimal list-inside text-sm space-y-1.5 mb-3 text-slate-600 dark:text-slate-400">
+          <li>ไป <a href="https://developers.facebook.com/" class="text-brand-600 hover:underline" target="_blank">developers.facebook.com</a></li>
+          <li>Create App → Consumer → Add <strong>Facebook Login</strong></li>
+          <li>Settings → Basic: ตั้ง Domain + Privacy Policy URL</li>
+          <li>Facebook Login → Valid OAuth Redirect URIs (HTTPS เท่านั้น)</li>
+          <li>นำ App ID + Secret ไปใส่ที่ <strong><code>/admin/settings/social-auth</code></strong> → การ์ด Facebook</li>
+        </ol>
+        <div class="rounded-lg bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/30 p-3 text-xs text-sky-800 dark:text-sky-300">
+          🔁 Facebook เป็น provider เดียวที่ยังอ่าน <code>.env</code> แบบ fallback ได้ (<code>FB_APP_ID</code>, <code>FB_APP_SECRET</code>) — สำหรับ fresh install
+        </div>
+      </div>
+
+      <!-- LINE -->
+      <div class="rounded-2xl border-2 border-green-100 dark:border-green-500/20 bg-white dark:bg-slate-800/50 p-5 mb-4">
+        <h3 class="font-bold text-lg mb-3 flex items-center gap-2"><i class="bi bi-chat-fill text-green-500"></i>LINE Login</h3>
+        <ol class="list-decimal list-inside text-sm space-y-1.5 mb-3 text-slate-600 dark:text-slate-400">
+          <li>ไป <a href="https://developers.line.biz/console/" class="text-brand-600 hover:underline" target="_blank">LINE Developers Console</a></li>
+          <li>Create Provider → Channel Type: <strong class="text-green-700 dark:text-green-400">LINE Login Channel</strong> ⚠️ (ไม่ใช่ Messaging API)</li>
+          <li>LINE Login tab → Callback URL ตรงกับ URI ที่แสดงในหน้า admin แบบ <strong>exact match</strong></li>
+          <li>นำ Channel ID + Secret ไปใส่ที่ <strong><code>/admin/settings/social-auth</code></strong> → การ์ด LINE</li>
+        </ol>
+        <div class="rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-3 text-xs text-amber-800 dark:text-amber-300">
+          💡 Channel ID/Secret ใช้ร่วมกันระหว่าง LINE Login และ LINE Messaging API (แก้ได้ที่ <code>/admin/settings/line</code>)
+        </div>
+      </div>
+
+      <!-- Apple -->
+      <div class="rounded-2xl border-2 border-slate-200 dark:border-slate-600/40 bg-white dark:bg-slate-800/50 p-5 mb-4">
+        <h3 class="font-bold text-lg mb-3 flex items-center gap-2"><i class="bi bi-apple text-slate-800 dark:text-slate-200"></i>Apple Sign-In (Optional)</h3>
+        <ol class="list-decimal list-inside text-sm space-y-1.5 mb-3 text-slate-600 dark:text-slate-400">
+          <li>ต้องเป็นสมาชิก <a href="https://developer.apple.com/" class="text-brand-600 hover:underline" target="_blank">Apple Developer Program</a></li>
+          <li>Identifiers → สร้าง <strong>Services ID</strong> (เช่น <code>com.yourdomain.auth</code>)</li>
+          <li>Configure → Sign in with Apple → เพิ่ม Return URL: <code>https://yourdomain.com/auth/apple/callback</code></li>
+          <li>Keys → Create Key → Enable "Sign in with Apple" → ดาวน์โหลด <code>.p8</code></li>
+          <li>ใส่ที่ <strong><code>/admin/settings/social-auth</code></strong> → การ์ด Apple (4 ช่อง: Service ID, Team ID, Key ID, Private Key)</li>
+        </ol>
+        <div class="rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 p-3 text-xs text-red-800 dark:text-red-300">
+          ⚠️ Apple Sign-In บังคับใช้ HTTPS + domain ต้อง verify แล้ว ใน Apple Developer Console
+        </div>
+      </div>
+
+      <div class="rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-4 text-sm text-amber-800 dark:text-amber-300">
+        <i class="bi bi-info-circle mr-1"></i>
+        <strong>Local Dev</strong>: Google/LINE ใช้ <code>http://127.0.0.1:8001</code> ได้ตรง ๆ (แต่ LINE ต้องตั้ง <code>APP_URL</code> ให้ตรง) — Facebook/Apple ต้อง HTTPS → ใช้
+        <a href="https://ngrok.com" class="underline" target="_blank">ngrok</a> หรือ <code>cloudflared tunnel</code>
+      </div>
+    </section>
+
+    <!-- ═══ 8. Payment ═══ -->
+    <section id="payment" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">8</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">Payment Gateway</h2>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4 mb-4">
+        <div class="rounded-2xl border-2 border-purple-100 dark:border-purple-500/20 bg-white dark:bg-slate-800/50 p-5">
+          <h3 class="font-bold text-lg mb-2 flex items-center gap-2"><i class="bi bi-stripe text-purple-500"></i>Stripe</h3>
+          <p class="text-sm text-slate-500 mb-2">บัตรเครดิตต่างประเทศ</p>
+          <ul class="text-xs text-slate-600 dark:text-slate-400 list-disc list-inside mb-2">
+            <li>Webhook: <code>/webhook/stripe</code></li>
+            <li>Events: <code>payment_intent.succeeded/failed</code></li>
+          </ul>
+          <div class="code-wrap"><pre><code class="language-ini">STRIPE_PUBLIC_KEY=pk_live_xxx
+STRIPE_SECRET_KEY=sk_live_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx</code></pre></div>
+        </div>
+
+        <div class="rounded-2xl border-2 border-blue-100 dark:border-blue-500/20 bg-white dark:bg-slate-800/50 p-5">
+          <h3 class="font-bold text-lg mb-2 flex items-center gap-2"><i class="bi bi-credit-card text-blue-500"></i>Omise</h3>
+          <p class="text-sm text-slate-500 mb-2">บัตรเครดิต + Internet Banking ไทย</p>
+          <div class="code-wrap"><pre><code class="language-ini">OMISE_PUBLIC_KEY=pkey_xxx
+OMISE_SECRET_KEY=skey_xxx</code></pre></div>
+        </div>
+
+        <div class="rounded-2xl border-2 border-emerald-100 dark:border-emerald-500/20 bg-white dark:bg-slate-800/50 p-5">
+          <h3 class="font-bold text-lg mb-2 flex items-center gap-2"><i class="bi bi-qr-code text-emerald-500"></i>PromptPay</h3>
+          <p class="text-sm text-slate-500 mb-2">QR โอนเงิน + แนบสลิป</p>
+          <div class="code-wrap"><pre><code class="language-ini">PROMPTPAY_NUMBER=0812345678
+PROMPTPAY_NAME="ชื่อร้าน จำกัด"</code></pre></div>
+        </div>
+
+        <div class="rounded-2xl border-2 border-amber-100 dark:border-amber-500/20 bg-white dark:bg-slate-800/50 p-5">
+          <h3 class="font-bold text-lg mb-2 flex items-center gap-2"><i class="bi bi-check-all text-amber-500"></i>SlipOK</h3>
+          <p class="text-sm text-slate-500 mb-2">ตรวจสลิปอัตโนมัติ (Optional)</p>
+          <p class="text-xs text-slate-600 dark:text-slate-400">ตั้งค่าใน Admin → Settings:<br>
+            <code>slip_verify_mode</code>: manual/auto/hybrid<br>
+            <code>slip_auto_threshold</code>: 80 (0-100)
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 9. S3 ═══ -->
+    <section id="s3" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">9</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">AWS S3 + CloudFront</h2>
+      </div>
+
+      <h3 class="font-bold mb-2">Bucket Policy</h3>
+      <div class="code-wrap"><pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": "*",
+    "Action": "s3:GetObject",
+    "Resource": "arn:aws:s3:::YOUR-BUCKET/*"
+  }]
+}</code></pre></div>
+
+      <h3 class="font-bold mb-2 mt-6"><code>.env</code></h3>
+      <div class="code-wrap"><pre><code class="language-ini">FILESYSTEM_DISK=s3
+AWS_ACCESS_KEY_ID=AKIAxxxxxx
+AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxxxx
+AWS_DEFAULT_REGION=ap-southeast-1
+AWS_BUCKET=your-bucket-name
+AWS_URL=https://your-bucket-name.s3.ap-southeast-1.amazonaws.com
+
+# CloudFront CDN
+AWS_CLOUDFRONT_DOMAIN=d1234.cloudfront.net
+AWS_CLOUDFRONT_DISTRIBUTION_ID=E1XXXXXX</code></pre></div>
+    </section>
+
+    <!-- ═══ 10. Mail · LINE · Delivery ═══ -->
+    <section id="mail" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">10</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">Mail · LINE · Photo Delivery</h2>
+      </div>
+
+      <h3 class="font-bold mb-2">SMTP (Gmail / SES)</h3>
+      <div class="code-wrap"><pre><code class="language-ini">MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=yourname@gmail.com
+MAIL_PASSWORD=xxxx-xxxx-xxxx-xxxx    # App Password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=no-reply@yourdomain.com
+MAIL_FROM_NAME="${APP_NAME}"</code></pre></div>
+
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-2">
+        <i class="bi bi-info-circle"></i> Gmail ต้องใช้ <a href="https://myaccount.google.com/apppasswords" class="text-brand-600 hover:underline" target="_blank">App Password</a> (ต้องเปิด 2FA ก่อน)
+      </p>
+
+      <h3 class="font-bold mb-2 mt-6">LINE Messaging API</h3>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mb-2">
+        LINE Notify ปิดตัวเดือน 3/2025 → ระบบเปลี่ยนมาใช้ <strong>LINE Messaging API</strong> แทน ตั้งค่าที่
+        <code>/admin/settings/line</code>:
+      </p>
+      <ul class="text-sm space-y-1 text-slate-700 dark:text-slate-300 list-disc list-inside mb-3">
+        <li><strong>Channel Access Token</strong> (long-lived / stateless)</li>
+        <li><strong>Channel Secret</strong> (webhook signature)</li>
+        <li><strong>Webhook URL</strong> (ถ้ารับข้อความจากผู้ใช้)</li>
+      </ul>
+      <div class="rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-3 text-xs text-amber-800 dark:text-amber-300">
+        💡 ถ้าเปิด LINE Login ไว้แล้ว Channel ID/Secret จะ sync อัตโนมัติ — ไม่ต้องกรอกซ้ำ
+      </div>
+
+      <h3 class="font-bold mb-2 mt-6">Photo Delivery Service</h3>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">
+        หน้า <code>/admin/settings/delivery</code> กำหนดช่องทางส่งรูป/ลิงก์ดาวน์โหลดหลังชำระเงิน:
+      </p>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm mb-3 rounded-xl overflow-hidden">
+          <thead class="bg-slate-100 dark:bg-slate-800">
+            <tr><th class="px-3 py-2 text-left font-semibold">ช่องทาง</th><th class="px-3 py-2 text-left font-semibold">รายละเอียด</th><th class="px-3 py-2 text-left font-semibold">ต้องตั้ง</th></tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+            <tr><td class="px-3 py-2 font-medium"><i class="bi bi-globe text-brand-500"></i> Web</td><td class="px-3 py-2 text-slate-600 dark:text-slate-400">แสดงในหน้า <code>/profile/downloads</code></td><td class="px-3 py-2 text-xs text-emerald-600">ไม่ต้องตั้ง</td></tr>
+            <tr><td class="px-3 py-2 font-medium"><i class="bi bi-envelope text-sky-500"></i> Email</td><td class="px-3 py-2 text-slate-600 dark:text-slate-400">ส่งอีเมลแนบลิงก์/ZIP</td><td class="px-3 py-2 text-xs text-slate-600">SMTP ด้านบน</td></tr>
+            <tr><td class="px-3 py-2 font-medium"><i class="bi bi-chat-fill text-green-500"></i> LINE</td><td class="px-3 py-2 text-slate-600 dark:text-slate-400">ส่ง Flex Message + Carousel</td><td class="px-3 py-2 text-xs text-slate-600">LINE Messaging + ผู้ใช้เชื่อม LINE Login</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-slate-500">Admin เลือกได้หลายช่องทางพร้อมกัน — default คือ Web + Email</p>
+    </section>
+
+    <!-- ═══ 11. Admin ═══ -->
+    <section id="admin" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">11</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">สร้างบัญชี Admin</h2>
+      </div>
+
+      <h3 class="font-bold mb-2">ผ่าน Seeder</h3>
+      <div class="code-wrap"><pre><code class="language-bash">php artisan db:seed --class=AdminSeeder</code></pre></div>
+
+      <h3 class="font-bold mb-2 mt-6">ผ่าน Tinker (Manual)</h3>
+      <div class="code-wrap"><pre><code class="language-bash">php artisan tinker</code></pre></div>
+      <div class="code-wrap mt-2"><pre><code class="language-php">\App\Models\Admin::create([
+    'username' =&gt; 'admin',
+    'email' =&gt; 'admin@yourdomain.com',
+    'password_hash' =&gt; \Hash::make('StrongPass!2026'),
+    'first_name' =&gt; 'Super',
+    'last_name' =&gt; 'Admin',
+    'role' =&gt; 'superadmin',
+    'status' =&gt; 'active',
+]);</code></pre></div>
+
+      <div class="mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-500/10 text-red-800 dark:text-red-300 text-sm">
+        <i class="bi bi-exclamation-triangle mr-1"></i> <strong>เปลี่ยนรหัสทันที</strong>หลังเข้าใช้ production ครั้งแรก
+      </div>
+    </section>
+
+    <!-- ═══ 12. Build ═══ -->
+    <section id="build" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">12</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">Build Assets</h2>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <h3 class="font-bold mb-2">Development</h3>
+          <div class="code-wrap"><pre><code class="language-bash">npm run dev</code></pre></div>
+          <p class="text-sm text-slate-500 mt-2">Hot reload, ใช้ระหว่างพัฒนา</p>
+        </div>
+        <div>
+          <h3 class="font-bold mb-2">Production</h3>
+          <div class="code-wrap"><pre><code class="language-bash">npm run build</code></pre></div>
+          <p class="text-sm text-slate-500 mt-2">สร้าง <code>public/build/</code> (minified)</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 13. Smoke Test ═══ -->
+    <section id="smoke" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">13</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">Smoke Test (95 Assertions)</h2>
+      </div>
+
+      <p class="text-slate-600 dark:text-slate-400 mb-3">โปรเจคมีชุดทดสอบอัตโนมัติ 95 assertions ครอบคลุมทุกระบบ</p>
+      <div class="code-wrap"><pre><code class="language-bash"># รันทั้งหมด
+php artisan app:smoke-test
+
+# รันเฉพาะกลุ่ม
+php artisan app:smoke-test --group=schema
+php artisan app:smoke-test --group=routes
+php artisan app:smoke-test --group=digital
+php artisan app:smoke-test --group=notifications
+php artisan app:smoke-test --group=dashboard
+php artisan app:smoke-test --group=reset
+
+# เก็บข้อมูลทดสอบไว้
+php artisan app:smoke-test --keep</code></pre></div>
+
+      <div class="mt-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 text-sm">
+        <i class="bi bi-check-circle mr-1"></i> ควรขึ้น <strong>100% pass</strong> ก่อน deploy
+      </div>
+    </section>
+
+    <!-- ═══ 14. Deploy ═══ -->
+    <section id="deploy" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">14</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">Deploy Production (Ubuntu)</h2>
+      </div>
+
+      <h3 class="font-bold mb-2">ติดตั้ง Software</h3>
+      <div class="code-wrap"><pre><code class="language-bash">sudo apt update &amp;&amp; sudo apt upgrade -y
+sudo apt install -y nginx mysql-server git unzip curl \
+    php8.2-fpm php8.2-mysql php8.2-mbstring php8.2-xml \
+    php8.2-curl php8.2-gd php8.2-bcmath php8.2-zip \
+    php8.2-intl php8.2-exif
+
+# Composer
+curl -sS https://getcomposer.org/installer | php
+sudo mv composer.phar /usr/local/bin/composer
+
+# Node.js 20
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs</code></pre></div>
+
+      <h3 class="font-bold mb-2 mt-6">Clone + Setup</h3>
+      <div class="code-wrap"><pre><code class="language-bash">cd /var/www
+sudo git clone &lt;repo-url&gt; photo-gallery
+cd photo-gallery
+
+composer install --no-dev --optimize-autoloader
+cp .env.example .env
+# แก้ .env เป็น production
+php artisan key:generate
+php artisan migrate --force
+php artisan storage:link
+npm install &amp;&amp; npm run build
+
+sudo chown -R www-data:www-data storage bootstrap/cache
+sudo chmod -R 775 storage bootstrap/cache
+
+# Optimize
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+php artisan event:cache</code></pre></div>
+    </section>
+
+    <!-- ═══ 15. Nginx ═══ -->
+    <section id="nginx" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">15</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">Nginx + SSL (Let's Encrypt)</h2>
+      </div>
+
+      <h3 class="font-bold mb-2">Nginx Config</h3>
+      <p class="text-sm text-slate-500 mb-2"><code>/etc/nginx/sites-available/photo-gallery</code></p>
+      <div class="code-wrap"><pre><code class="language-nginx">server {
+    listen 80;
+    server_name yourdomain.com www.yourdomain.com;
+    root /var/www/photo-gallery/public;
+
+    client_max_body_size 50M;
+    index index.php;
+    charset utf-8;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\.(?!well-known).* { deny all; }
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+}</code></pre></div>
+
+      <h3 class="font-bold mb-2 mt-6">เปิดใช้งาน + SSL</h3>
+      <div class="code-wrap"><pre><code class="language-bash">sudo ln -s /etc/nginx/sites-available/photo-gallery /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+
+# Let's Encrypt
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+sudo systemctl enable certbot.timer   # auto renewal</code></pre></div>
+    </section>
+
+    <!-- ═══ 16. Supervisor ═══ -->
+    <section id="supervisor" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">16</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">Queue Worker + Cron</h2>
+      </div>
+
+      <h3 class="font-bold mb-2">Supervisor Config</h3>
+      <p class="text-sm text-slate-500 mb-2"><code>/etc/supervisor/conf.d/photo-gallery-worker.conf</code></p>
+      <div class="code-wrap"><pre><code class="language-ini">[program:photo-gallery-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/photo-gallery/artisan queue:work database --sleep=3 --tries=3 --max-time=3600
+autostart=true
+autorestart=true
+user=www-data
+numprocs=2
+redirect_stderr=true
+stdout_logfile=/var/log/photo-gallery-worker.log
+stopwaitsecs=3600</code></pre></div>
+
+      <div class="code-wrap mt-2"><pre><code class="language-bash">sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl start photo-gallery-worker:*</code></pre></div>
+
+      <h3 class="font-bold mb-2 mt-6">Cron (Laravel Scheduler)</h3>
+      <div class="code-wrap"><pre><code class="language-bash">sudo crontab -u www-data -e</code></pre></div>
+      <div class="code-wrap mt-2"><pre><code class="language-cron">* * * * * cd /var/www/photo-gallery &amp;&amp; php artisan schedule:run &gt;&gt; /dev/null 2&gt;&amp;1</code></pre></div>
+    </section>
+
+    <!-- ═══ 17. Checklist ═══ -->
+    <section id="checklist" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">17</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">Checklist ก่อน Go Live</h2>
+      </div>
+
+      <div id="checklistWrap" class="space-y-4">
+
+        <div class="rounded-2xl border-2 border-red-100 dark:border-red-500/20 bg-red-50/50 dark:bg-red-500/5 p-5">
+          <h3 class="font-bold mb-3 text-red-700 dark:text-red-400"><i class="bi bi-shield-lock mr-1"></i>Security</h3>
+          <div class="space-y-2 text-sm">
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-red-500"> APP_DEBUG=false</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-red-500"> APP_ENV=production</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-red-500"> APP_KEY generate แล้ว</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-red-500"> DB user ไม่ใช่ root</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-red-500"> เปลี่ยนรหัส admin default แล้ว</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-red-500"> Firewall เปิดเฉพาะ 22, 80, 443</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-red-500"> chmod 600 .env</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-red-500"> SSL ใช้งานได้ (https://)</label>
+          </div>
+        </div>
+
+        <div class="rounded-2xl border-2 border-purple-100 dark:border-purple-500/20 bg-purple-50/50 dark:bg-purple-500/5 p-5">
+          <h3 class="font-bold mb-3 text-purple-700 dark:text-purple-400"><i class="bi bi-credit-card mr-1"></i>Payments</h3>
+          <div class="space-y-2 text-sm">
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-purple-500"> Stripe/Omise ใช้ live key</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-purple-500"> Webhook URL ถูกต้อง</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-purple-500"> PromptPay number ตรวจแล้ว</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-purple-500"> SlipOK key ใส่ใน admin settings</label>
+          </div>
+        </div>
+
+        <div class="rounded-2xl border-2 border-blue-100 dark:border-blue-500/20 bg-blue-50/50 dark:bg-blue-500/5 p-5">
+          <h3 class="font-bold mb-3 text-blue-700 dark:text-blue-400"><i class="bi bi-key mr-1"></i>OAuth <span class="text-xs font-normal text-slate-500">(<code>/admin/settings/social-auth</code>)</span></h3>
+          <div class="space-y-2 text-sm">
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-blue-500"> บันทึก OAuth credentials ใน admin settings (ไม่ใช่ .env)</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-blue-500"> Google redirect URI ตรงกับ domain จริง (exact match)</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-blue-500"> Facebook app อยู่ใน Live Mode</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-blue-500"> LINE ใช้ LINE Login Channel (ไม่ใช่ Messaging API)</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-blue-500"> LINE callback URL เป็น HTTPS + ตรงกับ APP_URL</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-blue-500"> Apple (ถ้าใช้): Service ID + Team ID + Key ID + .p8 ครบ</label>
+          </div>
+        </div>
+
+        <div class="rounded-2xl border-2 border-emerald-100 dark:border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-500/5 p-5">
+          <h3 class="font-bold mb-3 text-emerald-700 dark:text-emerald-400"><i class="bi bi-lightning mr-1"></i>Performance</h3>
+          <div class="space-y-2 text-sm">
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-emerald-500"> npm run build สำเร็จ</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-emerald-500"> config:cache + route:cache + view:cache</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-emerald-500"> Supervisor queue worker รันอยู่</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-emerald-500"> Cron scheduler รันอยู่</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-emerald-500"> CloudFront/CDN active</label>
+          </div>
+        </div>
+
+        <div class="rounded-2xl border-2 border-amber-100 dark:border-amber-500/20 bg-amber-50/50 dark:bg-amber-500/5 p-5">
+          <h3 class="font-bold mb-3 text-amber-700 dark:text-amber-400"><i class="bi bi-hdd mr-1"></i>Data & Monitoring</h3>
+          <div class="space-y-2 text-sm">
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-amber-500"> Backup DB อัตโนมัติ (cron + mysqldump)</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-amber-500"> Backup storage/app/public</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-amber-500"> Smoke test 100%</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-amber-500"> Google Analytics 4 active</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded text-amber-500"> Uptime monitoring (UptimeRobot)</label>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="mt-4 flex items-center gap-3 text-sm">
+        <div class="flex-1 h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+          <div id="progressBar" class="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 transition-all" style="width:0%"></div>
+        </div>
+        <span id="progressText" class="font-mono text-slate-500">0 / 0</span>
+      </div>
+    </section>
+
+    <!-- ═══ 18. Troubleshooting ═══ -->
+    <section id="troubleshoot" class="mb-14 scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="step-num">18</span>
+        <h2 class="text-2xl sm:text-3xl font-bold">Troubleshooting</h2>
+      </div>
+
+      <div class="space-y-3">
+        <details class="rounded-xl border border-red-200 dark:border-red-500/30 bg-white dark:bg-slate-800/50">
+          <summary class="p-4 font-semibold text-red-600 dark:text-red-400"><i class="bi bi-chevron-right chev mr-2"></i>500 Server Error หลัง deploy</summary>
+          <div class="px-5 pb-5 text-sm">
+            <div class="code-wrap"><pre><code class="language-bash">tail -f storage/logs/laravel.log
+sudo chown -R www-data:www-data storage bootstrap/cache
+sudo chmod -R 775 storage bootstrap/cache</code></pre></div>
+          </div>
+        </details>
+
+        <details class="rounded-xl border border-red-200 dark:border-red-500/30 bg-white dark:bg-slate-800/50">
+          <summary class="p-4 font-semibold text-red-600 dark:text-red-400"><i class="bi bi-chevron-right chev mr-2"></i>CSS/JS ไม่โหลด</summary>
+          <div class="px-5 pb-5 text-sm">
+            <div class="code-wrap"><pre><code class="language-bash">npm run build
+php artisan view:clear</code></pre></div>
+            <p class="text-slate-500 mt-2">ตรวจ <code>APP_URL</code> ตรงกับโดเมนจริง</p>
+          </div>
+        </details>
+
+        <details class="rounded-xl border border-red-200 dark:border-red-500/30 bg-white dark:bg-slate-800/50">
+          <summary class="p-4 font-semibold text-red-600 dark:text-red-400"><i class="bi bi-chevron-right chev mr-2"></i>Table doesn't exist</summary>
+          <div class="px-5 pb-5 text-sm">
+            <div class="code-wrap"><pre><code class="language-bash">php artisan migrate --force
+php artisan migrate:status</code></pre></div>
+          </div>
+        </details>
+
+        <details class="rounded-xl border border-red-200 dark:border-red-500/30 bg-white dark:bg-slate-800/50">
+          <summary class="p-4 font-semibold text-red-600 dark:text-red-400"><i class="bi bi-chevron-right chev mr-2"></i>ส่งเมลไม่ได้</summary>
+          <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-400 space-y-1">
+            <p>• Gmail ต้องใช้ App Password ไม่ใช่รหัสจริง</p>
+            <p>• ตรวจ <code>MAIL_ENCRYPTION=tls</code> + port 587</p>
+            <p>• ทดสอบ: <code>php artisan tinker</code> → <code>Mail::raw('test', fn($m) =&gt; $m-&gt;to('you@x.com')-&gt;subject('t'));</code></p>
+          </div>
+        </details>
+
+        <details class="rounded-xl border border-red-200 dark:border-red-500/30 bg-white dark:bg-slate-800/50">
+          <summary class="p-4 font-semibold text-red-600 dark:text-red-400"><i class="bi bi-chevron-right chev mr-2"></i>Webhook Stripe ไม่ทำงาน</summary>
+          <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-400 space-y-1">
+            <p>• ตรวจ <code>STRIPE_WEBHOOK_SECRET</code> ตรงกับ dashboard</p>
+            <p>• Route <code>/webhook/stripe</code> ต้องไม่ผ่าน CSRF middleware</p>
+            <p>• ดู <code>storage/logs/laravel.log</code></p>
+          </div>
+        </details>
+
+        <details class="rounded-xl border border-red-200 dark:border-red-500/30 bg-white dark:bg-slate-800/50">
+          <summary class="p-4 font-semibold text-red-600 dark:text-red-400"><i class="bi bi-chevron-right chev mr-2"></i>Upload รูปแล้วไม่แสดง</summary>
+          <div class="px-5 pb-5 text-sm">
+            <div class="code-wrap"><pre><code class="language-bash">php artisan storage:link
+ls -la public/storage       # ต้องเห็น symlink</code></pre></div>
+          </div>
+        </details>
+
+        <details class="rounded-xl border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-slate-800/50">
+          <summary class="p-4 font-semibold text-amber-700 dark:text-amber-400"><i class="bi bi-chevron-right chev mr-2"></i>LINE OAuth: 400 Bad Request "Invalid redirect_uri value"</summary>
+          <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-400 space-y-2">
+            <p><strong>สาเหตุ</strong>: <code>APP_URL</code> ใน <code>.env</code> ไม่ตรงกับ host ที่ browse จริง — LINE เช็ค redirect_uri แบบ exact string match</p>
+            <p><strong>ต้องตรงกัน 3 จุด</strong>:</p>
+            <ul class="list-disc list-inside ml-2 space-y-0.5">
+              <li><code>.env</code> → <code>APP_URL</code></li>
+              <li>URL ใน browser (อย่าผสม <code>localhost</code> กับ <code>127.0.0.1</code>)</li>
+              <li>LINE Developers Console → Callback URL</li>
+            </ul>
+            <div class="code-wrap mt-2"><pre><code class="language-bash">php artisan config:clear
+php artisan cache:clear
+# แล้ว copy URI จาก /admin/settings/social-auth ไปใส่ใน LINE Developers Console</code></pre></div>
+            <p class="mt-2">⚠️ ตรวจว่าใช้ <strong>LINE Login Channel</strong> (ไม่ใช่ Messaging API Channel) — ไม่งั้น 400 ตลอด</p>
+          </div>
+        </details>
+
+        <details class="rounded-xl border border-indigo-200 dark:border-indigo-500/30 bg-white dark:bg-slate-800/50">
+          <summary class="p-4 font-semibold text-indigo-700 dark:text-indigo-400"><i class="bi bi-chevron-right chev mr-2"></i>ใส่ OAuth ใน .env แล้วไม่ทำงาน</summary>
+          <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-400 space-y-2">
+            <p>ตั้งแต่ v1.1 credentials ของ Google/LINE/Apple ถูกย้ายจาก <code>.env</code> ไปที่ <code>app_settings</code> table แล้ว</p>
+            <p>→ ต้องตั้งที่ <code>/admin/settings/social-auth</code> (มีเพียง Facebook ที่ยังอ่าน <code>.env</code> แบบ fallback ได้)</p>
+            <p>ถ้าเพิ่งอัปเกรดจาก v1.0 ลองย้ายค่าจาก .env ผ่าน tinker:</p>
+            <div class="code-wrap mt-2"><pre><code class="language-php">\App\Models\AppSetting::set('social_auth', 'google_client_id', env('GOOGLE_CLIENT_ID'));
+\App\Models\AppSetting::set('social_auth', 'google_client_secret', env('GOOGLE_CLIENT_SECRET'));
+\App\Models\AppSetting::set('social_auth', 'line_channel_id', env('LINE_CHANNEL_ID'));
+\App\Models\AppSetting::set('social_auth', 'line_channel_secret', env('LINE_CHANNEL_SECRET'));</code></pre></div>
+          </div>
+        </details>
+
+        <details class="rounded-xl border border-red-200 dark:border-red-500/30 bg-white dark:bg-slate-800/50">
+          <summary class="p-4 font-semibold text-red-600 dark:text-red-400"><i class="bi bi-chevron-right chev mr-2"></i>Queue ไม่ process</summary>
+          <div class="px-5 pb-5 text-sm">
+            <div class="code-wrap"><pre><code class="language-bash">sudo supervisorctl status
+sudo supervisorctl restart photo-gallery-worker:*
+tail -f /var/log/photo-gallery-worker.log</code></pre></div>
+          </div>
+        </details>
+
+        <details class="rounded-xl border border-red-200 dark:border-red-500/30 bg-white dark:bg-slate-800/50">
+          <summary class="p-4 font-semibold text-red-600 dark:text-red-400"><i class="bi bi-chevron-right chev mr-2"></i>security_rate_limits doesn't exist</summary>
+          <div class="px-5 pb-5 text-sm">
+            <div class="code-wrap"><pre><code class="language-bash">php artisan migrate --path=database/migrations/2026_04_17_120000_create_security_rate_limits_table.php --force</code></pre></div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="mt-16 pt-8 border-t border-slate-200 dark:border-slate-800 text-center text-sm text-slate-500">
+      <p class="mb-2"><i class="bi bi-camera-fill text-brand-500"></i> Photo Gallery Installation Guide · v1.1</p>
+      <p class="text-xs">อัปเดตล่าสุด 2026-04-19 · ใช้เวลาติดตั้งทั้งหมดประมาณ 2-3 ชั่วโมง</p>
+      <div class="mt-4 flex items-center justify-center gap-3">
+        <a href="/docs/INSTALLATION.md" class="text-brand-600 hover:underline text-xs"><i class="bi bi-file-earmark-text"></i> เวอร์ชัน Markdown</a>
+        <span class="text-slate-300">·</span>
+        <button onclick="window.print()" class="text-brand-600 hover:underline text-xs"><i class="bi bi-printer"></i> พิมพ์</button>
+        <span class="text-slate-300">·</span>
+        <a href="#" class="text-brand-600 hover:underline text-xs"><i class="bi bi-arrow-up"></i> กลับขึ้นบน</a>
+      </div>
+    </footer>
+
+  </main>
+</div>
+
+<!-- Mobile sidebar overlay -->
+<div id="sidebarOverlay" class="hidden fixed inset-0 bg-black/50 z-20 lg:hidden"></div>
+
+<!-- ═══ Prism + Scripts ═══ -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-ini.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-php.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-nginx.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-markup.min.js"></script>
+
+<script>
+// Theme toggle
+(function(){
+  const saved = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  if (saved === 'dark') document.documentElement.classList.add('dark');
+  document.getElementById('btnTheme').addEventListener('click', () => {
+    document.documentElement.classList.toggle('dark');
+    localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+  });
+})();
+
+// Mobile sidebar
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('sidebarOverlay');
+document.getElementById('btnSidebar').addEventListener('click', () => {
+  sidebar.classList.toggle('hidden');
+  overlay.classList.toggle('hidden');
+});
+overlay.addEventListener('click', () => {
+  sidebar.classList.add('hidden');
+  overlay.classList.add('hidden');
+});
+
+// Copy buttons
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.innerHTML = '<i class="bi bi-clipboard"></i> Copy';
+  btn.addEventListener('click', () => {
+    const code = pre.querySelector('code').innerText;
+    navigator.clipboard.writeText(code).then(() => {
+      btn.innerHTML = '<i class="bi bi-check2"></i> Copied!';
+      setTimeout(() => { btn.innerHTML = '<i class="bi bi-clipboard"></i> Copy'; }, 1800);
+    });
+  });
+  const wrap = pre.closest('.code-wrap');
+  if (wrap) wrap.appendChild(btn);
+});
+
+// Scroll spy TOC
+const sections = document.querySelectorAll('main section[id]');
+const tocLinks = document.querySelectorAll('.toc-link');
+const spy = () => {
+  let current = '';
+  sections.forEach(s => {
+    const top = s.getBoundingClientRect().top;
+    if (top < 120) current = s.id;
+  });
+  tocLinks.forEach(l => {
+    l.classList.toggle('active', l.getAttribute('href') === '#' + current);
+  });
+};
+window.addEventListener('scroll', spy, { passive: true });
+spy();
+
+// Close mobile sidebar on link click
+tocLinks.forEach(l => l.addEventListener('click', () => {
+  if (window.innerWidth < 1024) {
+    sidebar.classList.add('hidden');
+    overlay.classList.add('hidden');
+  }
+}));
+
+// Search (client-side, highlight sections)
+const searchInput = document.getElementById('searchInput');
+if (searchInput) {
+  searchInput.addEventListener('input', e => {
+    const q = e.target.value.trim().toLowerCase();
+    sections.forEach(s => {
+      if (!q) { s.style.display = ''; return; }
+      s.style.display = s.innerText.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
+}
+
+// Checklist progress
+const checkboxes = document.querySelectorAll('#checklistWrap input[type="checkbox"]');
+const progressBar = document.getElementById('progressBar');
+const progressText = document.getElementById('progressText');
+
+function updateProgress() {
+  const total = checkboxes.length;
+  const done = [...checkboxes].filter(c => c.checked).length;
+  const pct = total ? (done/total*100) : 0;
+  progressBar.style.width = pct + '%';
+  progressText.textContent = `${done} / ${total}`;
+  localStorage.setItem('checklist', JSON.stringify([...checkboxes].map(c => c.checked)));
+}
+
+// Restore checklist
+try {
+  const saved = JSON.parse(localStorage.getItem('checklist') || '[]');
+  checkboxes.forEach((c, i) => { if (saved[i]) c.checked = true; });
+} catch(e){}
+
+checkboxes.forEach(c => c.addEventListener('change', updateProgress));
+updateProgress();
+</script>
+
+</body>
+</html>

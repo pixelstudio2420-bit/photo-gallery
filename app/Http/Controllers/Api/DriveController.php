@@ -1,0 +1,267 @@
+<?php
+namespace App\Http\Controllers\Api;
+use App\Http\Controllers\Controller;
+use App\Models\AppSetting;
+use App\Services\GoogleDriveService;
+use App\Models\Event;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+
+class DriveController extends Controller
+{
+    public function listPhotos($eventId) {
+        $event = Event::findOrFail($eventId);
+
+        // Admin-tunable client cache window (defaults to 60s).
+        // Uses stale-while-revalidate at 2× to keep the UX snappy while
+        // still picking up new uploads soon after they happen.
+        $cacheSeconds = max(0, min(3600, (int) AppSetting::get('photo_gallery_cache_seconds', 60)));
+        $swrSeconds   = max(30, $cacheSeconds * 2);
+
+        // ── Try Google Drive first (if folder is linked + SA configured) ──
+        if ($event->drive_folder_id) {
+            $drive = new GoogleDriveService();
+            if ($drive->hasServiceAccount()) {
+                try {
+                    $result  = $drive->listFolderFilesWithSWR($event->drive_folder_id, $event->id);
+                    $source  = $result['source'] ?? 'live';
+                    $headers = $drive->getCacheHeaders($source);
+
+                    $photos = array_map(fn($p) => [
+                        'id'            => $p['id'] ?? '',
+                        'name'          => $p['name'] ?? '',
+                        'thumbnailLink' => $p['thumbnailLink'] ?? $p['thumbnail'] ?? '',
+                        'fallback'      => $p['fallback'] ?? '',
+                        'source'        => 'drive',
+                    ], $result['photos'] ?? []);
+
+                    if (!empty($photos)) {
+                        return response()->json([
+                            'files'  => $photos,
+                            'count'  => $result['total'] ?? count($photos),
+                            'source' => $source,
+                        ], 200, $headers);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Drive API failed, falling back to DB: ' . $e->getMessage());
+                }
+            }
+        }
+
+        // ── Fallback: load from event_photos table (uploaded / imported) ──
+        // Cache the transformed payload briefly so a spike of concurrent
+        // gallery viewers doesn't all hit the DB — the public show page
+        // fires this endpoint on every visit. Cache TTL is tied to the
+        // admin's photo_gallery_cache_seconds so "clear cache" from the
+        // settings page gives a predictable invalidation window.
+        $cacheKey = "gallery_photos_v1_{$event->id}";
+        $ttl      = max(5, $cacheSeconds);
+
+        $photos = Cache::remember($cacheKey, $ttl, function () use ($event) {
+            return \App\Models\EventPhoto::where('event_id', $event->id)
+                ->where('status', 'active')
+                ->orderBy('sort_order')
+                ->orderByDesc('created_at')
+                ->get()
+                ->map(fn($p) => [
+                    'id'            => (string) $p->id,
+                    'name'          => $p->original_filename ?? $p->filename,
+                    'thumbnailLink' => $p->thumbnail_url,
+                    'watermarked'   => $p->watermarked_url,
+                    'fallback'      => $p->thumbnail_url,
+                    'source'        => $p->source ?? 'upload',
+                    'width'         => $p->width,
+                    'height'        => $p->height,
+                ])
+                ->values()
+                ->toArray();
+        });
+
+        return response()->json([
+            'files'  => $photos,
+            'count'  => count($photos),
+            'source' => 'database',
+        ], 200, [
+            'Cache-Control' => "public, max-age={$cacheSeconds}, stale-while-revalidate={$swrSeconds}",
+            'X-Cache-TTL'   => (string) $ttl,
+        ]);
+    }
+
+    public function proxyImage(Request $request, $fileId) {
+        $size = (int) $request->input('sz', 400);
+        $size = max(100, min(1600, $size));
+
+        // ── 1. R2 / S3 / local — numeric ID ⇒ EventPhoto PK ─────────────
+        // The endpoint name is historical ("drive proxy"); it's now the
+        // universal image-resolver for gallery & download-page previews,
+        // so it also has to handle R2-native uploads where the ID the
+        // client passes is the EventPhoto primary key (drive_file_id is
+        // NULL on those rows).
+        //
+        // Small sizes → thumbnail (cheaper, CDN-friendly). Larger sizes
+        // → watermarked variant (customer-safe preview on the public
+        // gallery). Falls back to original only when neither exists.
+        if (ctype_digit((string) $fileId)) {
+            $photo = \App\Models\EventPhoto::find((int) $fileId);
+            if ($photo) {
+                $url = $size <= 500
+                    ? ($photo->thumbnail_url ?: $photo->watermarked_url ?: $photo->original_url)
+                    : ($photo->watermarked_url ?: $photo->thumbnail_url ?: $photo->original_url);
+
+                if (!empty($url)) {
+                    // R2 `pub-xxx.r2.dev` and custom domains are CDN-fronted
+                    // already, so a 302 sends the browser straight to the
+                    // edge — zero app-server bandwidth.
+                    return redirect()->away($url, 302);
+                }
+            }
+        }
+
+        // ── 2. Legacy Google Drive path ─────────────────────────────────
+        $cacheKey = "drive_thumb_{$fileId}_{$size}";
+
+        // Return from cache if available (cached for 1 hour)
+        $cached = \Illuminate\Support\Facades\Cache::get($cacheKey);
+        if ($cached) {
+            return response($cached['body'], 200, [
+                'Content-Type'  => $cached['type'],
+                'Cache-Control' => 'public, max-age=3600',
+                'X-Cache'       => 'HIT',
+            ]);
+        }
+
+        $drive = new GoogleDriveService();
+
+        // Try authenticated thumbnail via Google Drive API
+        if ($drive->hasServiceAccount()) {
+            try {
+                $token = $drive->getAccessToken();
+                $url   = "https://www.googleapis.com/drive/v3/files/{$fileId}?fields=thumbnailLink";
+                $meta  = \Illuminate\Support\Facades\Http::withToken($token)->get($url);
+
+                if ($meta->ok() && !empty($meta->json('thumbnailLink'))) {
+                    $thumbUrl = preg_replace('/=s\d+/', '=s' . $size, $meta->json('thumbnailLink'));
+                    $imgResp  = \Illuminate\Support\Facades\Http::timeout(10)->get($thumbUrl);
+
+                    if ($imgResp->ok()) {
+                        $body = $imgResp->body();
+                        $type = $imgResp->header('Content-Type', 'image/jpeg');
+
+                        // Cache for 1 hour (only cache small sizes to save memory)
+                        if ($size <= 800 && strlen($body) < 500000) {
+                            \Illuminate\Support\Facades\Cache::put($cacheKey, ['body' => $body, 'type' => $type], 3600);
+                        }
+
+                        return response($body, 200, [
+                            'Content-Type'  => $type,
+                            'Cache-Control' => 'public, max-age=3600',
+                            'X-Cache'       => 'MISS',
+                        ]);
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Drive proxy auth failed: ' . $e->getMessage());
+            }
+        }
+
+        // Fallback: redirect to public thumbnail URL (legacy Drive-only)
+        return redirect("https://drive.google.com/thumbnail?id={$fileId}&sz=w{$size}");
+    }
+
+    /**
+     * Handle Google Drive push notification webhooks.
+     *
+     * Google sends push notifications with these headers:
+     *   X-Goog-Channel-ID     — channel ID registered during watch()
+     *   X-Goog-Resource-ID    — opaque resource ID
+     *   X-Goog-Resource-State — 'sync' (initial handshake) or 'update' / 'add' / 'remove' / 'trash'
+     *   X-Goog-Resource-URI   — URI of the resource that changed
+     *   X-Goog-Message-Number — incrementing message counter
+     *   X-Goog-Channel-Token  — optional token set during watch() for verification
+     */
+    public function webhook(Request $request)
+    {
+        $channelId     = $request->header('X-Goog-Channel-ID');
+        $resourceId    = $request->header('X-Goog-Resource-ID');
+        $resourceState = $request->header('X-Goog-Resource-State');
+        $resourceUri   = $request->header('X-Goog-Resource-URI');
+        $messageNumber = $request->header('X-Goog-Message-Number');
+        $channelToken  = $request->header('X-Goog-Channel-Token');
+
+        Log::info('Google Drive webhook received', [
+            'channel_id'     => $channelId,
+            'resource_id'    => $resourceId,
+            'resource_state' => $resourceState,
+            'resource_uri'   => $resourceUri,
+            'message_number' => $messageNumber,
+            'channel_token'  => $channelToken,
+            'body'           => $request->getContent(),
+        ]);
+
+        // 'sync' is just Google's initial handshake — acknowledge and return
+        if ($resourceState === 'sync') {
+            Log::info('Google Drive webhook: sync handshake acknowledged', ['channel_id' => $channelId]);
+            return response()->json(['ok' => true, 'state' => 'sync']);
+        }
+
+        // For update/add/remove/trash, find the event by channel ID and queue a re-sync
+        if (in_array($resourceState, ['update', 'add', 'remove', 'trash'], true)) {
+            // channel_id was set as the event's drive_folder_id (or a dedicated channel token)
+            // Try to find a matching event
+            $event = null;
+
+            if ($channelToken) {
+                // Token may be "event_{id}" or just the event id
+                $tokenId = str_replace('event_', '', $channelToken);
+                $event   = Event::find((int) $tokenId);
+            }
+
+            if (!$event && $channelId) {
+                // Fall back: channel ID may equal drive_folder_id
+                $event = Event::where('drive_folder_id', $channelId)->first();
+            }
+
+            if ($event) {
+                // Queue a re-sync job via the sync_queue table
+                // Schema: job_type, event_id, folder_id, status, priority, attempts, max_attempts, created_at, updated_at
+                try {
+                    $existing = DB::table('sync_queue')
+                        ->where('event_id', $event->id)
+                        ->whereIn('status', ['pending', 'running'])
+                        ->exists();
+
+                    if (!$existing) {
+                        DB::table('sync_queue')->insert([
+                            'job_type'     => 'drive_sync',
+                            'event_id'     => $event->id,
+                            'folder_id'    => $event->drive_folder_id,
+                            'status'       => 'pending',
+                            'priority'     => 1,
+                            'attempts'     => 0,
+                            'max_attempts' => 3,
+                            'created_at'   => now(),
+                            'updated_at'   => now(),
+                        ]);
+                        Log::info("Google Drive webhook: queued re-sync for event #{$event->id}", [
+                            'state'     => $resourceState,
+                            'folder_id' => $event->drive_folder_id,
+                        ]);
+                    } else {
+                        Log::info("Google Drive webhook: re-sync already pending for event #{$event->id}, skipping");
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('Google Drive webhook: failed to queue sync job', ['error' => $e->getMessage()]);
+                }
+            } else {
+                Log::warning('Google Drive webhook: could not resolve event from channel', [
+                    'channel_id'    => $channelId,
+                    'channel_token' => $channelToken,
+                ]);
+            }
+        }
+
+        return response()->json(['ok' => true, 'state' => $resourceState]);
+    }
+}

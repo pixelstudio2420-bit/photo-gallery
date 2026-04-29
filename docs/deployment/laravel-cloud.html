@@ -1,0 +1,1814 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🔴 Laravel Cloud — Step-by-Step Guide | Photo Gallery</title>
+<meta name="description" content="คู่มือ deploy Photo Gallery บน Laravel Cloud แบบ step-by-step — zero-ops PaaS อย่างเป็นทางการจากทีม Laravel">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --laravel: #FF2D20;
+    --laravel-dark: #c0210d;
+    --laravel-light: #ffe4e1;
+  }
+  html { scroll-behavior: smooth; scroll-padding-top: 2rem; }
+  body { font-family: 'Prompt', ui-sans-serif, system-ui, sans-serif; }
+  code, pre { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+  .hero-bg {
+    background:
+      radial-gradient(ellipse 70% 40% at 50% 0%, rgba(255,45,32,0.35) 0%, transparent 60%),
+      radial-gradient(ellipse at bottom right, #450a0a 0%, #0f172a 75%);
+  }
+  .brand-text { color: #fca5a5; }
+  .brand-bg { background-color: #FF2D20; }
+  .brand-bg:hover { background-color: #c0210d; }
+
+  .code-block {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    font-size: 0.875rem;
+    line-height: 1.7;
+    border: 1px solid #1e293b;
+    position: relative;
+  }
+  .code-block .comment { color: #64748b; font-style: italic; }
+  .code-block .keyword { color: #c084fc; }
+  .code-block .string  { color: #fbbf24; }
+  .code-block .cmd     { color: #4ade80; }
+  .code-block .flag    { color: #60a5fa; }
+  .code-block .path    { color: #f472b6; }
+  .code-block .prompt  { color: #94a3b8; user-select: none; }
+  .code-block .env-key { color: #93c5fd; }
+  .code-block .env-val { color: #fbbf24; }
+
+  .copy-btn {
+    position: absolute; top: 0.5rem; right: 0.5rem;
+    background: #1e293b; color: #94a3b8;
+    border: 1px solid #334155;
+    padding: 0.25rem 0.625rem; border-radius: 0.375rem;
+    font-size: 0.75rem; cursor: pointer;
+    font-family: 'Prompt', sans-serif;
+    opacity: 0; transition: opacity .15s;
+  }
+  .code-block:hover .copy-btn { opacity: 1; }
+  .copy-btn:hover { background: #334155; color: #f1f5f9; }
+  .copy-btn.copied { background: #065f46; color: #a7f3d0; border-color: #059669; }
+
+  .sidebar-link {
+    display: block; padding: 0.375rem 0.75rem;
+    border-radius: 0.375rem; color: #475569;
+    font-size: 0.875rem; transition: all .15s;
+    border-left: 2px solid transparent;
+  }
+  .sidebar-link:hover { background: #fef2f2; color: #c0210d; }
+  .sidebar-link.active {
+    color: #c0210d; background: #fef2f2;
+    border-left-color: #FF2D20; font-weight: 500;
+  }
+
+  .callout { border-left: 4px solid; padding: 1rem 1.25rem; border-radius: 0.5rem; margin: 1rem 0; }
+  .callout-info    { background: #eff6ff; border-color: #3b82f6; color: #1e3a8a; }
+  .callout-warn    { background: #fffbeb; border-color: #f59e0b; color: #78350f; }
+  .callout-danger  { background: #fef2f2; border-color: #ef4444; color: #7f1d1d; }
+  .callout-success { background: #f0fdf4; border-color: #22c55e; color: #14532d; }
+  .callout-tip     { background: #faf5ff; border-color: #a855f7; color: #581c87; }
+  .callout-brand   { background: #fef2f2; border-color: #FF2D20; color: #7f1d1d; }
+
+  .step-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 2.5rem; height: 2.5rem; border-radius: 9999px;
+    background: #FF2D20; color: white; font-weight: 700;
+    font-size: 1rem; margin-right: 0.75rem;
+    box-shadow: 0 4px 12px rgb(255 45 32 / 0.4);
+  }
+  .time-badge {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    background: #f1f5f9; color: #475569;
+    padding: 0.25rem 0.625rem; border-radius: 9999px;
+    font-size: 0.75rem; font-weight: 500;
+  }
+
+  .ui-mockup {
+    background: white; border: 1px solid #e2e8f0;
+    border-radius: 0.5rem; padding: 1rem;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+    font-size: 0.875rem;
+    margin: 0.75rem 0;
+  }
+  .ui-mockup .ui-header {
+    background: #FF2D20; color: white;
+    padding: 0.5rem 1rem; margin: -1rem -1rem 1rem -1rem;
+    border-radius: 0.5rem 0.5rem 0 0;
+    font-weight: 600;
+  }
+  .ui-mockup .ui-row {
+    display: flex; justify-content: space-between;
+    padding: 0.5rem 0; border-bottom: 1px solid #f1f5f9;
+  }
+  .ui-mockup .ui-row:last-child { border-bottom: none; }
+  .ui-mockup .ui-label { color: #64748b; font-size: 0.8125rem; }
+  .ui-mockup .ui-value { font-weight: 500; }
+  .ui-mockup .ui-button {
+    background: #FF2D20; color: white;
+    padding: 0.5rem 1rem; border-radius: 0.375rem;
+    display: inline-block; margin-top: 0.5rem;
+    font-size: 0.8125rem; font-weight: 500;
+  }
+
+  table.info { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+  table.info th, table.info td { padding: 0.75rem; border: 1px solid #e2e8f0; text-align: left; font-size: 0.875rem; }
+  table.info thead th { background: #fef2f2; font-weight: 600; color: #c0210d; }
+  table.info tbody tr:hover { background: #fff5f5; }
+
+  .pill { display: inline-block; padding: 0.125rem 0.625rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+  .pill-time      { background: #e0e7ff; color: #3730a3; }
+  .pill-cost      { background: #fef3c7; color: #92400e; }
+  .pill-req       { background: #fee2e2; color: #991b1b; }
+  .pill-recommend { background: #dcfce7; color: #166534; }
+  .pill-new       { background: #dcfce7; color: #166534; }
+  .pill-thai      { background: #fef3c7; color: #92400e; }
+
+  h2 { scroll-margin-top: 2rem; }
+  h3 { scroll-margin-top: 2rem; }
+
+  @media print {
+    .no-print, aside, .copy-btn { display: none !important; }
+    main { padding: 0 !important; max-width: none !important; }
+  }
+
+  .timeline {
+    position: relative;
+    padding-left: 2rem;
+  }
+  .timeline::before {
+    content: ''; position: absolute;
+    left: 0.875rem; top: 0; bottom: 0;
+    width: 2px; background: linear-gradient(to bottom, #FF2D20 0%, #fca5a5 100%);
+  }
+  .timeline-item {
+    position: relative;
+    margin-bottom: 2rem;
+  }
+  .timeline-item::before {
+    content: ''; position: absolute;
+    left: -1.75rem; top: 0.25rem;
+    width: 1rem; height: 1rem;
+    border-radius: 9999px;
+    background: #FF2D20;
+    border: 3px solid white;
+    box-shadow: 0 0 0 2px #FF2D20;
+  }
+
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem;
+    margin: 1rem 0;
+  }
+  .feature-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    transition: all .15s;
+  }
+  .feature-card:hover {
+    border-color: #FF2D20;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px -4px rgb(255 45 32 / 0.15);
+  }
+  .feature-card .icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  .feature-card .label { font-weight: 600; color: #1e293b; font-size: 0.875rem; margin-bottom: 0.25rem; }
+  .feature-card .desc { font-size: 0.75rem; color: #64748b; line-height: 1.4; }
+
+  .cost-row {
+    display: flex; justify-content: space-between;
+    padding: 0.625rem 0;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .cost-row:last-child { border-bottom: none; }
+  .cost-row .item { color: #475569; }
+  .cost-row .price { font-weight: 600; color: #1e293b; }
+  .cost-total {
+    background: #fef2f2; padding: 0.875rem 1rem;
+    border-radius: 0.5rem; margin-top: 0.5rem;
+    display: flex; justify-content: space-between;
+    font-weight: 700; color: #c0210d;
+    border: 1px solid #fecaca;
+  }
+
+  .compare-pros, .compare-cons {
+    padding: 1rem 1.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid;
+  }
+  .compare-pros { background: #f0fdf4; border-color: #bbf7d0; color: #14532d; }
+  .compare-cons { background: #fef2f2; border-color: #fecaca; color: #7f1d1d; }
+  .compare-pros h4, .compare-cons h4 {
+    font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;
+  }
+  .compare-pros ul li, .compare-cons ul li {
+    padding-left: 1.5rem; position: relative; margin: 0.375rem 0;
+    font-size: 0.875rem;
+  }
+  .compare-pros ul li::before { content: '✓'; position: absolute; left: 0; color: #22c55e; font-weight: 700; }
+  .compare-cons ul li::before { content: '✗'; position: absolute; left: 0; color: #ef4444; font-weight: 700; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+
+<!-- ═══ HERO ═══ -->
+<header class="hero-bg text-white">
+  <div class="max-w-7xl mx-auto px-6 py-16 md:py-20">
+    <div class="flex items-center gap-3 mb-4">
+      <a href="../index.html" class="text-red-300 hover:text-white text-sm flex items-center gap-1">
+        ← กลับไปยัง Documentation Hub
+      </a>
+    </div>
+    <div class="flex items-center gap-2 text-red-300 text-sm mb-4">
+      <span>🔴</span>
+      <span>OFFICIAL LARAVEL PaaS</span>
+      <span class="mx-2">•</span>
+      <span>Zero-Ops Deployment</span>
+    </div>
+    <h1 class="text-4xl md:text-6xl font-bold mb-4 leading-tight">
+      Deploy บน <span class="brand-text">Laravel Cloud</span><br>
+      แบบ Step-by-Step
+    </h1>
+    <p class="text-lg md:text-xl text-slate-300 max-w-3xl mb-6">
+      <strong class="text-white">git push = deploy</strong> ·
+      <strong class="text-white">auto-scale</strong> ·
+      <strong class="text-white">zero server config</strong> · ใช้เวลา ~25 นาที
+    </p>
+    <div class="flex flex-wrap gap-3 mb-6">
+      <a href="#step-1" class="bg-white text-slate-900 hover:bg-slate-100 px-5 py-2.5 rounded-lg font-medium transition">เริ่มต้น →</a>
+      <a href="#timeline" class="brand-bg text-white px-5 py-2.5 rounded-lg font-medium transition">ดู Timeline</a>
+      <a href="#cost" class="bg-slate-800 hover:bg-slate-700 px-5 py-2.5 rounded-lg font-medium transition">💰 ราคา</a>
+      <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-700 px-5 py-2.5 rounded-lg font-medium transition no-print">🖨 พิมพ์</button>
+    </div>
+    <div class="flex flex-wrap gap-4 text-sm">
+      <div class="flex items-center gap-2 bg-white/10 backdrop-blur px-3 py-1.5 rounded-lg">
+        <span class="text-red-300">⏱</span>
+        <span>~25 นาที รวม</span>
+      </div>
+      <div class="flex items-center gap-2 bg-white/10 backdrop-blur px-3 py-1.5 rounded-lg">
+        <span class="text-red-300">💰</span>
+        <span>~฿1,050-1,400/เดือน</span>
+      </div>
+      <div class="flex items-center gap-2 bg-white/10 backdrop-blur px-3 py-1.5 rounded-lg">
+        <span class="text-red-300">📍</span>
+        <span>Singapore (AWS)</span>
+      </div>
+      <div class="flex items-center gap-2 bg-white/10 backdrop-blur px-3 py-1.5 rounded-lg">
+        <span class="text-red-300">⚡</span>
+        <span>Auto-scale + Edge</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="max-w-7xl mx-auto px-6 flex gap-8 py-8">
+
+<!-- ═══ SIDEBAR ═══ -->
+<aside class="no-print hidden lg:block w-64 flex-shrink-0">
+  <nav class="sticky top-4 space-y-1">
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-4 mb-2 px-3">ภาพรวม</div>
+    <a href="#timeline" class="sidebar-link">📅 Timeline</a>
+    <a href="#why" class="sidebar-link">🎯 ทำไมต้อง Cloud</a>
+    <a href="#prerequisites" class="sidebar-link">✅ สิ่งที่ต้องเตรียม</a>
+
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-4 mb-2 px-3">เตรียมโปรเจค</div>
+    <a href="#step-1" class="sidebar-link">1. Push code ขึ้น GitHub</a>
+    <a href="#step-2" class="sidebar-link">2. แก้ config สำหรับ Cloud</a>
+    <a href="#step-3" class="sidebar-link">3. Export DB จาก Hostinger</a>
+
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-4 mb-2 px-3">Setup Cloud</div>
+    <a href="#step-4" class="sidebar-link">4. สมัคร + เชื่อม GitHub</a>
+    <a href="#step-5" class="sidebar-link">5. สร้าง App + Database</a>
+    <a href="#step-6" class="sidebar-link">6. Import DB</a>
+    <a href="#step-7" class="sidebar-link">7. ตั้งค่า ENV</a>
+
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-4 mb-2 px-3">Deploy</div>
+    <a href="#step-8" class="sidebar-link">8. First Deploy</a>
+    <a href="#step-9" class="sidebar-link">9. Scheduler + Queue</a>
+    <a href="#step-10" class="sidebar-link">10. Domain + SSL</a>
+    <a href="#step-11" class="sidebar-link">11. Update Webhooks</a>
+
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-4 mb-2 px-3">หลัง Deploy</div>
+    <a href="#post-deploy" class="sidebar-link">✅ Checklist</a>
+    <a href="#cutover" class="sidebar-link">🔄 Cutover Plan</a>
+    <a href="#rollback" class="sidebar-link">↩ Rollback</a>
+    <a href="#cost" class="sidebar-link">💰 ค่าใช้จ่าย</a>
+    <a href="#troubleshooting" class="sidebar-link">🔧 Troubleshooting</a>
+    <a href="#faq" class="sidebar-link">❓ FAQ</a>
+  </nav>
+</aside>
+
+<!-- ═══ MAIN CONTENT ═══ -->
+<main class="flex-1 min-w-0 space-y-12">
+
+<!-- ── TIMELINE ── -->
+<section id="timeline">
+  <h2 class="text-2xl md:text-3xl font-bold mb-2">📅 Timeline ภาพรวม</h2>
+  <p class="text-slate-600 mb-6">ขั้นตอนทั้งหมดใช้เวลาประมาณ <strong>25-35 นาที</strong> (ไม่รวมเวลา DNS propagate)</p>
+
+  <div class="timeline">
+    <div class="timeline-item">
+      <h3 class="font-bold">เตรียมโปรเจค <span class="time-badge">~5 นาที</span></h3>
+      <p class="text-sm text-slate-600">Push code ขึ้น GitHub, แก้ <code class="code-inline" style="background:#1e293b;color:#e2e8f0;padding:0.125rem 0.375rem;border-radius:0.25rem;font-size:0.8125rem;">config/database.php</code> ให้รองรับ MySQL, export ข้อมูลจาก MariaDB</p>
+    </div>
+    <div class="timeline-item">
+      <h3 class="font-bold">Setup Laravel Cloud <span class="time-badge">~10 นาที</span></h3>
+      <p class="text-sm text-slate-600">สมัครบัญชี, เชื่อม GitHub, สร้าง app + database, ตั้งค่า environment variables ทั้งหมด</p>
+    </div>
+    <div class="timeline-item">
+      <h3 class="font-bold">Deploy + Migrate <span class="time-badge">~5 นาที</span></h3>
+      <p class="text-sm text-slate-600">Cloud auto-builds, รัน migrations, import data จาก dump file</p>
+    </div>
+    <div class="timeline-item">
+      <h3 class="font-bold">เชื่อม Domain + Webhooks <span class="time-badge">~5 นาที</span></h3>
+      <p class="text-sm text-slate-600">ชี้ DNS ของ <code class="code-inline" style="background:#1e293b;color:#e2e8f0;padding:0.125rem 0.375rem;border-radius:0.25rem;font-size:0.8125rem;">jabphap.com</code>, อัพเดท callback URL ของ LINE/Stripe/Omise</p>
+    </div>
+    <div class="timeline-item">
+      <h3 class="font-bold">DNS Propagate + ทดสอบ <span class="time-badge">~5-30 นาที</span></h3>
+      <p class="text-sm text-slate-600">รอ DNS แพร่ทั่วโลก แล้วทดสอบทุกระบบ — booking, LINE, payment, R2</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── WHY LARAVEL CLOUD ── -->
+<section id="why">
+  <h2 class="text-2xl md:text-3xl font-bold mb-2">🎯 ทำไมต้อง Laravel Cloud สำหรับโปรเจคนี้</h2>
+  <p class="text-slate-600 mb-6">โปรเจคนี้มีหลายอย่างที่ shared hosting ทำได้ลำบาก แต่ Cloud จัดการให้แบบ first-class</p>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="icon">⏰</div>
+      <div class="label">Scheduler ตรงเวลา</div>
+      <div class="desc">Cron <code style="font-size:0.7rem;">bookings:send-reminders</code> ทุก 5 นาทีที่ไม่ drift ไม่ overlap</div>
+    </div>
+    <div class="feature-card">
+      <div class="icon">📨</div>
+      <div class="label">Queue Worker</div>
+      <div class="desc">LINE push, payment webhooks ย้ายไป async ได้ทันที</div>
+    </div>
+    <div class="feature-card">
+      <div class="icon">🚀</div>
+      <div class="label">git push = deploy</div>
+      <div class="desc">push main → auto build → auto migrate → live ใน ~2 นาที</div>
+    </div>
+    <div class="feature-card">
+      <div class="icon">📈</div>
+      <div class="label">Auto-Scale</div>
+      <div class="desc">Traffic spike (เทศกาลรับงานถ่าย) → scale ขึ้นเอง</div>
+    </div>
+    <div class="feature-card">
+      <div class="icon">🔒</div>
+      <div class="label">HTTPS Auto</div>
+      <div class="desc">Let's Encrypt cert auto-renew ไม่มีวันหมดอายุ</div>
+    </div>
+    <div class="feature-card">
+      <div class="icon">🌏</div>
+      <div class="label">Singapore Region</div>
+      <div class="desc">บน AWS ap-southeast-1 ~30-50ms ไป Bangkok</div>
+    </div>
+    <div class="feature-card">
+      <div class="icon">💾</div>
+      <div class="label">Auto Backup</div>
+      <div class="desc">Database snapshot ทุกวัน เก็บ 7-30 วันตามแผน</div>
+    </div>
+    <div class="feature-card">
+      <div class="icon">📊</div>
+      <div class="label">Built-in Logs</div>
+      <div class="desc">Live tail logs, error tracking, request analytics</div>
+    </div>
+  </div>
+
+  <div class="grid md:grid-cols-2 gap-4 mt-6">
+    <div class="compare-pros">
+      <h4>✅ ข้อดีสำหรับโปรเจคนี้</h4>
+      <ul>
+        <li>Cron + Queue ทำงาน reliable 100% (booking reminders ตรงเวลาแน่นอน)</li>
+        <li>LINE webhook ไม่ timeout ตอน traffic peak</li>
+        <li>Cloudflare R2 + AWS Rekognition — ใช้ต่อได้ไม่ต้องเปลี่ยน</li>
+        <li>Deploy ใหม่ใช้เวลา 2 นาที vs 30 นาทีบน Hostinger</li>
+        <li>ไม่ต้องเจอปัญหา document root อีก (Cloud รู้จัก Laravel)</li>
+        <li>Logs + monitoring built-in ไม่ต้องติด NewRelic/Sentry แยก</li>
+      </ul>
+    </div>
+    <div class="compare-cons">
+      <h4>⚠️ ข้อจำกัด</h4>
+      <ul>
+        <li>แพงกว่า Hostinger 5-10x (~฿1,400 vs ~฿200/เดือน)</li>
+        <li>MariaDB → MySQL/Postgres (ต้อง migrate data)</li>
+        <li>Filesystem ephemeral — ต้องใช้ R2/S3 เก็บไฟล์ทั้งหมด (มีอยู่แล้ว ✓)</li>
+        <li>เปลี่ยน workflow — ใช้ git-based deploy แทน FTP/cPanel</li>
+        <li>Vendor-specific dashboard (แต่ code ยังพอร์ตได้)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ── PREREQUISITES ── -->
+<section id="prerequisites">
+  <h2 class="text-2xl md:text-3xl font-bold mb-2">✅ สิ่งที่ต้องเตรียม</h2>
+
+  <table class="info">
+    <thead>
+      <tr><th>รายการ</th><th>รายละเอียด</th><th>สถานะ</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>GitHub Account</strong></td>
+        <td>โปรเจคต้องอยู่บน GitHub repo (private OK)</td>
+        <td><span class="pill pill-req">บังคับ</span></td>
+      </tr>
+      <tr>
+        <td><strong>บัตรเครดิต</strong></td>
+        <td>ใช้สมัคร Cloud (Visa/Master/AMEX) — มี Sandbox ฟรีก่อน</td>
+        <td><span class="pill pill-req">บังคับ</span></td>
+      </tr>
+      <tr>
+        <td><strong>Domain</strong></td>
+        <td><code style="font-size:0.8rem;">jabphap.com</code> ที่ control DNS ได้ (Cloudflare/Namecheap/etc.)</td>
+        <td><span class="pill pill-req">บังคับ</span></td>
+      </tr>
+      <tr>
+        <td><strong>R2/S3 Credentials</strong></td>
+        <td>มีอยู่แล้วใน <code style="font-size:0.8rem;">.env</code> ปัจจุบัน — copy ไปใช้ต่อได้เลย</td>
+        <td><span class="pill pill-recommend">มีแล้ว ✓</span></td>
+      </tr>
+      <tr>
+        <td><strong>LINE / Stripe / Omise keys</strong></td>
+        <td>API keys ทั้งหมด (Channel Secret, Webhook URL, etc.)</td>
+        <td><span class="pill pill-recommend">มีแล้ว ✓</span></td>
+      </tr>
+      <tr>
+        <td><strong>Database Dump</strong></td>
+        <td>Export <code style="font-size:0.8rem;">mysqldump</code> จาก MariaDB ปัจจุบัน</td>
+        <td><span class="pill pill-time">ทำใน Step 3</span></td>
+      </tr>
+      <tr>
+        <td><strong>Composer + PHP 8.2+ ในเครื่อง</strong></td>
+        <td>สำหรับทดสอบ build ก่อน push</td>
+        <td><span class="pill pill-recommend">มีแล้ว ✓</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-info">
+    <strong>💡 ดูก่อนเริ่ม:</strong> ถ้ายังไม่เคยใช้ Laravel Cloud เลย แนะนำให้สมัคร <strong>Sandbox tier (ฟรี)</strong> ก่อนเพื่อทดลอง deploy แล้วค่อย upgrade เป็น Production tier เมื่อพร้อม
+  </div>
+</section>
+
+<!-- ── STEP 1: GITHUB ── -->
+<section id="step-1">
+  <h2 class="text-2xl md:text-3xl font-bold mb-3 flex items-center">
+    <span class="step-badge">1</span>
+    Push code ขึ้น GitHub
+  </h2>
+  <p class="text-slate-600 mb-4"><span class="time-badge">⏱ ~3 นาที</span></p>
+
+  <p class="mb-3">Laravel Cloud ใช้ GitHub-based deploy เท่านั้น — ดังนั้น code ต้องอยู่บน GitHub repo ก่อน</p>
+
+  <h3 class="font-bold mt-4 mb-2">1.1 สร้าง repo ใหม่บน GitHub</h3>
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>เข้า <a href="https://github.com/new" target="_blank" class="text-red-600 underline">github.com/new</a></li>
+    <li>ชื่อ repo: <code class="code-inline" style="background:#1e293b;color:#e2e8f0;padding:0.125rem 0.375rem;border-radius:0.25rem;">jabphap</code> (หรือชื่ออะไรก็ได้)</li>
+    <li>เลือก <strong>Private</strong> (สำคัญ — มี secrets ใน history)</li>
+    <li>ห้ามเลือก "Add README" — เราจะ push existing project</li>
+  </ol>
+
+  <h3 class="font-bold mt-4 mb-2">1.2 Push code จากเครื่อง local</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><span class="prompt">PS&gt;</span> <span class="cmd">cd</span> <span class="path">C:\xampp\htdocs\photo-gallery-tailwind</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">git</span> init
+<span class="prompt">PS&gt;</span> <span class="cmd">git</span> branch -M main
+<span class="prompt">PS&gt;</span> <span class="cmd">git</span> add .
+<span class="prompt">PS&gt;</span> <span class="cmd">git</span> commit -m <span class="string">"initial commit"</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">git</span> remote add origin git@github.com:YOUR_USERNAME/jabphap.git
+<span class="prompt">PS&gt;</span> <span class="cmd">git</span> push -u origin main</pre>
+  </div>
+
+  <div class="callout callout-warn">
+    <strong>⚠️ สำคัญ:</strong> ตรวจสอบให้แน่ใจว่า <code>.env</code> อยู่ใน <code>.gitignore</code> — <strong>ห้าม commit credentials!</strong>
+    <div class="code-block mt-2">
+<pre><span class="prompt">PS&gt;</span> <span class="cmd">type</span> .gitignore | <span class="cmd">findstr</span> <span class="string">".env"</span>
+<span class="comment"># ควรเห็น: .env</span></pre>
+    </div>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">1.3 ตรวจ <code class="code-inline" style="background:#1e293b;color:#e2e8f0;padding:0.125rem 0.375rem;border-radius:0.25rem;">.gitignore</code> ให้ครบ</h3>
+  <div class="code-block">
+<pre><span class="comment"># ที่ต้องมีอยู่แล้ว (Laravel default)</span>
+/.env
+/.env.backup
+/storage/*.key
+/vendor/
+/node_modules/
+/public/storage
+/storage/app/public/*
+
+<span class="comment"># เพิ่มเติมสำหรับโปรเจคนี้</span>
+/storage/logs/*.log
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/debugbar/*</pre>
+  </div>
+</section>
+
+<!-- ── STEP 2: CONFIG ── -->
+<section id="step-2">
+  <h2 class="text-2xl md:text-3xl font-bold mb-3 flex items-center">
+    <span class="step-badge">2</span>
+    แก้ config สำหรับ Cloud
+  </h2>
+  <p class="text-slate-600 mb-4"><span class="time-badge">⏱ ~5 นาที</span></p>
+
+  <h3 class="font-bold mt-2 mb-2">2.1 เพิ่ม <code class="code-inline" style="background:#1e293b;color:#e2e8f0;padding:0.125rem 0.375rem;border-radius:0.25rem;">cloud.yaml</code> ที่ root</h3>
+  <p class="text-sm text-slate-600 mb-2">Laravel Cloud อ่านไฟล์นี้เพื่อเข้าใจ build steps ของโปรเจค</p>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><span class="env-key">name:</span> <span class="env-val">jabphap</span>
+
+<span class="env-key">environments:</span>
+  <span class="env-key">production:</span>
+    <span class="env-key">php:</span> <span class="env-val">"8.3"</span>
+    <span class="env-key">node:</span> <span class="env-val">"20"</span>
+
+    <span class="env-key">build:</span>
+      <span class="env-val">- composer install --no-dev --optimize-autoloader</span>
+      <span class="env-val">- npm ci</span>
+      <span class="env-val">- npm run build</span>
+      <span class="env-val">- php artisan config:cache</span>
+      <span class="env-val">- php artisan route:cache</span>
+      <span class="env-val">- php artisan view:cache</span>
+      <span class="env-val">- php artisan event:cache</span>
+
+    <span class="env-key">deploy:</span>
+      <span class="env-val">- php artisan migrate --force</span>
+      <span class="env-val">- php artisan storage:link</span>
+      <span class="env-val">- php artisan cache:clear</span>
+
+    <span class="env-key">scheduler:</span>
+      <span class="env-key">enabled:</span> <span class="env-val">true</span>
+
+    <span class="env-key">workers:</span>
+      <span class="env-key">default:</span>
+        <span class="env-key">command:</span> <span class="env-val">php artisan queue:work --queue=default,line,emails --sleep=2 --tries=3 --max-time=3600</span>
+        <span class="env-key">replicas:</span> <span class="env-val">1</span></pre>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">2.2 เช็ค <code class="code-inline" style="background:#1e293b;color:#e2e8f0;padding:0.125rem 0.375rem;border-radius:0.25rem;">config/database.php</code></h3>
+  <p class="text-sm text-slate-600 mb-2">ต้องรองรับ MySQL 8 — Laravel default รองรับอยู่แล้ว แค่เช็ค charset:</p>
+  <div class="code-block">
+<pre><span class="keyword">'mysql'</span> => [
+    <span class="keyword">'driver'</span>          => <span class="string">'mysql'</span>,
+    <span class="keyword">'host'</span>            => env(<span class="string">'DB_HOST'</span>, <span class="string">'127.0.0.1'</span>),
+    <span class="keyword">'port'</span>            => env(<span class="string">'DB_PORT'</span>, <span class="string">'3306'</span>),
+    <span class="keyword">'database'</span>        => env(<span class="string">'DB_DATABASE'</span>),
+    <span class="keyword">'username'</span>        => env(<span class="string">'DB_USERNAME'</span>),
+    <span class="keyword">'password'</span>        => env(<span class="string">'DB_PASSWORD'</span>),
+    <span class="keyword">'charset'</span>         => <span class="string">'utf8mb4'</span>,        <span class="comment">// ✓ รองรับภาษาไทย + emoji</span>
+    <span class="keyword">'collation'</span>       => <span class="string">'utf8mb4_unicode_ci'</span>, <span class="comment">// ✓ ตรงกับ Hostinger</span>
+    <span class="keyword">'prefix'</span>          => <span class="string">''</span>,
+    <span class="keyword">'strict'</span>          => <span class="keyword">true</span>,
+    <span class="keyword">'engine'</span>          => <span class="keyword">null</span>,
+],</pre>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">2.3 เช็ค <code class="code-inline" style="background:#1e293b;color:#e2e8f0;padding:0.125rem 0.375rem;border-radius:0.25rem;">config/filesystems.php</code> — R2</h3>
+  <p class="text-sm text-slate-600 mb-2">โปรเจคนี้ใช้ R2 อยู่แล้ว — แค่ตรวจว่า disk default ไม่ใช่ <code>local</code></p>
+  <div class="code-block">
+<pre><span class="keyword">'default'</span> => env(<span class="string">'FILESYSTEM_DISK'</span>, <span class="string">'r2'</span>),  <span class="comment">// ← ตรงนี้ ไม่ใช่ local</span>
+
+<span class="keyword">'disks'</span> => [
+    <span class="keyword">'r2'</span> => [
+        <span class="keyword">'driver'</span>   => <span class="string">'s3'</span>,
+        <span class="keyword">'key'</span>      => env(<span class="string">'R2_ACCESS_KEY_ID'</span>),
+        <span class="keyword">'secret'</span>   => env(<span class="string">'R2_SECRET_ACCESS_KEY'</span>),
+        <span class="keyword">'region'</span>   => <span class="string">'auto'</span>,
+        <span class="keyword">'bucket'</span>   => env(<span class="string">'R2_BUCKET'</span>),
+        <span class="keyword">'endpoint'</span> => env(<span class="string">'R2_ENDPOINT'</span>),
+        <span class="keyword">'use_path_style_endpoint'</span> => <span class="keyword">true</span>,
+    ],
+],</pre>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">2.4 ใช้ Redis สำหรับ session + cache + queue</h3>
+  <p class="text-sm text-slate-600 mb-2">Cloud มี Redis built-in — ตอน Hostinger เราใช้ <code>file</code>/<code>database</code> driver แต่บน Cloud ใช้ Redis เร็วกว่ามาก</p>
+  <div class="code-block">
+<pre><span class="comment"># ใน config/session.php</span>
+<span class="keyword">'driver'</span> => env(<span class="string">'SESSION_DRIVER'</span>, <span class="string">'redis'</span>),
+
+<span class="comment"># ใน config/cache.php</span>
+<span class="keyword">'default'</span> => env(<span class="string">'CACHE_STORE'</span>, <span class="string">'redis'</span>),
+
+<span class="comment"># ใน config/queue.php</span>
+<span class="keyword">'default'</span> => env(<span class="string">'QUEUE_CONNECTION'</span>, <span class="string">'redis'</span>),</pre>
+  </div>
+
+  <div class="callout callout-tip">
+    <strong>💡 Tip:</strong> ค่า fallback ในโค้ด (<code>'redis'</code>) จะถูกเปลี่ยนได้ผ่าน ENV ตอน deploy — ไม่ต้องแก้โค้ดถ้าจะกลับไปใช้ <code>file</code> ตอน local dev
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">2.5 เพิ่ม Trusted Proxies (สำหรับ HTTPS หลัง load balancer)</h3>
+  <div class="code-block">
+<pre><span class="comment"># app/Http/Middleware/TrustProxies.php</span>
+<span class="keyword">protected</span> $proxies = <span class="string">'*'</span>;  <span class="comment">// trust all (Cloud LB จัดการให้)</span>
+
+<span class="keyword">protected</span> $headers =
+    Request::HEADER_X_FORWARDED_FOR |
+    Request::HEADER_X_FORWARDED_HOST |
+    Request::HEADER_X_FORWARDED_PORT |
+    Request::HEADER_X_FORWARDED_PROTO |
+    Request::HEADER_X_FORWARDED_AWS_ELB;</pre>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">2.6 Commit + push การแก้ไข</h3>
+  <div class="code-block">
+<pre><span class="prompt">PS&gt;</span> <span class="cmd">git</span> add cloud.yaml config/
+<span class="prompt">PS&gt;</span> <span class="cmd">git</span> commit -m <span class="string">"chore: prepare for Laravel Cloud deployment"</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">git</span> push origin main</pre>
+  </div>
+</section>
+
+<!-- ── STEP 3: EXPORT DB ── -->
+<section id="step-3">
+  <h2 class="text-2xl md:text-3xl font-bold mb-3 flex items-center">
+    <span class="step-badge">3</span>
+    Export ข้อมูลจาก MariaDB
+  </h2>
+  <p class="text-slate-600 mb-4"><span class="time-badge">⏱ ~2 นาที</span></p>
+
+  <p class="mb-3">เราจะ dump ทุกตารางออกเป็นไฟล์ <code class="code-inline" style="background:#1e293b;color:#e2e8f0;padding:0.125rem 0.375rem;border-radius:0.25rem;">.sql</code> เพื่อ import เข้า MySQL บน Cloud</p>
+
+  <h3 class="font-bold mt-2 mb-2">3.1 SSH เข้า Hostinger หรือใช้ phpMyAdmin</h3>
+
+  <h4 class="font-semibold mt-3 mb-2">วิธี A: ผ่าน SSH (แนะนำ)</h4>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><span class="prompt">$</span> <span class="cmd">ssh</span> u123456@your-server.hostinger.com
+<span class="prompt">$</span> <span class="cmd">cd</span> domains/jabphap.com/public_html
+
+<span class="comment"># Dump ทั้ง schema + data</span>
+<span class="prompt">$</span> <span class="cmd">mysqldump</span> \
+    --user=u123456_jabphap \
+    --password=YOUR_DB_PASSWORD \
+    --default-character-set=utf8mb4 \
+    --single-transaction \
+    --routines --triggers \
+    --no-tablespaces \
+    u123456_jabphap > <span class="path">jabphap-backup.sql</span>
+
+<span class="comment"># เช็คขนาด</span>
+<span class="prompt">$</span> <span class="cmd">ls</span> -lh jabphap-backup.sql
+
+<span class="comment"># Download ลงเครื่อง</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">scp</span> u123456@your-server.hostinger.com:domains/jabphap.com/public_html/jabphap-backup.sql .</pre>
+  </div>
+
+  <h4 class="font-semibold mt-4 mb-2">วิธี B: ผ่าน phpMyAdmin</h4>
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>เข้า <strong>hpanel → Databases → phpMyAdmin</strong></li>
+    <li>เลือก database ของโปรเจค (เช่น <code>u123456_jabphap</code>)</li>
+    <li>คลิก tab <strong>Export</strong></li>
+    <li>Format: <strong>SQL</strong></li>
+    <li>Custom options: ✓ Add DROP TABLE, ✓ Disable foreign key checks</li>
+    <li>Charset: <strong>utf8mb4</strong></li>
+    <li>คลิก <strong>Go</strong> → ดาวน์โหลดไฟล์ <code>.sql</code></li>
+  </ol>
+
+  <div class="callout callout-warn">
+    <strong>⚠️ ระวัง MariaDB-specific syntax:</strong> ก่อน import เข้า MySQL 8 ให้แก้ dump:
+    <ul class="list-disc ml-6 mt-2 text-sm">
+      <li><code>utf8mb4_uca1400_ai_ci</code> → <code>utf8mb4_unicode_ci</code> (MySQL 8 ไม่มี collation นี้)</li>
+      <li>เอา <code>SET @OLD_CHARACTER_SET_CLIENT</code> ออกถ้ามี issue</li>
+      <li>ลบ <code>DEFINER=...</code> ใน triggers/views (Cloud user ไม่ตรง)</li>
+    </ul>
+    <p class="mt-2">PowerShell แก้แบบ batch:</p>
+    <div class="code-block mt-1">
+<pre><span class="prompt">PS&gt;</span> (<span class="cmd">Get-Content</span> jabphap-backup.sql) `
+    -replace <span class="string">'utf8mb4_uca1400_ai_ci'</span>, <span class="string">'utf8mb4_unicode_ci'</span> `
+    -replace <span class="string">'DEFINER=`[^`]*`@`[^`]*`'</span>, <span class="string">''</span> |
+    <span class="cmd">Set-Content</span> jabphap-backup-fixed.sql</pre>
+    </div>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">3.2 ตรวจ dump ก่อนใช้</h3>
+  <div class="code-block">
+<pre><span class="prompt">PS&gt;</span> <span class="cmd">type</span> jabphap-backup-fixed.sql | <span class="cmd">findstr</span> /C:<span class="string">"CREATE TABLE"</span> | <span class="cmd">measure</span>
+<span class="comment"># ควรเห็นจำนวนเท่ากับตารางในโปรเจค (~30-40 ตาราง)</span></pre>
+  </div>
+</section>
+
+<!-- ── STEP 4: SIGN UP ── -->
+<section id="step-4">
+  <h2 class="text-2xl md:text-3xl font-bold mb-3 flex items-center">
+    <span class="step-badge">4</span>
+    สมัคร Laravel Cloud + เชื่อม GitHub
+  </h2>
+  <p class="text-slate-600 mb-4"><span class="time-badge">⏱ ~3 นาที</span></p>
+
+  <h3 class="font-bold mt-2 mb-2">4.1 สมัครบัญชี</h3>
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>เข้า <a href="https://cloud.laravel.com" target="_blank" class="text-red-600 underline">cloud.laravel.com</a></li>
+    <li>คลิก <strong>Sign up</strong></li>
+    <li>ใช้ GitHub OAuth (recommended) หรือ Email + Password</li>
+    <li>ยืนยันอีเมล (ถ้าใช้ email signup)</li>
+  </ol>
+
+  <h3 class="font-bold mt-4 mb-2">4.2 สร้าง Organization</h3>
+  <div class="ui-mockup">
+    <div class="ui-header">Create Organization</div>
+    <div class="ui-row">
+      <span class="ui-label">Name</span>
+      <span class="ui-value">jabphap-th</span>
+    </div>
+    <div class="ui-row">
+      <span class="ui-label">Plan</span>
+      <span class="ui-value">Sandbox (Free) → Production later</span>
+    </div>
+    <a class="ui-button">Create Organization</a>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">4.3 เชื่อม GitHub Account</h3>
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>ใน dashboard คลิก <strong>Source Providers → Connect GitHub</strong></li>
+    <li>หน้า GitHub OAuth — เลือก organization ที่มี repo <code>jabphap</code></li>
+    <li>Grant access เฉพาะ repo นี้ (ไม่ต้อง grant ทั้ง org)</li>
+    <li>กลับมาที่ Cloud → ควรเห็น "GitHub connected ✓"</li>
+  </ol>
+
+  <div class="callout callout-tip">
+    <strong>💡 Tip:</strong> ถ้า repo อยู่ใน personal account ก็ได้ — แต่ถ้าทำงานเป็นทีมแนะนำให้ย้ายเข้า GitHub organization ก่อนเพื่อจัดการ access
+  </div>
+</section>
+
+<!-- ── STEP 5: CREATE APP ── -->
+<section id="step-5">
+  <h2 class="text-2xl md:text-3xl font-bold mb-3 flex items-center">
+    <span class="step-badge">5</span>
+    สร้าง App + Database + Redis
+  </h2>
+  <p class="text-slate-600 mb-4"><span class="time-badge">⏱ ~3 นาที</span></p>
+
+  <h3 class="font-bold mt-2 mb-2">5.1 สร้าง Application</h3>
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>Dashboard → คลิก <strong>+ New Application</strong></li>
+    <li>เลือก <strong>From GitHub</strong></li>
+    <li>เลือก repo: <code>YOUR_USERNAME/jabphap</code></li>
+    <li>Branch: <code>main</code></li>
+    <li>Region: <strong>Singapore (ap-southeast-1)</strong> ← สำคัญสำหรับ user ไทย</li>
+    <li>Framework: Laravel (auto-detect)</li>
+    <li>คลิก <strong>Create</strong></li>
+  </ol>
+
+  <div class="ui-mockup">
+    <div class="ui-header">New Application</div>
+    <div class="ui-row">
+      <span class="ui-label">Repository</span>
+      <span class="ui-value">YOUR_USERNAME/jabphap</span>
+    </div>
+    <div class="ui-row">
+      <span class="ui-label">Branch</span>
+      <span class="ui-value">main</span>
+    </div>
+    <div class="ui-row">
+      <span class="ui-label">Region</span>
+      <span class="ui-value">🇸🇬 Singapore</span>
+    </div>
+    <div class="ui-row">
+      <span class="ui-label">Compute</span>
+      <span class="ui-value">Hobby (1 vCPU · 512MB) → Production (2 vCPU · 2GB) later</span>
+    </div>
+    <a class="ui-button">Create Application</a>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">5.2 สร้าง MySQL Database</h3>
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>Application → tab <strong>Databases</strong> → <strong>+ New Database</strong></li>
+    <li>Type: <strong>MySQL 8.0</strong></li>
+    <li>Name: <code>jabphap-db</code></li>
+    <li>Size: <strong>Small (1GB)</strong> — ขยายได้ทีหลัง</li>
+    <li>Region: เดียวกับ app (Singapore)</li>
+    <li>คลิก <strong>Create</strong></li>
+  </ol>
+
+  <div class="callout callout-success">
+    <strong>✅ Auto-wired:</strong> Cloud จะตั้ง <code>DB_HOST</code>, <code>DB_PORT</code>, <code>DB_DATABASE</code>, <code>DB_USERNAME</code>, <code>DB_PASSWORD</code> ให้อัตโนมัติ — ไม่ต้องไปก๊อปเอง
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">5.3 สร้าง Redis (สำหรับ session + cache + queue)</h3>
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>tab <strong>Caches</strong> → <strong>+ New Cache</strong></li>
+    <li>Type: <strong>Redis</strong></li>
+    <li>Size: <strong>256MB</strong> (เริ่มต้นเพียงพอ)</li>
+    <li>คลิก <strong>Create</strong></li>
+  </ol>
+
+  <div class="callout callout-success">
+    <strong>✅ Auto-wired:</strong> ตัวแปร <code>REDIS_HOST</code>, <code>REDIS_PORT</code>, <code>REDIS_PASSWORD</code> ถูกเซ็ตให้อัตโนมัติ
+  </div>
+</section>
+
+<!-- ── STEP 6: IMPORT DB ── -->
+<section id="step-6">
+  <h2 class="text-2xl md:text-3xl font-bold mb-3 flex items-center">
+    <span class="step-badge">6</span>
+    Import Database
+  </h2>
+  <p class="text-slate-600 mb-4"><span class="time-badge">⏱ ~2 นาที</span></p>
+
+  <h3 class="font-bold mt-2 mb-2">6.1 วิธี A: ใช้ Cloud CLI</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><span class="comment"># ติดตั้ง CLI (ครั้งเดียว)</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">composer</span> global require laravel/cloud-cli
+
+<span class="comment"># Login</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">laravel</span> cloud:login
+
+<span class="comment"># Import dump เข้า Cloud DB</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">laravel</span> cloud:db:import \
+    --app=jabphap \
+    --database=jabphap-db \
+    --file=jabphap-backup-fixed.sql</pre>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">6.2 วิธี B: เปิด tunnel แล้วใช้ mysql client</h3>
+  <div class="code-block">
+<pre><span class="comment"># เปิด tunnel ไปที่ Cloud DB</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">laravel</span> cloud:db:tunnel jabphap-db
+<span class="comment"># จะ print: localhost:33067 → Cloud DB</span>
+
+<span class="comment"># Import (เปิด terminal ใหม่)</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">mysql</span> -h 127.0.0.1 -P 33067 -u cloud_user -p jabphap_db &lt; jabphap-backup-fixed.sql</pre>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">6.3 ตรวจว่า import สำเร็จ</h3>
+  <div class="code-block">
+<pre><span class="prompt">PS&gt;</span> <span class="cmd">laravel</span> cloud:db:tunnel jabphap-db
+<span class="prompt">PS&gt;</span> <span class="cmd">mysql</span> -h 127.0.0.1 -P 33067 -u cloud_user -p
+
+<span class="prompt">mysql&gt;</span> <span class="cmd">USE</span> jabphap_db;
+<span class="prompt">mysql&gt;</span> <span class="cmd">SHOW</span> TABLES;
+<span class="comment"># ควรเห็น ~30-40 ตาราง รวม bookings, photographer_availabilities, ฯลฯ</span>
+
+<span class="prompt">mysql&gt;</span> <span class="cmd">SELECT</span> COUNT(*) <span class="cmd">FROM</span> auth_users;
+<span class="prompt">mysql&gt;</span> <span class="cmd">SELECT</span> COUNT(*) <span class="cmd">FROM</span> bookings;</pre>
+  </div>
+
+  <div class="callout callout-warn">
+    <strong>⚠️ Schema กับ data:</strong> ถ้าจะให้ Laravel จัดการ schema เอง (run migrations แทน import schema จาก dump) แนะนำให้ import แค่ <strong>data tables</strong> ไม่รวม <code>migrations</code> table → Cloud จะ run migrations ใหม่หมดและสะอาดกว่า
+  </div>
+</section>
+
+<!-- ── STEP 7: ENV VARS ── -->
+<section id="step-7">
+  <h2 class="text-2xl md:text-3xl font-bold mb-3 flex items-center">
+    <span class="step-badge">7</span>
+    ตั้งค่า Environment Variables
+  </h2>
+  <p class="text-slate-600 mb-4"><span class="time-badge">⏱ ~5 นาที</span></p>
+
+  <p class="mb-3">Application → tab <strong>Environment</strong> → คลิก <strong>Edit Variables</strong></p>
+
+  <h3 class="font-bold mt-4 mb-2">7.1 ตัวแปรพื้นฐาน Laravel</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><span class="env-key">APP_NAME</span>=<span class="env-val">"จับภาพ"</span>
+<span class="env-key">APP_ENV</span>=<span class="env-val">production</span>
+<span class="env-key">APP_KEY</span>=<span class="env-val">base64:GENERATE_NEW_KEY_HERE</span>
+<span class="env-key">APP_DEBUG</span>=<span class="env-val">false</span>
+<span class="env-key">APP_URL</span>=<span class="env-val">https://jabphap.com</span>
+<span class="env-key">APP_TIMEZONE</span>=<span class="env-val">Asia/Bangkok</span>
+<span class="env-key">APP_LOCALE</span>=<span class="env-val">th</span>
+<span class="env-key">LOG_CHANNEL</span>=<span class="env-val">stderr</span>
+<span class="env-key">LOG_LEVEL</span>=<span class="env-val">warning</span></pre>
+  </div>
+
+  <div class="callout callout-info">
+    <strong>💡 สร้าง APP_KEY ใหม่:</strong>
+    <div class="code-block mt-2">
+<pre><span class="prompt">PS&gt;</span> <span class="cmd">php</span> artisan key:generate --show
+<span class="comment"># copy output แล้ววางใน Cloud env</span></pre>
+    </div>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">7.2 Database (auto-wired) + Cache + Queue</h3>
+  <div class="code-block">
+<pre><span class="comment"># DB_* — auto-wired โดย Cloud, ไม่ต้องใส่</span>
+
+<span class="env-key">DB_CONNECTION</span>=<span class="env-val">mysql</span>
+
+<span class="comment"># Redis — auto-wired</span>
+<span class="env-key">SESSION_DRIVER</span>=<span class="env-val">redis</span>
+<span class="env-key">SESSION_LIFETIME</span>=<span class="env-val">120</span>
+<span class="env-key">CACHE_STORE</span>=<span class="env-val">redis</span>
+<span class="env-key">QUEUE_CONNECTION</span>=<span class="env-val">redis</span>
+<span class="env-key">BROADCAST_CONNECTION</span>=<span class="env-val">log</span></pre>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">7.3 Storage (Cloudflare R2)</h3>
+  <div class="code-block">
+<pre><span class="env-key">FILESYSTEM_DISK</span>=<span class="env-val">r2</span>
+
+<span class="env-key">R2_ACCESS_KEY_ID</span>=<span class="env-val">YOUR_R2_KEY</span>
+<span class="env-key">R2_SECRET_ACCESS_KEY</span>=<span class="env-val">YOUR_R2_SECRET</span>
+<span class="env-key">R2_BUCKET</span>=<span class="env-val">jabphap-photos</span>
+<span class="env-key">R2_ENDPOINT</span>=<span class="env-val">https://abc123.r2.cloudflarestorage.com</span>
+<span class="env-key">R2_PUBLIC_URL</span>=<span class="env-val">https://photos.jabphap.com</span></pre>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">7.4 LINE (Messaging API + Login + Pay)</h3>
+  <div class="code-block">
+<pre><span class="env-key">LINE_CHANNEL_ID</span>=<span class="env-val">1234567890</span>
+<span class="env-key">LINE_CHANNEL_SECRET</span>=<span class="env-val">YOUR_CHANNEL_SECRET</span>
+<span class="env-key">LINE_CHANNEL_ACCESS_TOKEN</span>=<span class="env-val">YOUR_LONG_LIVED_TOKEN</span>
+
+<span class="comment"># LINE Login OAuth</span>
+<span class="env-key">LINE_LOGIN_CHANNEL_ID</span>=<span class="env-val">9876543210</span>
+<span class="env-key">LINE_LOGIN_CHANNEL_SECRET</span>=<span class="env-val">YOUR_LOGIN_SECRET</span>
+<span class="env-key">LINE_LOGIN_REDIRECT_URI</span>=<span class="env-val">https://jabphap.com/auth/line/callback</span>
+
+<span class="comment"># LINE Pay</span>
+<span class="env-key">LINE_PAY_CHANNEL_ID</span>=<span class="env-val">YOUR_PAY_CHANNEL</span>
+<span class="env-key">LINE_PAY_SECRET</span>=<span class="env-val">YOUR_PAY_SECRET</span>
+<span class="env-key">LINE_PAY_SANDBOX</span>=<span class="env-val">false</span>
+
+<span class="comment"># Admin LINE User IDs สำหรับ multicast (รับ notification)</span>
+<span class="env-key">LINE_ADMIN_USER_IDS</span>=<span class="env-val">U123abc...,U456def...</span></pre>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">7.5 Payment Gateways</h3>
+  <div class="code-block">
+<pre><span class="comment"># PromptPay QR + SlipOK</span>
+<span class="env-key">PROMPTPAY_ID</span>=<span class="env-val">0812345678</span>
+<span class="env-key">SLIPOK_API_KEY</span>=<span class="env-val">SLOK_xxxxxxxxxxxxxx</span>
+<span class="env-key">SLIPOK_BRANCH_ID</span>=<span class="env-val">12345</span>
+
+<span class="comment"># Stripe</span>
+<span class="env-key">STRIPE_KEY</span>=<span class="env-val">pk_live_...</span>
+<span class="env-key">STRIPE_SECRET</span>=<span class="env-val">sk_live_...</span>
+<span class="env-key">STRIPE_WEBHOOK_SECRET</span>=<span class="env-val">whsec_...</span>
+
+<span class="comment"># Omise</span>
+<span class="env-key">OMISE_PUBLIC_KEY</span>=<span class="env-val">pkey_live_...</span>
+<span class="env-key">OMISE_SECRET_KEY</span>=<span class="env-val">skey_live_...</span></pre>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">7.6 Google OAuth + AWS Rekognition</h3>
+  <div class="code-block">
+<pre><span class="comment"># Google OAuth (Socialite)</span>
+<span class="env-key">GOOGLE_CLIENT_ID</span>=<span class="env-val">xxxx.apps.googleusercontent.com</span>
+<span class="env-key">GOOGLE_CLIENT_SECRET</span>=<span class="env-val">GOCSPX-...</span>
+<span class="env-key">GOOGLE_REDIRECT_URI</span>=<span class="env-val">https://jabphap.com/auth/google/callback</span>
+
+<span class="comment"># AWS Rekognition (face search)</span>
+<span class="env-key">AWS_ACCESS_KEY_ID</span>=<span class="env-val">AKIA...</span>
+<span class="env-key">AWS_SECRET_ACCESS_KEY</span>=<span class="env-val">YOUR_AWS_SECRET</span>
+<span class="env-key">AWS_DEFAULT_REGION</span>=<span class="env-val">ap-southeast-1</span>
+<span class="env-key">AWS_REKOGNITION_COLLECTION</span>=<span class="env-val">jabphap-faces</span></pre>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">7.7 Mail (สำหรับ password reset, etc.)</h3>
+  <div class="code-block">
+<pre><span class="env-key">MAIL_MAILER</span>=<span class="env-val">smtp</span>
+<span class="env-key">MAIL_HOST</span>=<span class="env-val">smtp.resend.com</span>
+<span class="env-key">MAIL_PORT</span>=<span class="env-val">587</span>
+<span class="env-key">MAIL_USERNAME</span>=<span class="env-val">resend</span>
+<span class="env-key">MAIL_PASSWORD</span>=<span class="env-val">re_xxxxxxxxxxxxxx</span>
+<span class="env-key">MAIL_ENCRYPTION</span>=<span class="env-val">tls</span>
+<span class="env-key">MAIL_FROM_ADDRESS</span>=<span class="env-val">no-reply@jabphap.com</span>
+<span class="env-key">MAIL_FROM_NAME</span>=<span class="env-val">"จับภาพ"</span></pre>
+  </div>
+
+  <div class="callout callout-tip">
+    <strong>💡 ใช้ Cloud Secrets:</strong> สำหรับ value ที่ sensitive มาก (Stripe live key) → tick <strong>"Mark as secret"</strong> ตอน edit → ค่าจะถูก redact ใน UI หลังบันทึก
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">7.8 บันทึก + Trigger redeploy</h3>
+  <p class="text-sm">หลังบันทึก ENV → คลิก <strong>Save & Deploy</strong> → Cloud จะ rebuild app ด้วยค่าใหม่</p>
+</section>
+
+<!-- ── STEP 8: FIRST DEPLOY ── -->
+<section id="step-8">
+  <h2 class="text-2xl md:text-3xl font-bold mb-3 flex items-center">
+    <span class="step-badge">8</span>
+    First Deploy
+  </h2>
+  <p class="text-slate-600 mb-4"><span class="time-badge">⏱ ~3 นาที</span></p>
+
+  <h3 class="font-bold mt-2 mb-2">8.1 Trigger deploy</h3>
+  <p class="text-sm mb-2">มี 3 วิธี:</p>
+  <ul class="list-disc ml-6 space-y-1 text-sm">
+    <li><strong>Auto:</strong> push to <code>main</code> → deploy อัตโนมัติ</li>
+    <li><strong>Manual:</strong> Application → ปุ่ม <strong>Deploy</strong></li>
+    <li><strong>CLI:</strong> <code>laravel cloud:deploy --app=jabphap</code></li>
+  </ul>
+
+  <h3 class="font-bold mt-4 mb-2">8.2 ดู build logs</h3>
+  <p class="text-sm">tab <strong>Deployments</strong> → คลิก deployment ที่กำลังรัน</p>
+
+  <div class="ui-mockup">
+    <div class="ui-header">Build Logs (live tail)</div>
+    <pre style="font-size:0.75rem;line-height:1.5;background:#0f172a;color:#cbd5e1;padding:0.75rem;border-radius:0.375rem;overflow-x:auto;">
+✓ Cloning repository (jabphap@main)
+✓ Installing PHP 8.3
+✓ Installing Node 20
+✓ Running: composer install --no-dev --optimize-autoloader
+  → Generating autoload files
+  → 132 packages installed
+✓ Running: npm ci
+  → 845 packages installed
+✓ Running: npm run build
+  → public/build/manifest.json created
+✓ Running: php artisan config:cache
+✓ Running: php artisan route:cache
+✓ Running: php artisan view:cache
+✓ Running: php artisan migrate --force
+  → Migrating: 2026_05_15_000001_create_bookings_table
+  → Migrated: 2026_05_15_000001_create_bookings_table (4.32ms)
+  → ...
+✓ Running: php artisan storage:link
+✓ Deployment successful
+✓ Worker started: php artisan queue:work
+✓ Scheduler started
+
+🎉 Live at: https://jabphap-prod.laravel.cloud</pre>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">8.3 ทดสอบ URL ชั่วคราว</h3>
+  <p class="text-sm mb-2">Cloud จะให้ URL <code>https://your-app.laravel.cloud</code> มาทดสอบก่อนชี้ domain จริง</p>
+  <div class="code-block">
+<pre><span class="prompt">PS&gt;</span> <span class="cmd">curl</span> -I https://jabphap-prod.laravel.cloud
+<span class="comment"># ต้องได้ HTTP/2 200</span>
+
+<span class="comment"># เปิด browser เช็คหน้า home</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">start</span> https://jabphap-prod.laravel.cloud</pre>
+  </div>
+
+  <div class="callout callout-warn">
+    <strong>⚠️ ถ้า build fail:</strong>
+    <ul class="list-disc ml-6 mt-2 text-sm">
+      <li>Composer error → เช็ค <code>composer.json</code> require version</li>
+      <li>NPM error → เช็ค <code>package.json</code> + <code>package-lock.json</code> sync</li>
+      <li>Migration error → ดู Step 6 ว่า data import ทับ schema มั้ย</li>
+      <li>500 error หลัง deploy → ดู logs (Application → Logs tab)</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ── STEP 9: SCHEDULER + QUEUE ── -->
+<section id="step-9">
+  <h2 class="text-2xl md:text-3xl font-bold mb-3 flex items-center">
+    <span class="step-badge">9</span>
+    เปิด Scheduler + Queue Worker
+  </h2>
+  <p class="text-slate-600 mb-4"><span class="time-badge">⏱ ~2 นาที</span></p>
+
+  <p class="mb-3">โปรเจคนี้มี cron jobs สำคัญที่ต้องเปิด:</p>
+
+  <table class="info">
+    <thead>
+      <tr><th>Job</th><th>ความถี่</th><th>หน้าที่</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>bookings:send-reminders</code></td>
+        <td>ทุก 5 นาที</td>
+        <td>ส่ง LINE reminder 5 ระดับ (3 วัน / 1 วัน / 1 ชม. / วันงาน / รีวิว)</td>
+      </tr>
+      <tr>
+        <td><code>queue:work</code> worker</td>
+        <td>ตลอดเวลา</td>
+        <td>process LINE pushes, mail, image processing async</td>
+      </tr>
+      <tr>
+        <td>Auto-cleanup logs</td>
+        <td>รายวัน</td>
+        <td>ลบ log เก่ากว่า 14 วัน</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3 class="font-bold mt-4 mb-2">9.1 ตรวจ scheduler ใน <code class="code-inline" style="background:#1e293b;color:#e2e8f0;padding:0.125rem 0.375rem;border-radius:0.25rem;">cloud.yaml</code></h3>
+  <p class="text-sm">ที่ Step 2.1 เราเซ็ต <code>scheduler.enabled: true</code> แล้ว — Cloud จะรัน <code>php artisan schedule:run</code> ทุกนาที</p>
+
+  <h3 class="font-bold mt-4 mb-2">9.2 ตรวจ <code class="code-inline" style="background:#1e293b;color:#e2e8f0;padding:0.125rem 0.375rem;border-radius:0.25rem;">routes/console.php</code></h3>
+  <div class="code-block">
+<pre><span class="keyword">use</span> Illuminate\Support\Facades\Schedule;
+
+Schedule::command(<span class="string">'bookings:send-reminders'</span>)
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+Schedule::command(<span class="string">'log:clear'</span>)->daily();</pre>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">9.3 ตรวจ Queue Worker</h3>
+  <p class="text-sm mb-2">Application → tab <strong>Workers</strong> → ควรเห็น:</p>
+  <div class="ui-mockup">
+    <div class="ui-header">Workers · 1 active</div>
+    <div class="ui-row">
+      <span class="ui-label">Name</span>
+      <span class="ui-value">default</span>
+    </div>
+    <div class="ui-row">
+      <span class="ui-label">Command</span>
+      <span class="ui-value" style="font-size:0.7rem;">php artisan queue:work --queue=default,line,emails</span>
+    </div>
+    <div class="ui-row">
+      <span class="ui-label">Status</span>
+      <span class="ui-value" style="color:#16a34a;">● Running</span>
+    </div>
+    <div class="ui-row">
+      <span class="ui-label">Replicas</span>
+      <span class="ui-value">1</span>
+    </div>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">9.4 ทดสอบ scheduler ทำงาน</h3>
+  <div class="code-block">
+<pre><span class="comment"># SSH เข้า Cloud app</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">laravel</span> cloud:ssh jabphap
+
+<span class="comment"># ดู schedule list</span>
+<span class="prompt">$</span> <span class="cmd">php</span> artisan schedule:list
+
+<span class="comment"># รัน manual ดู</span>
+<span class="prompt">$</span> <span class="cmd">php</span> artisan bookings:send-reminders --dry-run
+
+<span class="comment"># ดู queue jobs</span>
+<span class="prompt">$</span> <span class="cmd">php</span> artisan queue:monitor default,line,emails</pre>
+  </div>
+</section>
+
+<!-- ── STEP 10: DOMAIN + SSL ── -->
+<section id="step-10">
+  <h2 class="text-2xl md:text-3xl font-bold mb-3 flex items-center">
+    <span class="step-badge">10</span>
+    เชื่อม Domain + SSL
+  </h2>
+  <p class="text-slate-600 mb-4"><span class="time-badge">⏱ ~3 นาที + รอ DNS ~5-30 นาที</span></p>
+
+  <h3 class="font-bold mt-2 mb-2">10.1 เพิ่ม custom domain ใน Cloud</h3>
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>Application → tab <strong>Domains</strong> → <strong>+ Add Domain</strong></li>
+    <li>กรอก: <code>jabphap.com</code></li>
+    <li>Cloud จะแสดง DNS records ที่ต้องชี้</li>
+  </ol>
+
+  <div class="ui-mockup">
+    <div class="ui-header">DNS Records to add</div>
+    <div class="ui-row">
+      <span class="ui-label">Type</span>
+      <span class="ui-value">CNAME (apex flattened)</span>
+    </div>
+    <div class="ui-row">
+      <span class="ui-label">Name</span>
+      <span class="ui-value">@</span>
+    </div>
+    <div class="ui-row">
+      <span class="ui-label">Value</span>
+      <span class="ui-value">jabphap-prod.laravel.cloud</span>
+    </div>
+    <div class="ui-row" style="margin-top:0.5rem;border-top:1px dashed #cbd5e1;padding-top:0.5rem;">
+      <span class="ui-label">Type</span>
+      <span class="ui-value">CNAME</span>
+    </div>
+    <div class="ui-row">
+      <span class="ui-label">Name</span>
+      <span class="ui-value">www</span>
+    </div>
+    <div class="ui-row">
+      <span class="ui-label">Value</span>
+      <span class="ui-value">jabphap-prod.laravel.cloud</span>
+    </div>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">10.2 ตั้ง DNS ที่ Cloudflare (หรือผู้ให้บริการ DNS ของคุณ)</h3>
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>เข้า Cloudflare dashboard → เลือก zone <code>jabphap.com</code></li>
+    <li>tab <strong>DNS</strong> → เพิ่ม records ตามที่ Cloud บอก</li>
+    <li>ตั้ง <strong>Proxy status: DNS only (gray cloud)</strong> ← สำคัญ! ห้ามเปิด orange cloud (จะ conflict กับ SSL ของ Cloud)</li>
+  </ol>
+
+  <div class="callout callout-warn">
+    <strong>⚠️ ถ้าใช้ Cloudflare proxy (orange cloud):</strong> ต้องเซ็ต SSL mode เป็น <strong>Full (strict)</strong> และอาจมี issue กับ Cloud's auto-cert — แนะนำให้ใช้ DNS only ก่อน แล้วค่อยเปิด orange cloud หลัง SSL ทำงาน
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">10.3 รอ DNS propagate</h3>
+  <div class="code-block">
+<pre><span class="prompt">PS&gt;</span> <span class="cmd">nslookup</span> jabphap.com
+<span class="comment"># ต้องเห็น IP ของ Cloud (เช่น xxx.elb.amazonaws.com)</span>
+
+<span class="prompt">PS&gt;</span> <span class="cmd">curl</span> -I https://jabphap.com
+<span class="comment"># HTTP/2 200 + ใบ cert ของ Let's Encrypt</span></pre>
+  </div>
+
+  <h3 class="font-bold mt-4 mb-2">10.4 SSL — Auto-issued</h3>
+  <p class="text-sm">หลัง DNS propagate Cloud จะ auto-issue Let's Encrypt cert ให้ภายใน <strong>1-5 นาที</strong> — ดูสถานะใน tab Domains:</p>
+
+  <div class="ui-mockup">
+    <div class="ui-header">Domain Status</div>
+    <div class="ui-row">
+      <span class="ui-label">jabphap.com</span>
+      <span class="ui-value" style="color:#16a34a;">● SSL Active</span>
+    </div>
+    <div class="ui-row">
+      <span class="ui-label">Issuer</span>
+      <span class="ui-value">Let's Encrypt</span>
+    </div>
+    <div class="ui-row">
+      <span class="ui-label">Auto-renew</span>
+      <span class="ui-value">✓ Every 60 days</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── STEP 11: WEBHOOKS ── -->
+<section id="step-11">
+  <h2 class="text-2xl md:text-3xl font-bold mb-3 flex items-center">
+    <span class="step-badge">11</span>
+    Update Callback URLs / Webhooks
+  </h2>
+  <p class="text-slate-600 mb-4"><span class="time-badge">⏱ ~5 นาที</span></p>
+
+  <p class="mb-3">เนื่องจาก domain ยังเป็น <code>jabphap.com</code> เหมือนเดิม URLs ส่วนใหญ่ <strong>ไม่ต้องเปลี่ยน</strong> — แต่ถ้าใครที่อ้างอิง IP หรือ subdomain เก่าต้องอัพเดท</p>
+
+  <h3 class="font-bold mt-2 mb-2">11.1 LINE Developer Console</h3>
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>เข้า <a href="https://developers.line.biz/console" target="_blank" class="text-red-600 underline">developers.line.biz</a></li>
+    <li><strong>Messaging API channel</strong> → Webhook URL: <code>https://jabphap.com/webhooks/line/messaging</code></li>
+    <li><strong>LINE Login channel</strong> → Callback URL: <code>https://jabphap.com/auth/line/callback</code></li>
+    <li>คลิก <strong>Verify</strong> → ต้องได้ Success</li>
+  </ol>
+
+  <h3 class="font-bold mt-4 mb-2">11.2 Stripe Webhooks</h3>
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>Stripe Dashboard → <strong>Developers → Webhooks</strong></li>
+    <li>Endpoint URL: <code>https://jabphap.com/webhooks/stripe</code></li>
+    <li>Events: <code>checkout.session.completed</code>, <code>charge.refunded</code>, ฯลฯ</li>
+    <li>Copy <strong>Signing Secret</strong> → อัพเดท <code>STRIPE_WEBHOOK_SECRET</code> ใน Cloud env</li>
+  </ol>
+
+  <h3 class="font-bold mt-4 mb-2">11.3 Omise Webhooks</h3>
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>Omise Dashboard → <strong>Webhooks</strong></li>
+    <li>URL: <code>https://jabphap.com/webhooks/omise</code></li>
+  </ol>
+
+  <h3 class="font-bold mt-4 mb-2">11.4 SlipOK</h3>
+  <p class="text-sm">SlipOK ใช้ pull model (เรา POST ไปหาเขา) — ไม่ต้องอัพเดท URL</p>
+
+  <h3 class="font-bold mt-4 mb-2">11.5 Google OAuth</h3>
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>เข้า <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-red-600 underline">Google Cloud Console → Credentials</a></li>
+    <li>เลือก OAuth 2.0 Client ID ของโปรเจค</li>
+    <li><strong>Authorized redirect URIs</strong> ต้องมี: <code>https://jabphap.com/auth/google/callback</code></li>
+  </ol>
+
+  <h3 class="font-bold mt-4 mb-2">11.6 ทดสอบทุก webhook</h3>
+  <div class="code-block">
+<pre><span class="comment"># LINE webhook test</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">curl</span> -X POST https://jabphap.com/webhooks/line/messaging `
+    -H <span class="string">"Content-Type: application/json"</span> `
+    -d <span class="string">'{"events":[]}'</span>
+<span class="comment"># ต้องได้ HTTP 200</span>
+
+<span class="comment"># Stripe webhook test (ใน dashboard มีปุ่ม Send test event)</span>
+
+<span class="comment"># LINE Login flow test</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">start</span> https://jabphap.com/auth/line</pre>
+  </div>
+</section>
+
+<!-- ── POST-DEPLOY CHECKLIST ── -->
+<section id="post-deploy">
+  <h2 class="text-2xl md:text-3xl font-bold mb-3">✅ Post-Deploy Checklist</h2>
+  <p class="text-slate-600 mb-4">ทดสอบให้ครบก่อนปิด Hostinger เก่า</p>
+
+  <table class="info">
+    <thead>
+      <tr><th style="width:50%;">รายการทดสอบ</th><th>วิธีตรวจ</th><th>สถานะ</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Home page โหลดได้</td>
+        <td><code>curl -I https://jabphap.com</code> → 200</td>
+        <td>☐</td>
+      </tr>
+      <tr>
+        <td>Login ปกติ</td>
+        <td>เข้า <code>/login</code> ด้วย admin user</td>
+        <td>☐</td>
+      </tr>
+      <tr>
+        <td>LINE Login OAuth</td>
+        <td>คลิก "Login ด้วย LINE" → callback กลับมา + auto-create user</td>
+        <td>☐</td>
+      </tr>
+      <tr>
+        <td>Google OAuth</td>
+        <td>คลิก "เชื่อม Google" → granted</td>
+        <td>☐</td>
+      </tr>
+      <tr>
+        <td>Photo upload</td>
+        <td>upload ภาพ → ดูใน R2 bucket ว่ามีไฟล์</td>
+        <td>☐</td>
+      </tr>
+      <tr>
+        <td>Booking flow ทั้งหมด</td>
+        <td>customer create → photographer confirm → admin oversight</td>
+        <td>☐</td>
+      </tr>
+      <tr>
+        <td>LINE notifications</td>
+        <td>booking ใหม่ → photographer ได้ LINE message</td>
+        <td>☐</td>
+      </tr>
+      <tr>
+        <td>Cron scheduler</td>
+        <td>SSH → <code>php artisan schedule:list</code></td>
+        <td>☐</td>
+      </tr>
+      <tr>
+        <td>Queue worker active</td>
+        <td>tab Workers → ● Running</td>
+        <td>☐</td>
+      </tr>
+      <tr>
+        <td>Payment (test mode)</td>
+        <td>test booking ด้วย Stripe test card</td>
+        <td>☐</td>
+      </tr>
+      <tr>
+        <td>Face search (Rekognition)</td>
+        <td>upload selfie → search ใน gallery</td>
+        <td>☐</td>
+      </tr>
+      <tr>
+        <td>Admin sidebar แสดงครบ</td>
+        <td>login admin → sidebar มีเมนูทั้งหมด</td>
+        <td>☐</td>
+      </tr>
+      <tr>
+        <td>Email send</td>
+        <td>ทำ password reset → ได้ email</td>
+        <td>☐</td>
+      </tr>
+      <tr>
+        <td>Logs streaming</td>
+        <td>tab Logs → เห็น request log สด</td>
+        <td>☐</td>
+      </tr>
+      <tr>
+        <td>HTTPS cert valid</td>
+        <td>browser ไม่เตือน insecure</td>
+        <td>☐</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ── CUTOVER PLAN ── -->
+<section id="cutover">
+  <h2 class="text-2xl md:text-3xl font-bold mb-3">🔄 Zero-Downtime Cutover จาก Hostinger</h2>
+  <p class="text-slate-600 mb-4">วิธีย้าย live traffic จาก Hostinger → Cloud โดยไม่ให้ user เห็น downtime</p>
+
+  <ol class="list-decimal ml-6 space-y-3 text-sm">
+    <li>
+      <strong>เตรียมพร้อมบน Cloud (ก่อนสับ DNS)</strong>
+      <ul class="list-disc ml-6 mt-1 space-y-1">
+        <li>Deploy + ทดสอบครบทุกข้อใน checklist ผ่าน URL <code>jabphap-prod.laravel.cloud</code></li>
+        <li>Import ข้อมูลล่าสุดจาก Hostinger (ถ้ามี gap)</li>
+      </ul>
+    </li>
+    <li>
+      <strong>Snapshot DB Hostinger ครั้งสุดท้าย (T-0)</strong>
+      <div class="code-block mt-1">
+<pre><span class="prompt">$</span> <span class="cmd">mysqldump</span> ... &gt; <span class="path">final-snapshot.sql</span></pre>
+      </div>
+    </li>
+    <li>
+      <strong>เปิด maintenance mode บน Hostinger (5-10 นาที)</strong>
+      <div class="code-block mt-1">
+<pre><span class="prompt">$</span> <span class="cmd">php</span> artisan down --message=<span class="string">"กำลังอัพเกรดระบบ — กลับมาใน 10 นาที"</span></pre>
+      </div>
+    </li>
+    <li>
+      <strong>Import snapshot สุดท้ายเข้า Cloud DB</strong>
+      <p>ใช้ Step 6 — แต่คราวนี้ overwrite (drop existing tables ก่อน)</p>
+    </li>
+    <li>
+      <strong>เปลี่ยน DNS ที่ Cloudflare</strong>
+      <ul class="list-disc ml-6 mt-1 space-y-1">
+        <li>ลด TTL เป็น 60 วินาที <strong>ก่อนหน้านี้ 24 ชม.</strong> เพื่อให้ propagate เร็ว</li>
+        <li>เปลี่ยน A record เก่า → CNAME ของ Cloud</li>
+        <li>รอ propagate ~5 นาที</li>
+      </ul>
+    </li>
+    <li>
+      <strong>ทดสอบ live</strong>
+      <div class="code-block mt-1">
+<pre><span class="prompt">PS&gt;</span> <span class="cmd">curl</span> -I https://jabphap.com
+<span class="comment"># Server header ต้องเปลี่ยนจาก Hostinger LiteSpeed → AWS/Cloudflare</span></pre>
+      </div>
+    </li>
+    <li>
+      <strong>ปิด Hostinger app (ยังเก็บ server ไว้)</strong>
+      <p>เก็บ Hostinger ไว้ 7-14 วันเป็น rollback option ก่อนยกเลิก</p>
+    </li>
+  </ol>
+
+  <div class="callout callout-success">
+    <strong>✅ Total downtime คาดการณ์:</strong> 5-10 นาที (ตอน import snapshot สุดท้าย) — user ที่เปิดอยู่จะเห็น maintenance page สั้นๆ แล้วเข้าได้ปกติ
+  </div>
+</section>
+
+<!-- ── ROLLBACK ── -->
+<section id="rollback">
+  <h2 class="text-2xl md:text-3xl font-bold mb-3">↩ Rollback Plan</h2>
+  <p class="text-slate-600 mb-4">ถ้าเกิดปัญหาหลัง cutover — ย้อนกลับ Hostinger ภายใน 5 นาที</p>
+
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>เข้า Cloudflare DNS</li>
+    <li>เปลี่ยน CNAME ของ <code>@</code> + <code>www</code> กลับเป็น A record IP เก่าของ Hostinger</li>
+    <li>รอ propagate ~1-5 นาที (TTL 60s ที่เราตั้งไว้)</li>
+    <li>SSH เข้า Hostinger → <code>php artisan up</code> เปิด site กลับ</li>
+    <li>ถ้ามีข้อมูลใหม่ที่เกิดบน Cloud หลัง cutover — export กลับไป merge ที่ Hostinger</li>
+  </ol>
+
+  <div class="callout callout-tip">
+    <strong>💡 Backup Plan:</strong> ตั้ง TTL DNS = 60 วินาทีล่วงหน้า 1 วัน — propagate จะเร็วทั้งขาไปและขากลับ
+  </div>
+</section>
+
+<!-- ── COST ── -->
+<section id="cost">
+  <h2 class="text-2xl md:text-3xl font-bold mb-3">💰 ค่าใช้จ่ายรายเดือน (ประมาณการ)</h2>
+
+  <div class="grid md:grid-cols-2 gap-6">
+    <div>
+      <h3 class="font-bold mb-2">📦 ขั้นต่ำ (Hobby Production)</h3>
+      <p class="text-sm text-slate-600 mb-2">เหมาะสำหรับช่วงเริ่มต้น &lt; 500 users</p>
+      <div class="bg-white border border-slate-200 rounded-lg p-4">
+        <div class="cost-row">
+          <span class="item">Compute (1 vCPU · 512MB)</span>
+          <span class="price">$10</span>
+        </div>
+        <div class="cost-row">
+          <span class="item">MySQL (1GB)</span>
+          <span class="price">$15</span>
+        </div>
+        <div class="cost-row">
+          <span class="item">Redis (256MB)</span>
+          <span class="price">$5</span>
+        </div>
+        <div class="cost-row">
+          <span class="item">Bandwidth (~50GB)</span>
+          <span class="price">included</span>
+        </div>
+        <div class="cost-total">
+          <span>รวม / เดือน</span>
+          <span>~$30 (~฿1,050)</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3 class="font-bold mb-2">🚀 Production (Real Traffic)</h3>
+      <p class="text-sm text-slate-600 mb-2">เหมาะสำหรับ 500-5000 users</p>
+      <div class="bg-white border border-slate-200 rounded-lg p-4">
+        <div class="cost-row">
+          <span class="item">Compute (2 vCPU · 2GB)</span>
+          <span class="price">$25</span>
+        </div>
+        <div class="cost-row">
+          <span class="item">MySQL (5GB · backups)</span>
+          <span class="price">$25</span>
+        </div>
+        <div class="cost-row">
+          <span class="item">Redis (1GB)</span>
+          <span class="price">$10</span>
+        </div>
+        <div class="cost-row">
+          <span class="item">Worker (extra replica)</span>
+          <span class="price">$10</span>
+        </div>
+        <div class="cost-row">
+          <span class="item">Bandwidth (~200GB)</span>
+          <span class="price">$5</span>
+        </div>
+        <div class="cost-total">
+          <span>รวม / เดือน</span>
+          <span>~$75 (~฿2,650)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3 class="font-bold mt-6 mb-2">📊 เปรียบเทียบกับทางอื่น</h3>
+  <table class="info">
+    <thead>
+      <tr><th>Provider</th><th>Min/เดือน</th><th>Setup time</th><th>Ops effort</th><th>Best for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Hostinger Business</td>
+        <td>~฿200</td>
+        <td>30+ นาที</td>
+        <td>Manual cron, no queue</td>
+        <td>MVP, traffic ต่ำ</td>
+      </tr>
+      <tr>
+        <td>Forge + DO Singapore</td>
+        <td>~฿630</td>
+        <td>20 นาที</td>
+        <td>OS updates ต้องทำเอง</td>
+        <td>Sweet spot ราคา/feature</td>
+      </tr>
+      <tr style="background:#fef2f2;">
+        <td><strong>Laravel Cloud (Hobby)</strong></td>
+        <td><strong>~฿1,050</strong></td>
+        <td><strong>15 นาที</strong></td>
+        <td><strong>Zero ops</strong></td>
+        <td><strong>Production พร้อมโต</strong></td>
+      </tr>
+      <tr>
+        <td>Laravel Cloud (Prod)</td>
+        <td>~฿2,650</td>
+        <td>15 นาที</td>
+        <td>Zero ops + auto-scale</td>
+        <td>Real traffic 1k-10k users</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-tip">
+    <strong>💡 Free credits:</strong> Laravel Cloud มี <strong>$30 free credit</strong> ตอนสมัครใหม่ — พอใช้ทดสอบ 1 เดือนเต็ม
+  </div>
+</section>
+
+<!-- ── TROUBLESHOOTING ── -->
+<section id="troubleshooting">
+  <h2 class="text-2xl md:text-3xl font-bold mb-3">🔧 Troubleshooting</h2>
+
+  <div class="space-y-3">
+    <details class="bg-white border border-slate-200 rounded-lg p-4">
+      <summary class="font-semibold cursor-pointer">❌ Build fails: "composer install" memory exhausted</summary>
+      <div class="mt-3 text-sm space-y-2">
+        <p>Cloud build container มี memory limit — แก้โดย:</p>
+        <ol class="list-decimal ml-6">
+          <li>Commit <code>composer.lock</code> เข้า repo (ถ้ายังไม่มี)</li>
+          <li>เพิ่ม <code>--prefer-dist --no-progress</code> ใน build step ของ <code>cloud.yaml</code></li>
+          <li>ถ้ายังไม่ได้ → upgrade compute size ชั่วคราว</li>
+        </ol>
+      </div>
+    </details>
+
+    <details class="bg-white border border-slate-200 rounded-lg p-4">
+      <summary class="font-semibold cursor-pointer">❌ Migration error: "table already exists"</summary>
+      <div class="mt-3 text-sm space-y-2">
+        <p>เพราะ import data dump พ่วง schema มาด้วย — แก้:</p>
+        <ol class="list-decimal ml-6">
+          <li>SSH เข้า Cloud → <code>php artisan migrate:fresh --seed</code> (ระวัง — ลบทุกอย่าง!)</li>
+          <li>หรือ import แค่ data tables (ไม่รวม <code>migrations</code> table)</li>
+        </ol>
+      </div>
+    </details>
+
+    <details class="bg-white border border-slate-200 rounded-lg p-4">
+      <summary class="font-semibold cursor-pointer">❌ 500 Error หลัง deploy + log บอก "view not found"</summary>
+      <div class="mt-3 text-sm space-y-2">
+        <p>view cache ค้าง — clear แล้ว rebuild:</p>
+        <div class="code-block">
+<pre><span class="prompt">$</span> <span class="cmd">laravel</span> cloud:ssh jabphap
+<span class="prompt">$</span> <span class="cmd">php</span> artisan view:clear
+<span class="prompt">$</span> <span class="cmd">php</span> artisan config:clear
+<span class="prompt">$</span> <span class="cmd">php</span> artisan cache:clear
+<span class="prompt">$</span> <span class="cmd">php</span> artisan optimize</pre>
+        </div>
+      </div>
+    </details>
+
+    <details class="bg-white border border-slate-200 rounded-lg p-4">
+      <summary class="font-semibold cursor-pointer">❌ LINE webhook signature mismatch</summary>
+      <div class="mt-3 text-sm space-y-2">
+        <p>เกิดจาก request body ถูก middleware แก้ก่อน verify — เช็ค:</p>
+        <ol class="list-decimal ml-6">
+          <li><code>App\Http\Middleware\VerifyCsrfToken</code> ต้อง <code>except</code> <code>webhooks/*</code></li>
+          <li>Trusted Proxies = <code>'*'</code> (Step 2.5)</li>
+          <li><code>LINE_CHANNEL_SECRET</code> ใน Cloud env ตรงกับ LINE console</li>
+        </ol>
+      </div>
+    </details>
+
+    <details class="bg-white border border-slate-200 rounded-lg p-4">
+      <summary class="font-semibold cursor-pointer">❌ Queue jobs ไม่ทำงาน</summary>
+      <div class="mt-3 text-sm space-y-2">
+        <p>ตรวจ:</p>
+        <ol class="list-decimal ml-6">
+          <li>Worker tab → Status = Running</li>
+          <li><code>QUEUE_CONNECTION=redis</code> ใน env</li>
+          <li>SSH → <code>php artisan queue:failed</code> ดู failed jobs</li>
+          <li>Logs tab → filter "queue" — ดู error</li>
+        </ol>
+      </div>
+    </details>
+
+    <details class="bg-white border border-slate-200 rounded-lg p-4">
+      <summary class="font-semibold cursor-pointer">❌ R2/S3 upload error: "Could not resolve host"</summary>
+      <div class="mt-3 text-sm space-y-2">
+        <p>เช็ค <code>R2_ENDPOINT</code> ใน Cloud env — ต้องเป็น URL เต็ม HTTPS:</p>
+        <div class="code-block">
+<pre><span class="env-key">R2_ENDPOINT</span>=<span class="env-val">https://abc123.r2.cloudflarestorage.com</span>
+<span class="comment"># ❌ ไม่ใช่ abc123.r2.cloudflarestorage.com (ไม่มี https://)</span></pre>
+        </div>
+      </div>
+    </details>
+
+    <details class="bg-white border border-slate-200 rounded-lg p-4">
+      <summary class="font-semibold cursor-pointer">❌ Sidebar หายเหมือนเคยเจอบน Hostinger</summary>
+      <div class="mt-3 text-sm space-y-2">
+        <p>ปัญหาเดียวกับที่เจอ — role string ใน DB ไม่ตรงกับ Model constant. แก้:</p>
+        <div class="code-block">
+<pre><span class="prompt">$</span> <span class="cmd">laravel</span> cloud:ssh jabphap
+<span class="prompt">$</span> <span class="cmd">php</span> artisan tinker
+<span class="prompt">&gt;&gt;&gt;</span> Admin::where(<span class="string">'role'</span>, <span class="string">'super_admin'</span>)->update([<span class="string">'role'</span> => Admin::ROLE_SUPERADMIN]);</pre>
+        </div>
+      </div>
+    </details>
+
+    <details class="bg-white border border-slate-200 rounded-lg p-4">
+      <summary class="font-semibold cursor-pointer">❌ Slow first request หลังไม่มี traffic</summary>
+      <div class="mt-3 text-sm space-y-2">
+        <p>Cold start ของ Hobby tier — แก้:</p>
+        <ul class="list-disc ml-6">
+          <li>Upgrade เป็น Production tier (warm instances)</li>
+          <li>หรือใช้ uptime monitor (UptimeRobot, etc.) ping ทุก 5 นาทีเพื่อกัน cold</li>
+        </ul>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ── FAQ ── -->
+<section id="faq">
+  <h2 class="text-2xl md:text-3xl font-bold mb-3">❓ FAQ</h2>
+
+  <div class="space-y-3">
+    <details class="bg-white border border-slate-200 rounded-lg p-4">
+      <summary class="font-semibold cursor-pointer">Q: ใช้ MariaDB ต่อได้มั้ย ไม่อยากเปลี่ยน MySQL?</summary>
+      <div class="mt-3 text-sm">
+        <p>Cloud มีแค่ MySQL 8 และ Postgres 16 — ไม่มี MariaDB native. แต่ MySQL 8 รองรับ feature ทั้งหมดที่โปรเจคใช้ + utf8mb4 + JSON columns ดังนั้น migrate มาแล้วใช้ได้ตามปกติ ไม่ต้องแก้โค้ด</p>
+      </div>
+    </details>
+
+    <details class="bg-white border border-slate-200 rounded-lg p-4">
+      <summary class="font-semibold cursor-pointer">Q: เก็บภาพใน Cloud ได้มั้ย ไม่ต้องใช้ R2?</summary>
+      <div class="mt-3 text-sm">
+        <p>Cloud ใช้ ephemeral filesystem — ไฟล์ที่เขียน local จะหายตอน deploy ใหม่. <strong>ต้องใช้ R2/S3 เท่านั้น</strong>. โปรเจคนี้ใช้ R2 อยู่แล้วจึงไม่กระทบ ✓</p>
+      </div>
+    </details>
+
+    <details class="bg-white border border-slate-200 rounded-lg p-4">
+      <summary class="font-semibold cursor-pointer">Q: Pricing เพิ่มขึ้นยังไงเมื่อ traffic โต?</summary>
+      <div class="mt-3 text-sm">
+        <p>Cloud bill 3 ก้อน:</p>
+        <ul class="list-disc ml-6 mt-2">
+          <li><strong>Compute:</strong> ตามขนาด instance + จำนวน hours (ถ้า auto-scale ขึ้น 2x = ค่าขึ้น 2x ชั่วคราว)</li>
+          <li><strong>Database/Redis:</strong> ตามขนาด storage (fixed)</li>
+          <li><strong>Bandwidth:</strong> $0.10/GB หลัง 100GB free</li>
+        </ul>
+        <p class="mt-2">Set <strong>Spending Limit</strong> ใน Settings เพื่อกันบิลเกินคาด</p>
+      </div>
+    </details>
+
+    <details class="bg-white border border-slate-200 rounded-lg p-4">
+      <summary class="font-semibold cursor-pointer">Q: ย้ายออกจาก Cloud ไปที่อื่นได้มั้ย?</summary>
+      <div class="mt-3 text-sm">
+        <p>ได้สบาย — code ยังเป็น Laravel มาตรฐาน. Steps:</p>
+        <ol class="list-decimal ml-6 mt-2">
+          <li>Export DB ผ่าน <code>cloud:db:export</code></li>
+          <li>git clone repo</li>
+          <li>Setup ที่ Forge/DO/AWS ของใหม่</li>
+          <li>Import data + เซ็ต ENV</li>
+        </ol>
+        <p class="mt-2">มีแค่ <code>cloud.yaml</code> ที่จะไม่จำเป็นในที่อื่น (แต่ปล่อยไว้ก็ไม่เสียหาย)</p>
+      </div>
+    </details>
+
+    <details class="bg-white border border-slate-200 rounded-lg p-4">
+      <summary class="font-semibold cursor-pointer">Q: รองรับ multi-environment (staging + production) มั้ย?</summary>
+      <div class="mt-3 text-sm">
+        <p>ได้ — สร้าง app แยกได้ 2 ตัว แต่ละตัวต่อกันคนละ branch:</p>
+        <ul class="list-disc ml-6 mt-2">
+          <li><code>jabphap-prod</code> ↔ <code>main</code> branch</li>
+          <li><code>jabphap-staging</code> ↔ <code>staging</code> branch (free Sandbox tier ก็ได้)</li>
+        </ul>
+      </div>
+    </details>
+
+    <details class="bg-white border border-slate-200 rounded-lg p-4">
+      <summary class="font-semibold cursor-pointer">Q: SSH เข้าได้ไหม? ต้องเปลี่ยน workflow มั้ย?</summary>
+      <div class="mt-3 text-sm">
+        <p>SSH ได้ผ่าน CLI: <code>laravel cloud:ssh jabphap</code> — เข้าไปได้ทุก artisan command, tinker, ดูไฟล์ ฯลฯ. แต่ <strong>ห้ามแก้ code ผ่าน SSH</strong> เพราะ deploy ใหม่จะทับ — ทุกการแก้ต้องผ่าน git commit + push</p>
+      </div>
+    </details>
+
+    <details class="bg-white border border-slate-200 rounded-lg p-4">
+      <summary class="font-semibold cursor-pointer">Q: ใช้ <code>/admin/deployment</code> ที่สร้างไว้ก่อนหน้านี้ได้มั้ย?</summary>
+      <div class="mt-3 text-sm">
+        <p>ไม่จำเป็นแล้ว — Cloud จัดการ schema/migration ผ่าน <code>cloud.yaml</code> ให้อัตโนมัติ. แต่หน้า admin/deployment ก็ยังใช้ดู status ของ ENV ได้</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ── DONE ── -->
+<section class="text-center py-12 bg-gradient-to-br from-red-50 to-orange-50 rounded-2xl border border-red-100">
+  <div class="text-5xl mb-3">🎉</div>
+  <h2 class="text-2xl font-bold mb-2">เสร็จแล้ว!</h2>
+  <p class="text-slate-600 max-w-xl mx-auto mb-6">
+    เว็บอยู่บน Laravel Cloud พร้อม auto-scale, scheduled jobs ตรงเวลา, queue worker async, และ HTTPS ที่ renew อัตโนมัติ
+  </p>
+  <div class="flex flex-wrap justify-center gap-3">
+    <a href="https://cloud.laravel.com" target="_blank" class="brand-bg text-white px-5 py-2.5 rounded-lg font-medium transition">
+      เข้า Cloud Dashboard →
+    </a>
+    <a href="../index.html" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-5 py-2.5 rounded-lg font-medium transition">
+      ← กลับเอกสารหลัก
+    </a>
+  </div>
+</section>
+
+</main>
+</div>
+
+<!-- ═══ FOOTER ═══ -->
+<footer class="bg-slate-900 text-slate-400 mt-16">
+  <div class="max-w-7xl mx-auto px-6 py-8">
+    <div class="flex flex-wrap justify-between gap-4 text-sm">
+      <div>
+        <strong class="text-white">Photo Gallery × Laravel Cloud</strong>
+        <p class="mt-1">คู่มือ deploy ฉบับ Step-by-Step สำหรับโปรเจค <code style="color:#fca5a5">jabphap.com</code></p>
+      </div>
+      <div class="flex gap-6">
+        <a href="../index.html" class="hover:text-white">Documentation Hub</a>
+        <a href="./hostinger.html" class="hover:text-white">Hostinger Guide</a>
+        <a href="./guide.html" class="hover:text-white">Deployment Overview</a>
+        <a href="https://cloud.laravel.com/docs" target="_blank" class="hover:text-white">Cloud Docs ↗</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+function copyCode(btn) {
+  const pre = btn.parentElement.querySelector('pre');
+  const text = pre.innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    const original = btn.textContent;
+    btn.textContent = '✓ Copied';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = original;
+      btn.classList.remove('copied');
+    }, 1500);
+  });
+}
+
+// Active sidebar link based on scroll
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const id = entry.target.id;
+    const link = document.querySelector(`.sidebar-link[href="#${id}"]`);
+    if (link) {
+      if (entry.isIntersecting) {
+        document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+        link.classList.add('active');
+      }
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+
+document.querySelectorAll('section[id]').forEach(s => observer.observe(s));
+</script>
+
+</body>
+</html>

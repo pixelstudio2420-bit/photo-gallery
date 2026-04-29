@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🚀 Laravel Cloud Sandbox Quickstart (PG fork) — 10 นาที</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Prompt', ui-sans-serif, system-ui, sans-serif; }
+  code, pre { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .hero-bg { background: radial-gradient(ellipse at top, #336791 0%, #0f172a 80%); }
+  .step-num { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; background: #336791; color: white; border-radius: 9999px; font-weight: 700; margin-right: 0.75rem; }
+  .code-block { background: #0f172a; color: #e2e8f0; padding: 0.875rem 1rem; border-radius: 0.5rem; font-size: 0.85rem; overflow-x: auto; }
+  .code-block .c { color: #94a3b8; font-style: italic; }
+  .code-block .k { color: #c084fc; }
+  .code-block .s { color: #fbbf24; }
+  .code-block .v { color: #93c5fd; }
+  .callout { padding: 0.875rem 1rem; border-radius: 0.5rem; border-left: 4px solid; margin: 1rem 0; }
+  .callout-tip { background: #faf5ff; border-color: #a855f7; color: #581c87; }
+  .callout-warn { background: #fffbeb; border-color: #f59e0b; color: #78350f; }
+  .callout-success { background: #f0fdf4; border-color: #22c55e; color: #14532d; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+
+<header class="hero-bg text-white">
+  <div class="max-w-5xl mx-auto px-6 py-12">
+    <div class="text-blue-300 text-sm mb-2">🐘 Postgres fork · Sandbox ทดลองฟรี</div>
+    <h1 class="text-3xl md:text-5xl font-bold mb-3 leading-tight">Deploy <span style="color:#fca5a5;">photo-gallery-pgsql</span><br>บน Laravel Cloud Sandbox</h1>
+    <p class="text-lg text-slate-300">$30 free credit · ใช้งานได้ ~1 เดือน · setup 10 นาที</p>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-6 py-10 space-y-8">
+
+<!-- intro -->
+<section>
+  <h2 class="text-xl font-bold mb-3">🎯 เป้าหมาย</h2>
+  <p class="text-slate-600 mb-4">
+    คู่มือนี้ deploy <strong>Postgres fork</strong> (ที่อยู่ใน <code class="bg-slate-200 px-1 rounded">C:\xampp\htdocs\photo-gallery-pgsql</code>)
+    ขึ้น Laravel Cloud <strong>Sandbox tier (ฟรี)</strong> เพื่อทดสอบก่อนจ่าย Production tier.
+    Sandbox มี $30 credit ฟรีตอนสมัครใหม่ — พอใช้รัน serverless Postgres + 1 compute instance นาน ~30 วัน
+  </p>
+  <table class="w-full text-sm border-collapse">
+    <tr class="bg-slate-100"><td class="p-2 border">Tier</td><td class="p-2 border">Compute</td><td class="p-2 border">DB</td><td class="p-2 border">ราคา</td></tr>
+    <tr><td class="p-2 border font-semibold">Sandbox</td><td class="p-2 border">0.25 vCPU shared</td><td class="p-2 border">Postgres serverless 0.25 CU</td><td class="p-2 border text-green-600">$0 (ใช้ credit)</td></tr>
+    <tr><td class="p-2 border font-semibold">Hobby Production</td><td class="p-2 border">1 vCPU 512MB</td><td class="p-2 border">Postgres 0.5 CU + Redis</td><td class="p-2 border">~$25/mo</td></tr>
+  </table>
+</section>
+
+<!-- Step 1 -->
+<section>
+  <h2 class="text-xl font-bold mb-3"><span class="step-num">1</span>Push fork ขึ้น GitHub (1 นาที)</h2>
+  <div class="code-block">
+<pre><span class="k">PS&gt;</span> <span class="c">cd</span> C:\xampp\htdocs\photo-gallery-pgsql
+<span class="k">PS&gt;</span> git init
+<span class="k">PS&gt;</span> git add .
+<span class="k">PS&gt;</span> git commit -m <span class="s">"initial: pgsql fork"</span>
+<span class="k">PS&gt;</span> git branch -M main
+<span class="k">PS&gt;</span> git remote add origin git@github.com:YOU/jabphap-pgsql.git
+<span class="k">PS&gt;</span> git push -u origin main</pre>
+  </div>
+  <div class="callout callout-warn">
+    ⚠️ ตรวจ <code>.gitignore</code> มี <code>.env</code> + <code>vendor/</code> + <code>node_modules/</code> ก่อน push
+  </div>
+</section>
+
+<!-- Step 2 -->
+<section>
+  <h2 class="text-xl font-bold mb-3"><span class="step-num">2</span>สมัคร Cloud + connect GitHub (3 นาที)</h2>
+  <ol class="list-decimal ml-6 space-y-2 text-sm">
+    <li>เข้า <a href="https://cloud.laravel.com/register" class="text-blue-600 underline" target="_blank">cloud.laravel.com/register</a> → Sign up with GitHub</li>
+    <li>Verify email + ใส่บัตรเครดิต (จะไม่ตัดถ้าใช้ใน free credit)</li>
+    <li>Dashboard → <strong>Source Providers → GitHub → Connect</strong></li>
+    <li>Grant access เฉพาะ repo <code>jabphap-pgsql</code></li>
+  </ol>
+</section>
+
+<!-- Step 3 -->
+<section>
+  <h2 class="text-xl font-bold mb-3"><span class="step-num">3</span>สร้าง app + Postgres + Redis (3 นาที)</h2>
+  <h3 class="font-bold mb-2">3.1 New Application</h3>
+  <ol class="list-decimal ml-6 space-y-1 text-sm mb-4">
+    <li>คลิก <strong>+ New Application</strong></li>
+    <li>From GitHub → <code>YOU/jabphap-pgsql</code> · branch <code>main</code></li>
+    <li>Region: <strong>Singapore (ap-southeast-1)</strong></li>
+    <li>Tier: <strong>Sandbox</strong></li>
+    <li>Click <strong>Create</strong></li>
+  </ol>
+
+  <h3 class="font-bold mb-2">3.2 Add Serverless Postgres ⭐</h3>
+  <ol class="list-decimal ml-6 space-y-1 text-sm mb-4">
+    <li>tab <strong>Databases → + New Database</strong></li>
+    <li>Type: <strong>Serverless Postgres</strong> ← จุดเด่นของ fork นี้</li>
+    <li>Name: <code>jabphap-pg</code></li>
+    <li>Compute: <strong>0.25 CU (auto-scale)</strong></li>
+    <li>Click <strong>Create</strong> — ใช้เวลา ~30 วินาที</li>
+  </ol>
+
+  <div class="callout callout-tip">
+    💡 <strong>Auto-wired ENV:</strong> Cloud ใส่ <code>DB_HOST</code>, <code>DB_PORT=5432</code>, <code>DB_DATABASE</code>,
+    <code>DB_USERNAME</code>, <code>DB_PASSWORD</code>, <code>DB_SSLMODE=require</code> ให้เอง — ไม่ต้องมี .env
+  </div>
+
+  <h3 class="font-bold mb-2">3.3 Add Valkey (Redis-compatible)</h3>
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>tab <strong>Caches → + New Cache</strong></li>
+    <li>Type: <strong>Valkey</strong> · Size: <strong>128MB</strong></li>
+    <li>Auto-wires <code>REDIS_HOST</code> + <code>REDIS_PASSWORD</code></li>
+  </ol>
+</section>
+
+<!-- Step 4 -->
+<section>
+  <h2 class="text-xl font-bold mb-3"><span class="step-num">4</span>ตั้ง ENV ที่ขาด (2 นาที)</h2>
+  <p class="text-sm text-slate-600 mb-3">DB + Redis auto-wired แล้ว — เหลือแค่ ENV ที่ Cloud ไม่รู้:</p>
+  <div class="code-block">
+<pre><span class="v">APP_NAME</span>=<span class="s">"จับภาพ"</span>
+<span class="v">APP_ENV</span>=<span class="s">production</span>
+<span class="v">APP_KEY</span>=<span class="c"># กด "Generate" ใน Cloud UI</span>
+<span class="v">APP_DEBUG</span>=<span class="s">false</span>
+<span class="v">APP_URL</span>=<span class="s">https://jabphap-pgsql.laravel.cloud</span>
+<span class="v">APP_TIMEZONE</span>=<span class="s">Asia/Bangkok</span>
+<span class="v">DB_CONNECTION</span>=<span class="s">pgsql</span>     <span class="c"># ← สำคัญ! บอกให้ใช้ pg driver</span>
+
+<span class="v">SESSION_DRIVER</span>=<span class="s">redis</span>
+<span class="v">CACHE_STORE</span>=<span class="s">redis</span>
+<span class="v">QUEUE_CONNECTION</span>=<span class="s">redis</span>
+
+<span class="v">FILESYSTEM_DISK</span>=<span class="s">r2</span>
+<span class="v">R2_ACCESS_KEY_ID</span>=<span class="s">YOUR_KEY</span>
+<span class="v">R2_SECRET_ACCESS_KEY</span>=<span class="s">YOUR_SECRET</span>
+<span class="v">R2_BUCKET</span>=<span class="s">jabphap-photos</span>
+<span class="v">R2_ENDPOINT</span>=<span class="s">https://abc.r2.cloudflarestorage.com</span></pre>
+  </div>
+  <p class="text-sm text-slate-600 mt-2">
+    LINE / Stripe / Omise / Google ENV ทั้งหมดเหมือนคู่มือ <a href="../../../photo-gallery-tailwind/docs/deployment/laravel-cloud.html#step-7" class="text-blue-600 underline">main Cloud guide step 7</a>
+  </p>
+</section>
+
+<!-- Step 5 -->
+<section>
+  <h2 class="text-xl font-bold mb-3"><span class="step-num">5</span>Deploy (1 นาที)</h2>
+  <p class="text-sm text-slate-600 mb-3">Cloud มี <code>cloud.yaml</code> ที่ root อยู่แล้ว — กด Deploy เลย</p>
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>tab <strong>Deployments → Deploy</strong></li>
+    <li>ดู build logs:</li>
+  </ol>
+  <div class="code-block mt-3">
+<pre><span class="c">✓ Cloning repository (jabphap-pgsql@main)
+✓ Installing PHP 8.3
+✓ Running: composer install
+✓ Running: npm ci && npm run build
+✓ Running: php artisan migrate --force
+  → 50 migrations ran on Postgres ✓
+✓ Running: php artisan storage:link
+✓ Worker started
+✓ Scheduler started
+🎉 Live at: https://jabphap-pgsql.laravel.cloud</span></pre>
+  </div>
+
+  <div class="callout callout-success">
+    ✅ <strong>Live URL ทำงาน:</strong> เปิด <code>https://jabphap-pgsql.laravel.cloud</code> — ควรเห็นหน้า home
+  </div>
+</section>
+
+<!-- Step 6 -->
+<section>
+  <h2 class="text-xl font-bold mb-3"><span class="step-num">6</span>Smoke test (1 นาที)</h2>
+  <p class="text-sm text-slate-600 mb-3">SSH เข้าไปทดสอบ</p>
+  <div class="code-block">
+<pre><span class="k">PS&gt;</span> laravel cloud:ssh jabphap-pgsql
+<span class="k">$</span> php artisan tinker
+<span class="k">&gt;&gt;&gt;</span> <span class="c">// Postgres reachable?</span>
+<span class="k">&gt;&gt;&gt;</span> DB::connection()->getDriverName()
+<span class="c">// "pgsql"</span>
+
+<span class="k">&gt;&gt;&gt;</span> <span class="c">// Booking phase 2 features?</span>
+<span class="k">&gt;&gt;&gt;</span> Schema::hasColumn('bookings', 'is_waitlist')
+<span class="c">// true</span>
+
+<span class="k">&gt;&gt;&gt;</span> <span class="c">// Test overlap query (PG INTERVAL syntax)</span>
+<span class="k">&gt;&gt;&gt;</span> Booking::overlapping(1, now(), now()->addHours(2))->count()
+<span class="c">// 0  (no errors = SQL parsed correctly)</span></pre>
+  </div>
+</section>
+
+<!-- Cost monitoring -->
+<section>
+  <h2 class="text-xl font-bold mb-3">💰 Monitor cost</h2>
+  <p class="text-sm text-slate-600 mb-3">Sandbox + free credit = $0 สำหรับเดือนแรก แต่ดูได้ว่ามี usage เท่าไหร่:</p>
+  <ol class="list-decimal ml-6 space-y-1 text-sm">
+    <li>Dashboard → <strong>Billing → Current Usage</strong></li>
+    <li>ดู:
+      <ul class="list-disc ml-6 mt-1">
+        <li>Compute hours used (ฟรี ~720 hrs/month ใน Sandbox)</li>
+        <li>Postgres CU-hours (ใน Sandbox = pay-per-use แต่ scale-to-zero ตอนไม่มี traffic = เกือบฟรี)</li>
+        <li>Bandwidth (100GB/mo ฟรี)</li>
+      </ul>
+    </li>
+    <li>ตั้ง <strong>Spending Limit</strong> = $10/month เพื่อกัน surprise</li>
+  </ol>
+</section>
+
+<!-- next steps -->
+<section class="bg-blue-50 p-6 rounded-xl border border-blue-200">
+  <h2 class="text-xl font-bold mb-3">🎯 Next Steps</h2>
+  <ul class="space-y-2 text-sm">
+    <li>📸 ลองสร้าง booking ผ่านหน้า <code>/photographers/{id}/book</code> → ดูว่า phase 2 features ทำงานทุกอย่าง</li>
+    <li>📊 เช็ค <code>/admin/dashboard</code> → ทดสอบ raw queries ที่เพิ่งแก้เป็น PG syntax</li>
+    <li>🔄 ถ้าทุกอย่าง work → upgrade Sandbox → Hobby/Production tier</li>
+    <li>🌐 ชี้ domain <code>jabphap.com</code> มาที่ app — ดู step 10 ใน main Cloud guide</li>
+    <li>📦 Migrate data จาก MySQL fork (ถ้ามี): ใช้ <code>scripts/mysql-to-pgsql.py</code></li>
+  </ul>
+</section>
+
+<footer class="text-center text-sm text-slate-500 py-6 mt-8 border-t">
+  <a href="../../README.PGSQL.md" class="text-blue-600 hover:underline">📖 README</a> ·
+  <a href="../../../photo-gallery-tailwind/docs/deployment/laravel-cloud.html" class="text-blue-600 hover:underline">📘 Main Cloud guide</a> ·
+  <a href="https://cloud.laravel.com/docs" class="text-blue-600 hover:underline" target="_blank">🔗 Cloud docs ↗</a>
+</footer>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📸 Web Installer Guide — Photo Gallery</title>
+<meta name="description" content="คู่มือใช้ Web Install Wizard สำหรับ deploy โดยไม่ต้องใช้ CLI (4 ขั้นตอน — APP_KEY → Database → Migrations → Admin)">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<style>
+  html { scroll-behavior: smooth; scroll-padding-top: 1.5rem; }
+  body { font-family: 'Prompt', ui-sans-serif, system-ui, sans-serif; }
+  code, pre, .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+  /* Hero */
+  .hero-bg {
+    background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 50%, #8b5cf6 100%);
+  }
+  .gradient-text {
+    background: linear-gradient(135deg, #fde68a 0%, #ffffff 50%, #6ee7b7 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* TOC sidebar */
+  .toc-link {
+    display: block;
+    padding: 0.4rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.78rem;
+    color: #475569;
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    transition: all .15s;
+  }
+  .toc-link:hover { background: #f1f5f9; color: #6366f1; border-left-color: #a5b4fc; }
+  .toc-link.is-active { background: #eef2ff; color: #4338ca; border-left-color: #6366f1; font-weight: 600; }
+  .toc-num { display: inline-block; width: 22px; font-size: 0.7rem; font-weight: 700; color: #6366f1; }
+
+  /* Section card */
+  .sec-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 1px 3px rgba(15,23,42,.04);
+    scroll-margin-top: 1rem;
+  }
+  @media (min-width: 768px) {
+    .sec-card { padding: 2rem 2.25rem; }
+  }
+  .sec-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 10px;
+    font-weight: 800; font-size: 0.85rem; color: white;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    flex-shrink: 0;
+  }
+  .sec-title { font-size: 1.35rem; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.3; }
+  .sec-lead { color: #64748b; font-size: 0.9rem; line-height: 1.6; margin: 0.5rem 0 1rem; }
+
+  /* Code block */
+  .code-block {
+    position: relative;
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 0.625rem;
+    padding: 1rem 1.25rem;
+    padding-right: 4rem;
+    overflow-x: auto;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    margin: 0.75rem 0;
+  }
+  .code-block .prompt { color: #6ee7b7; user-select: none; }
+  .code-block .comment { color: #94a3b8; font-style: italic; }
+  .code-block .key { color: #c4b5fd; }
+  .code-block .val { color: #fed7aa; }
+  .code-block .ok  { color: #86efac; }
+
+  .copy-btn {
+    position: absolute; top: 0.5rem; right: 0.5rem;
+    width: 30px; height: 30px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #cbd5e1;
+    font-size: 0.8rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .copy-btn:hover { background: rgba(255,255,255,0.15); color: white; }
+  .copy-btn.is-copied { background: #10b981; border-color: #10b981; color: white; }
+
+  /* Callout boxes */
+  .callout {
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    margin: 0.75rem 0;
+    border-left: 4px solid;
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    font-size: 0.85rem;
+    line-height: 1.6;
+  }
+  .callout.tip    { background: #d1fae5; border-color: #10b981; color: #065f46; }
+  .callout.info   { background: #dbeafe; border-color: #3b82f6; color: #1e3a8a; }
+  .callout.warn   { background: #fef3c7; border-color: #f59e0b; color: #78350f; }
+  .callout.danger { background: #fee2e2; border-color: #ef4444; color: #991b1b; }
+  .callout-icon { flex-shrink: 0; font-size: 1.1rem; margin-top: 0.1rem; }
+
+  /* Table */
+  .doc-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0;
+    font-size: 0.82rem;
+  }
+  .doc-table th, .doc-table td {
+    padding: 0.65rem 0.85rem;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .doc-table th {
+    background: #f8fafc;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    color: #475569;
+  }
+
+  /* Step list */
+  .steps {
+    counter-reset: step;
+    margin: 0.5rem 0;
+    list-style: none;
+    padding: 0;
+  }
+  .steps li {
+    counter-increment: step;
+    position: relative;
+    padding-left: 2.25rem;
+    margin-bottom: 0.6rem;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute; left: 0; top: 0;
+    width: 24px; height: 24px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; font-weight: 800;
+  }
+
+  /* Inline code */
+  .sec-card :not(pre) > code {
+    background: #f1f5f9;
+    color: #6366f1;
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.82em;
+  }
+
+  /* Stage card (4-step wizard) */
+  .stage-card {
+    border: 2px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 1rem;
+    background: white;
+    transition: all .2s;
+  }
+  .stage-card.is-current {
+    border-color: #f59e0b;
+    background: #fef3c7;
+    box-shadow: 0 8px 20px -8px rgba(245,158,11,0.4);
+  }
+  .stage-card.is-done {
+    border-color: #10b981;
+    background: #d1fae5;
+  }
+  .stage-pill {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 50%;
+    font-size: 0.75rem; font-weight: 800; color: white;
+    background: #94a3b8;
+  }
+  .stage-card.is-current .stage-pill { background: #f59e0b; }
+  .stage-card.is-done .stage-pill { background: #10b981; }
+
+  /* Print */
+  @media print {
+    .no-print { display: none !important; }
+    .sec-card { break-inside: avoid; box-shadow: none !important; }
+    body { background: white !important; }
+  }
+
+  /* Pretty body text */
+  .sec-card p { font-size: 0.88rem; line-height: 1.65; color: #334155; margin: 0.5rem 0; }
+  .sec-card ul:not(.steps) {
+    padding-left: 1.5rem;
+    margin: 0.5rem 0;
+    font-size: 0.88rem;
+    line-height: 1.65;
+    color: #334155;
+  }
+  .sec-card ul:not(.steps) li { margin-bottom: 0.3rem; }
+  .sec-card a { color: #6366f1; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  .sec-card h3 { font-size: 1rem; font-weight: 700; color: #1e293b; margin: 1.25rem 0 0.5rem; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     HERO
+     ═══════════════════════════════════════════════════════════════════════ -->
+<header class="hero-bg text-white">
+  <div class="max-w-7xl mx-auto px-5 md:px-8 py-12 md:py-16">
+    <div class="flex items-start gap-4 flex-wrap justify-between">
+      <div class="flex items-start gap-4 flex-1 min-w-0">
+        <div class="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-2xl shadow-lg shadow-black/20">
+          <i class="bi bi-gear-wide-connected"></i>
+        </div>
+        <div class="min-w-0">
+          <div class="text-[10px] uppercase tracking-[0.25em] text-white/75 font-bold mb-2 flex items-center gap-1.5">
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+            Web-Based Installer · Photo Gallery
+          </div>
+          <h1 class="font-bold text-3xl md:text-4xl xl:text-5xl tracking-tight leading-tight mb-3">
+            ติดตั้งผ่าน <span class="gradient-text">เว็บ</span> ไม่ต้องใช้ CLI
+          </h1>
+          <p class="text-base md:text-lg text-white/85 max-w-2xl">
+            เปิด <code class="bg-white/15 px-2 py-0.5 rounded text-sm">/admin/deployment</code> หลัง upload code →
+            Wizard นำคุณ 4 ขั้นตอน → admin login พร้อมใช้
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 flex-wrap no-print">
+        <button onclick="window.print()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/30 text-white transition">
+          <i class="bi bi-printer"></i> พิมพ์
+        </button>
+        <a href="../index.html" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/30 text-white transition no-underline">
+          <i class="bi bi-arrow-left"></i> Documentation Hub
+        </a>
+      </div>
+    </div>
+
+    <!-- Quick stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-8 max-w-3xl">
+      <div class="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3 text-center">
+        <div class="text-2xl font-extrabold">4</div>
+        <div class="text-[10px] uppercase tracking-wider opacity-80">ขั้นตอนใน Wizard</div>
+      </div>
+      <div class="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3 text-center">
+        <div class="text-2xl font-extrabold">~15<span class="text-sm">นาที</span></div>
+        <div class="text-[10px] uppercase tracking-wider opacity-80">เวลาที่ใช้</div>
+      </div>
+      <div class="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3 text-center">
+        <div class="text-2xl font-extrabold">0</div>
+        <div class="text-[10px] uppercase tracking-wider opacity-80">CLI Commands</div>
+      </div>
+      <div class="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3 text-center">
+        <div class="text-2xl font-extrabold">Auto<span class="text-sm">-secure</span></div>
+        <div class="text-[10px] uppercase tracking-wider opacity-80">หลังสร้าง admin</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     MAIN CONTENT WITH TOC
+     ═══════════════════════════════════════════════════════════════════════ -->
+<main class="max-w-7xl mx-auto px-5 md:px-8 py-8">
+  <div class="grid grid-cols-1 lg:grid-cols-[230px_1fr] gap-6 lg:gap-10">
+
+    <!-- TOC sidebar -->
+    <aside class="lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto no-print">
+      <div class="text-[11px] uppercase font-bold tracking-[0.15em] text-slate-500 mb-2 px-3">
+        สารบัญ
+      </div>
+      <nav id="toc">
+        <a href="#s1" class="toc-link is-active"><span class="toc-num">1.</span> ภาพรวม Web Installer</a>
+        <a href="#s2" class="toc-link"><span class="toc-num">2.</span> เมื่อไร Install Mode เปิด</a>
+        <a href="#s3" class="toc-link"><span class="toc-num">3.</span> ข้อกำหนดก่อนเริ่ม</a>
+        <a href="#s4" class="toc-link"><span class="toc-num">4.</span> Step 1: APP_KEY</a>
+        <a href="#s5" class="toc-link"><span class="toc-num">5.</span> Step 2: Database</a>
+        <a href="#s6" class="toc-link"><span class="toc-num">6.</span> Step 3: Migrations</a>
+        <a href="#s7" class="toc-link"><span class="toc-num">7.</span> Step 4: Admin User</a>
+        <a href="#s8" class="toc-link"><span class="toc-num">8.</span> Tabs: App/Mail/Storage</a>
+        <a href="#s9" class="toc-link"><span class="toc-num">9.</span> Tab URLs (Webhooks)</a>
+        <a href="#s10" class="toc-link"><span class="toc-num">10.</span> Tab Health (System Check)</a>
+        <a href="#s11" class="toc-link"><span class="toc-num">11.</span> หลัง Install: Auto-Secure</a>
+        <a href="#s12" class="toc-link"><span class="toc-num">12.</span> Security Model</a>
+        <a href="#s13" class="toc-link"><span class="toc-num">13.</span> Troubleshooting</a>
+        <a href="#s14" class="toc-link"><span class="toc-num">14.</span> ดูเพิ่ม</a>
+      </nav>
+    </aside>
+
+    <article>
+
+      <!-- 1. ภาพรวม -->
+      <section id="s1" class="sec-card">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="sec-num">1</span>
+          <h2 class="sec-title">ภาพรวม Web Installer</h2>
+        </div>
+        <p class="sec-lead">
+          Photo Gallery มีโหมด <strong>Install Mode</strong> ที่ตรวจจับว่ายังไม่มี admin user แล้วเปิดให้
+          <code>/admin/deployment</code> เข้าได้ <strong>โดยไม่ต้อง login</strong> — ผู้ใช้ตั้งค่า server ทั้งหมดผ่าน Web UI
+        </p>
+
+        <h3>เปรียบเทียบ Web Installer vs CLI</h3>
+        <table class="doc-table">
+          <thead>
+            <tr><th>เรื่อง</th><th>Web Installer (ใหม่)</th><th>CLI Manual (เดิม)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Skill ที่ต้องมี</td><td>คลิกเป็นพอ</td><td>SSH + bash</td></tr>
+            <tr><td>เวลา</td><td>~15 นาที</td><td>~30-60 นาที</td></tr>
+            <tr><td>ข้อผิดพลาด</td><td>UI guard + test ก่อน save</td><td>copy-paste ผิดง่าย</td></tr>
+            <tr><td>Webhook URLs</td><td>auto-generate + Copy</td><td>เขียนเอง</td></tr>
+            <tr><td>เหมาะกับ</td><td>ลูกค้าที่ไม่ technical / re-config</td><td>devops / automation</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout tip">
+          <i class="bi bi-lightbulb-fill callout-icon"></i>
+          <div>
+            <strong>ใช้คู่กันได้:</strong> ใช้ <code>provision.sh</code> ติดตั้ง LAMP + nginx + SSL (CLI)
+            แล้วใช้ Web Installer ตั้งค่า DB / Admin / API credentials (Web)
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. เมื่อไร Install Mode เปิด -->
+      <section id="s2" class="sec-card">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="sec-num">2</span>
+          <h2 class="sec-title">เมื่อไร Install Mode เปิดอัตโนมัติ</h2>
+        </div>
+        <p class="sec-lead">ระบบเช็ค 4 เงื่อนไข — เจออันใดอันหนึ่ง = อยู่ใน install mode</p>
+
+        <table class="doc-table">
+          <thead>
+            <tr><th>Stage</th><th>เงื่อนไข</th><th>ผล</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>no_key</code></td><td>APP_KEY ใน .env ว่าง</td><td>โชว์ปุ่ม Generate APP_KEY</td></tr>
+            <tr><td><code>no_db</code></td><td>เชื่อม DB ไม่ได้</td><td>ชี้ไปแท็บ Database</td></tr>
+            <tr><td><code>no_migrations</code></td><td>ไม่มี table <code>auth_admins</code></td><td>โชว์ปุ่ม Run Migrations</td></tr>
+            <tr><td><code>no_admin</code></td><td>ไม่มี admin user เลย</td><td>โชว์ฟอร์มสร้าง admin</td></tr>
+            <tr><td><code>installed</code></td><td>มี admin ≥ 1 คน</td><td><strong>auto-secure</strong> — ต้อง login</td></tr>
+          </tbody>
+        </table>
+
+        <h3>ตรวจสถานะปัจจุบันด้วย CLI (optional)</h3>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)"><i class="bi bi-clipboard"></i></button>
+<span class="prompt">$</span> php artisan tinker
+<span class="key">>>></span> \App\Services\Deployment\InstallMode::isActive()
+<span class="comment"># true = อยู่ใน install mode</span>
+
+<span class="key">>>></span> \App\Services\Deployment\InstallMode::stage()
+<span class="comment"># "no_admin" / "no_db" / "no_migrations" / "installed"</span>
+        </div>
+      </section>
+
+      <!-- 3. Prereq -->
+      <section id="s3" class="sec-card">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="sec-num">3</span>
+          <h2 class="sec-title">ข้อกำหนดก่อนเริ่ม</h2>
+        </div>
+        <p class="sec-lead">Web Installer ทำได้แค่ส่วน application — ส่วน server-level ยังต้องทำเอง</p>
+
+        <h3>✅ ทำเองก่อน (server-level)</h3>
+        <ul>
+          <li>ติดตั้ง <strong>PHP 8.2+, MySQL/MariaDB, nginx, Composer, Node.js</strong></li>
+          <li>upload code + รัน <code>composer install --no-dev</code> + <code>npm run build</code></li>
+          <li>copy <code>.env.example</code> → <code>.env</code> + ตั้ง permissions <code>chmod 664 .env</code></li>
+          <li>ตั้ง nginx vhost ชี้ไปที่ <code>/path/to/photo-gallery/public</code></li>
+          <li>ตั้ง SSL (Let's Encrypt) — provider บังคับ HTTPS</li>
+        </ul>
+        <p>👉 ใช้ <a href="provision.sh"><code>provision.sh</code></a> ทำให้อัตโนมัติได้</p>
+
+        <h3>✅ Web Installer ทำให้ (application-level)</h3>
+        <ul>
+          <li>Generate <code>APP_KEY</code></li>
+          <li>ตั้ง DB credentials ใน <code>.env</code> (พร้อม test connection)</li>
+          <li>รัน migrations</li>
+          <li>สร้าง super-admin คนแรก</li>
+          <li>ตั้ง SMTP / R2 / S3 credentials (optional)</li>
+          <li>Show webhook URLs ที่ต้อง register</li>
+        </ul>
+
+        <div class="callout warn">
+          <i class="bi bi-exclamation-triangle-fill callout-icon"></i>
+          <div>
+            ห้ามลืม <code>.env</code> writable! Permission ต้อง 664 + owner เป็น <code>www-data</code> ไม่งั้น save ไม่ได้
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. Step 1: APP_KEY -->
+      <section id="s4" class="sec-card">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="sec-num">4</span>
+          <h2 class="sec-title">Step 1: Generate APP_KEY</h2>
+        </div>
+        <p class="sec-lead">
+          เปิด browser ไปที่ <code>https://your-domain.com/admin/deployment</code> →
+          จะเห็น <strong>Install Mode banner</strong> สีส้ม-ชมพู
+        </p>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 my-4">
+          <div class="stage-card is-current">
+            <div class="flex items-center gap-2"><span class="stage-pill">1</span><div><div class="text-xs font-bold">APP_KEY</div><div class="text-[10px] text-slate-500">← ทำตอนนี้</div></div></div>
+          </div>
+          <div class="stage-card">
+            <div class="flex items-center gap-2"><span class="stage-pill">2</span><div><div class="text-xs font-bold">Database</div><div class="text-[10px] text-slate-500">รอ</div></div></div>
+          </div>
+          <div class="stage-card">
+            <div class="flex items-center gap-2"><span class="stage-pill">3</span><div><div class="text-xs font-bold">Migrations</div><div class="text-[10px] text-slate-500">รอ</div></div></div>
+          </div>
+          <div class="stage-card">
+            <div class="flex items-center gap-2"><span class="stage-pill">4</span><div><div class="text-xs font-bold">Admin</div><div class="text-[10px] text-slate-500">รอ</div></div></div>
+          </div>
+        </div>
+
+        <p>กดปุ่ม <strong>"Generate APP_KEY"</strong> — ระบบจะ:</p>
+        <ol class="steps">
+          <li>random 32 bytes ผ่าน <code>random_bytes(32)</code></li>
+          <li>encode เป็น base64 → <code>base64:xxxxxxxx...</code></li>
+          <li>เขียนลง <code>.env</code> แบบ atomic (backup ก่อน)</li>
+          <li>รัน <code>php artisan config:clear</code> อัตโนมัติ</li>
+        </ol>
+
+        <div class="callout info">
+          <i class="bi bi-info-circle-fill callout-icon"></i>
+          <div>เทียบเท่ากับ <code>php artisan key:generate</code> แต่ทำผ่านเว็บแบบไม่ต้องใช้ shell</div>
+        </div>
+      </section>
+
+      <!-- 5. Step 2: Database -->
+      <section id="s5" class="sec-card">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="sec-num">5</span>
+          <h2 class="sec-title">Step 2: ตั้งค่า Database</h2>
+        </div>
+        <p class="sec-lead">
+          กลับมาที่ banner — กด <strong>"ไปยัง Database Tab"</strong> หรือคลิก Tab <strong>Database</strong> ด้านบน
+        </p>
+
+        <h3>กรอก credentials</h3>
+        <table class="doc-table">
+          <thead>
+            <tr><th>Field</th><th>ค่า</th><th>หมายเหตุ</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Driver</td><td>mysql</td><td>หรือ mariadb / pgsql</td></tr>
+            <tr><td>Host</td><td><code>127.0.0.1</code></td><td>ถ้า DB อยู่บน VPS เดียวกัน</td></tr>
+            <tr><td>Port</td><td>3306</td><td>5432 สำหรับ pgsql</td></tr>
+            <tr><td>Database</td><td><code>photo_gallery</code></td><td>ต้องสร้างใน MySQL ก่อน</td></tr>
+            <tr><td>Username</td><td><code>pg_user</code></td><td>ห้ามใช้ root</td></tr>
+            <tr><td>Password</td><td>(ใส่ password)</td><td>เว้นว่าง = ไม่เปลี่ยนของเดิม</td></tr>
+          </tbody>
+        </table>
+
+        <h3>สร้าง DB ใน MySQL ก่อน (ครั้งแรก)</h3>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)"><i class="bi bi-clipboard"></i></button>
+<span class="prompt">$</span> sudo mysql -u root -p
+<span class="key">mysql></span> CREATE DATABASE photo_gallery
+       CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+<span class="key">mysql></span> CREATE USER 'pg_user'@'localhost'
+       IDENTIFIED BY '<span class="val">YOUR_STRONG_PASSWORD</span>';
+<span class="key">mysql></span> GRANT ALL ON photo_gallery.* TO 'pg_user'@'localhost';
+<span class="key">mysql></span> FLUSH PRIVILEGES;
+        </div>
+
+        <h3>สำคัญ: ทดสอบก่อน Save!</h3>
+        <ol class="steps">
+          <li>กรอก credentials</li>
+          <li>กดปุ่ม <strong>[ทดสอบเชื่อมต่อ]</strong> สีเขียว</li>
+          <li>เห็น <span class="text-emerald-600 font-bold">✓ เชื่อมต่อสำเร็จ — MySQL/MariaDB X.Y.Z</span></li>
+          <li>ถึงค่อยกด <strong>[บันทึก Database]</strong> สีม่วง</li>
+        </ol>
+
+        <div class="callout danger">
+          <i class="bi bi-shield-fill-exclamation callout-icon"></i>
+          <div>
+            ถ้าใส่ creds ผิดแล้ว save ทันที — เว็บจะใช้งานไม่ได้! ใช้ปุ่ม <strong>ทดสอบ</strong> เสมอ
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. Step 3: Migrations -->
+      <section id="s6" class="sec-card">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="sec-num">6</span>
+          <h2 class="sec-title">Step 3: รัน Migrations</h2>
+        </div>
+        <p class="sec-lead">
+          กลับมาที่ Install banner → กด <strong>"รัน php artisan migrate"</strong> — ใช้เวลาประมาณ 30 วินาที
+        </p>
+
+        <h3>สิ่งที่เกิดขึ้น</h3>
+        <ul>
+          <li>เรียก <code>Artisan::call('migrate', ['--force' => true])</code></li>
+          <li>สร้าง tables ทั้งหมด <strong>~120+ tables</strong></li>
+          <li>seeder default plans + settings ถูก insert อัตโนมัติ</li>
+          <li>output ของ artisan ถูก trim แล้วแสดงในข้อความ flash</li>
+        </ul>
+
+        <h3>ผลลัพธ์ที่ควรเห็น</h3>
+        <div class="code-block">
+<span class="ok">✓ รัน migrations สำเร็จ —</span> Migrating: 2024_01_15_create_users_table
+Migrated:  2024_01_15_create_users_table (12.34ms) ...
+        </div>
+
+        <div class="callout warn">
+          <i class="bi bi-exclamation-triangle-fill callout-icon"></i>
+          <div>
+            ถ้าเจอ error <code>SQLSTATE[42S01]: Base table 'X' already exists</code> — แสดงว่า DB เคยรันมาแล้ว ลบ DB แล้วเริ่มใหม่
+            หรือ skip ขั้นนี้ไปสร้าง admin ต่อเลย
+          </div>
+        </div>
+      </section>
+
+      <!-- 7. Step 4: Admin -->
+      <section id="s7" class="sec-card">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="sec-num">7</span>
+          <h2 class="sec-title">Step 4: สร้าง Super-Admin คนแรก</h2>
+        </div>
+        <p class="sec-lead">
+          ฟอร์มสุดท้ายของ wizard — กรอกข้อมูล admin คนแรกของระบบ (super-admin role อัตโนมัติ)
+        </p>
+
+        <table class="doc-table">
+          <thead><tr><th>Field</th><th>กฎ</th></tr></thead>
+          <tbody>
+            <tr><td>ชื่อ</td><td>≤ 120 ตัว · split เป็น first_name + last_name</td></tr>
+            <tr><td>Email</td><td>email format · unique ใน <code>auth_admins</code></td></tr>
+            <tr><td>Password</td><td>≥ 8 ตัว · max 128 ตัว</td></tr>
+            <tr><td>Confirm</td><td>ต้องตรงกับ password</td></tr>
+          </tbody>
+        </table>
+
+        <h3>สิ่งที่เกิดขึ้น</h3>
+        <ol class="steps">
+          <li>insert row ลง <code>auth_admins</code> ด้วย password hash (bcrypt cost 12)</li>
+          <li>set <code>role = 'super_admin'</code> + <code>is_active = 1</code></li>
+          <li>redirect ไป <code>/admin/login</code> พร้อมข้อความ success</li>
+          <li>Install Mode <strong>auto-end</strong> ทันที (มี admin แล้ว)</li>
+          <li>หน้า <code>/admin/deployment</code> เปลี่ยนเป็น require login</li>
+        </ol>
+
+        <div class="callout tip">
+          <i class="bi bi-shield-check callout-icon"></i>
+          <div>
+            <strong>เปิด 2FA ทันทีหลัง login!</strong> Settings → 2FA → scan QR ด้วย Google Authenticator / Authy
+          </div>
+        </div>
+      </section>
+
+      <!-- 8. Other tabs -->
+      <section id="s8" class="sec-card">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="sec-num">8</span>
+          <h2 class="sec-title">Tabs อื่น: App / Mail / Storage</h2>
+        </div>
+        <p class="sec-lead">หลัง login admin แล้ว กลับมาที่ <code>/admin/deployment</code> เพื่อตั้งค่าเพิ่ม</p>
+
+        <h3>Tab Application</h3>
+        <ul>
+          <li><code>APP_NAME</code> — ชื่อเว็บที่แสดงทุกที่ (browser title, email, etc.)</li>
+          <li><code>APP_URL</code> — domain ของคุณ (https://...) — สำคัญสำหรับ webhook + OAuth callback</li>
+          <li><code>APP_ENV</code> — local / staging / <strong>production</strong></li>
+          <li><code>APP_DEBUG</code> — ⚠️ ห้ามเปิดบน production</li>
+          <li><code>APP_TIMEZONE</code> — Asia/Bangkok</li>
+        </ul>
+
+        <h3>Tab Mail (SMTP)</h3>
+        <ul>
+          <li>Mailer: smtp / log / sendmail / mailgun / ses</li>
+          <li>SMTP host + port + username + password + encryption (TLS/SSL)</li>
+          <li>From address + From name</li>
+          <li><strong>Test ด้วย Send Test Email</strong> ก่อน save</li>
+        </ul>
+
+        <h3>Tab Storage</h3>
+        <p>เลือก 1 ใน 3:</p>
+        <ul>
+          <li><strong>Local</strong> — <code>storage/app/public</code> (เริ่มต้น)</li>
+          <li><strong>AWS S3</strong> — scalable / pay-as-you-go</li>
+          <li><strong>Cloudflare R2</strong> — ถูกกว่า S3, ฟรี egress (แนะนำ)</li>
+        </ul>
+        <p>R2 preset: <code>region=auto</code> + <code>path-style endpoint=on</code> + <code>endpoint=https://&lt;account-id&gt;.r2.cloudflarestorage.com</code></p>
+      </section>
+
+      <!-- 9. URLs tab -->
+      <section id="s9" class="sec-card">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="sec-num">9</span>
+          <h2 class="sec-title">Tab URLs — Webhook & OAuth Callbacks</h2>
+        </div>
+        <p class="sec-lead">
+          แท็บนี้แสดง <strong>16 URLs</strong> ที่ต้อง paste ใน dashboard ของผู้ให้บริการ — auto-generate จาก APP_URL
+        </p>
+
+        <h3>5 กลุ่ม URLs</h3>
+        <table class="doc-table">
+          <thead><tr><th>กลุ่ม</th><th>จำนวน</th><th>ตัวอย่าง</th></tr></thead>
+          <tbody>
+            <tr><td>OAuth Login (ลูกค้า)</td><td>3</td><td>Google / LINE / Facebook callback</td></tr>
+            <tr><td>OAuth Login (ช่างภาพ)</td><td>2</td><td>Google / LINE photographer callback</td></tr>
+            <tr><td>Payment Webhooks</td><td>8</td><td>Stripe / Omise×2 / LINE Pay / PayPal / TrueMoney / 2C2P / SlipOK</td></tr>
+            <tr><td>LINE OA Webhook</td><td>1</td><td>Messaging API webhook</td></tr>
+            <tr><td>Other</td><td>2</td><td>Facebook Messenger / Google Drive Push</td></tr>
+          </tbody>
+        </table>
+
+        <h3>วิธีใช้</h3>
+        <ol class="steps">
+          <li>กด Tab <strong>URLs</strong></li>
+          <li>หาผู้ให้บริการที่ต้องการ (เช่น Stripe)</li>
+          <li>คลิกลิงก์ <strong>"ตั้งค่าที่ Stripe Dashboard → Developers → Webhooks"</strong> (เปิด tab ใหม่)</li>
+          <li>กลับมาที่หน้านี้ กดปุ่ม <strong>📋 Copy</strong> → paste ใน Stripe webhook URL</li>
+          <li>ทำซ้ำสำหรับทุกบริการที่ใช้</li>
+        </ol>
+
+        <h3>CORS JSON สำหรับ S3/R2</h3>
+        <p>ถ้าใช้ R2/S3 + ลูกค้าอัปโหลดรูปจาก browser ตรง (presigned upload) — ต้องตั้ง CORS:</p>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)"><i class="bi bi-clipboard"></i></button>
+[{
+  <span class="key">"AllowedOrigins"</span>: [<span class="val">"https://your-domain.com"</span>],
+  <span class="key">"AllowedMethods"</span>: [<span class="val">"GET"</span>, <span class="val">"PUT"</span>, <span class="val">"POST"</span>, <span class="val">"HEAD"</span>],
+  <span class="key">"AllowedHeaders"</span>: [<span class="val">"*"</span>],
+  <span class="key">"ExposeHeaders"</span>: [<span class="val">"ETag"</span>],
+  <span class="key">"MaxAgeSeconds"</span>: 3000
+}]
+        </div>
+      </section>
+
+      <!-- 10. Health tab -->
+      <section id="s10" class="sec-card">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="sec-num">10</span>
+          <h2 class="sec-title">Tab Health — System Check</h2>
+        </div>
+        <p class="sec-lead">ตรวจสุขภาพระบบทั้งหมด — เปิดดูเป็นประจำเพื่อจับปัญหาล่วงหน้า</p>
+
+        <h3>4 กลุ่มที่ตรวจ</h3>
+        <ul>
+          <li><strong>PHP</strong> — version + 12 required extensions (pdo, mbstring, gd, ฯลฯ)</li>
+          <li><strong>File Permissions</strong> — storage/, bootstrap/cache/, .env writable</li>
+          <li><strong>Database (live)</strong> — driver, version, table count</li>
+          <li><strong>Runtime</strong> — Cache OK · Storage OK · memory limit · upload max</li>
+        </ul>
+
+        <h3>.env Backups</h3>
+        <p>
+          ทุกครั้งที่ save settings — ระบบ backup <code>.env</code> เก่าไว้ที่ <code>storage/app/env-backups/</code>
+          เก็บ 30 ไฟล์ล่าสุด (auto-prune)
+        </p>
+      </section>
+
+      <!-- 11. Auto-secure -->
+      <section id="s11" class="sec-card">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="sec-num">11</span>
+          <h2 class="sec-title">หลัง Install: Auto-Secure</h2>
+        </div>
+        <p class="sec-lead">
+          ระบบ <strong>self-locking</strong> — ทันทีที่มี admin user 1 คนใน <code>auth_admins</code>:
+        </p>
+
+        <ul>
+          <li>✅ <code>InstallMode::isActive()</code> return false</li>
+          <li>✅ middleware <code>admin.or.install</code> เปลี่ยนเป็น require admin login</li>
+          <li>✅ install endpoints (key/migrate/admin) ปฏิเสธทุก request ที่ไม่ login</li>
+          <li>✅ <code>/admin/deployment</code> redirect ไป <code>/admin/login</code> ถ้าไม่ login</li>
+          <li>✅ Install banner หายไป — เห็นเฉพาะ tabs ปกติ</li>
+        </ul>
+
+        <div class="callout tip">
+          <i class="bi bi-shield-check callout-icon"></i>
+          <div>
+            <strong>ไม่มี flag ที่ลืมปิด!</strong> ระบบใช้การมี/ไม่มี admin row เป็น gate — ลบ admin = install mode กลับมาเปิด
+          </div>
+        </div>
+      </section>
+
+      <!-- 12. Security -->
+      <section id="s12" class="sec-card">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="sec-num">12</span>
+          <h2 class="sec-title">Security Model — Drive-by Protection</h2>
+        </div>
+        <p class="sec-lead">Install mode บน production มี IP whitelist กัน drive-by hijack</p>
+
+        <h3>เปิดได้เฉพาะ:</h3>
+        <table class="doc-table">
+          <thead><tr><th>Path</th><th>เงื่อนไข</th><th>ผล</th></tr></thead>
+          <tbody>
+            <tr><td>A</td><td>Localhost (<code>127.0.0.1</code>, <code>::1</code>)</td><td>✅ เข้าได้</td></tr>
+            <tr><td>B</td><td>Private LAN (10.x, 192.168.x, 172.16-31.x)</td><td>✅ เข้าได้</td></tr>
+            <tr><td>C</td><td>APP_ENV = local / staging / testing</td><td>✅ เข้าได้</td></tr>
+            <tr><td>D</td><td>Login admin แล้ว (post-install)</td><td>✅ เข้าได้</td></tr>
+            <tr><td>E</td><td>Public IP + production + ไม่ login</td><td>❌ <strong>403 Forbidden</strong> + log warning</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Threat Model</h3>
+        <p>ถ้า attacker หา URL <code>/admin/deployment</code> เจอตอนคุณกำลัง deploy:</p>
+        <ul>
+          <li><strong>local dev</strong> — ไม่กระทบเพราะ attacker ไม่อยู่ใน LAN ของคุณ</li>
+          <li><strong>production จาก public IP</strong> — โดน 403 ทันที (เพราะ APP_ENV=production)</li>
+          <li><strong>กรณีพิเศษ</strong> — admin ใช้ proxy/VPN ที่ไม่ใช่ private IP — ต้อง login ก่อน หรือเปลี่ยน APP_ENV ชั่วคราว</li>
+        </ul>
+
+        <div class="callout warn">
+          <i class="bi bi-clock-history callout-icon"></i>
+          <div>
+            <strong>เคล็ดลับ:</strong> ทำ Step 1-4 ติดต่อกันให้เสร็จในรอบเดียว (5-10 นาที) เพื่อลด exposure window
+          </div>
+        </div>
+      </section>
+
+      <!-- 13. Troubleshooting -->
+      <section id="s13" class="sec-card">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="sec-num">13</span>
+          <h2 class="sec-title">Troubleshooting</h2>
+        </div>
+
+        <h3>❌ "Install mode is restricted to local/private network..."</h3>
+        <p>เกิดเมื่อ APP_ENV=production + เข้าจาก public IP. แก้:</p>
+        <ul>
+          <li>ssh เข้า server แล้วตั้ง <code>APP_ENV=staging</code> ชั่วคราว</li>
+          <li>หรือ access ผ่าน localhost ของ server (ssh + tunnel)</li>
+          <li>หรือ login admin ก่อน (ถ้ามี admin แล้ว)</li>
+        </ul>
+
+        <h3>❌ ".env file ไม่สามารถเขียนได้"</h3>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)"><i class="bi bi-clipboard"></i></button>
+<span class="prompt">$</span> sudo chown www-data:www-data .env
+<span class="prompt">$</span> sudo chmod 664 .env
+        </div>
+
+        <h3>❌ Migrations ล้มเหลว — "Base table already exists"</h3>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)"><i class="bi bi-clipboard"></i></button>
+<span class="comment"># DB เคย migrate แล้ว — drop + recreate</span>
+<span class="prompt">$</span> mysql -u root -p
+<span class="key">mysql></span> DROP DATABASE photo_gallery;
+<span class="key">mysql></span> CREATE DATABASE photo_gallery
+       CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+        </div>
+
+        <h3>❌ "Test connection failed" ที่ Tab Database</h3>
+        <ul>
+          <li>ตรวจ MySQL service: <code>sudo systemctl status mysql</code></li>
+          <li>ตรวจ user permissions: <code>SHOW GRANTS FOR 'pg_user'@'localhost';</code></li>
+          <li>ตรวจ port 3306 เปิด: <code>ss -tnlp | grep 3306</code></li>
+          <li>ลอง connect ด้วย CLI: <code>mysql -u pg_user -p photo_gallery</code></li>
+        </ul>
+
+        <h3>❌ admin login ไม่ได้หลังสร้าง</h3>
+        <ul>
+          <li>ตรวจว่า session storage path writable: <code>chmod 775 storage/framework/sessions</code></li>
+          <li>ตรวจ APP_KEY ตั้งแล้ว (ดูใน <code>.env</code>)</li>
+          <li>ตรวจ <code>auth_admins</code> table มี row จริง: <code>SELECT email FROM auth_admins;</code></li>
+        </ul>
+      </section>
+
+      <!-- 14. ดูเพิ่ม -->
+      <section id="s14" class="sec-card">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="sec-num">14</span>
+          <h2 class="sec-title">ดูเพิ่ม / เอกสารที่เกี่ยวข้อง</h2>
+        </div>
+
+        <table class="doc-table">
+          <thead><tr><th>เอกสาร</th><th>ที่</th><th>เหมาะกับ</th></tr></thead>
+          <tbody>
+            <tr><td>Deployment Guide (CLI)</td><td><a href="guide.html">guide.html</a></td><td>devops · automation</td></tr>
+            <tr><td>provision.sh</td><td><a href="provision.sh">provision.sh</a></td><td>fresh VPS one-shot</td></tr>
+            <tr><td>nginx.conf</td><td><a href="nginx.conf">nginx.conf</a></td><td>HTTPS server block</td></tr>
+            <tr><td>supervisor-queue.conf</td><td><a href="supervisor-queue.conf">supervisor-queue.conf</a></td><td>queue worker</td></tr>
+            <tr><td>Hostinger Guide</td><td><a href="hostinger.html">hostinger.html</a></td><td>shared hosting</td></tr>
+            <tr><td>Documentation Hub</td><td><a href="../index.html">../index.html</a></td><td>เอกสารทั้งหมด</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout info">
+          <i class="bi bi-link-45deg callout-icon"></i>
+          <div>
+            อ่านในแอปได้ด้วย: <code>https://your-domain.com/admin/deployment/guide</code>
+            (เวอร์ชันเดียวกัน + แสดง live system status)
+          </div>
+        </div>
+      </section>
+
+      <!-- Footer CTA -->
+      <div class="rounded-2xl p-8 text-center text-white" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">
+        <h3 class="text-2xl font-extrabold mb-2">🎉 พร้อมแล้ว!</h3>
+        <p class="opacity-90 text-sm mb-5">เปิด <code class="bg-white/20 px-2 py-0.5 rounded">/admin/deployment</code> เริ่ม install ได้เลย</p>
+        <a href="../index.html" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-violet-700 bg-white shadow-lg hover:-translate-y-0.5 transition no-underline">
+          <i class="bi bi-arrow-left"></i> Documentation Hub
+        </a>
+      </div>
+
+    </article>
+  </div>
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+  // ── Copy code blocks ──────────────────────────────────────────────────
+  function copyCode(btn) {
+    const block = btn.parentElement;
+    // Use innerText excluding the button's text
+    const tmp = block.cloneNode(true);
+    tmp.querySelector('.copy-btn')?.remove();
+    const text = tmp.innerText.trim();
+    navigator.clipboard.writeText(text).then(() => {
+      btn.classList.add('is-copied');
+      const orig = btn.innerHTML;
+      btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+      setTimeout(() => { btn.classList.remove('is-copied'); btn.innerHTML = orig; }, 1500);
+    }).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      btn.classList.add('is-copied');
+      btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+      setTimeout(() => { btn.classList.remove('is-copied'); btn.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 1500);
+    });
+  }
+
+  // ── Auto-highlight TOC based on scroll ────────────────────────────────
+  const sections = document.querySelectorAll('section[id]');
+  const tocLinks = document.querySelectorAll('.toc-link');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        tocLinks.forEach(l => l.classList.remove('is-active'));
+        const link = document.querySelector('.toc-link[href="#' + e.target.id + '"]');
+        if (link) link.classList.add('is-active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(s => observer.observe(s));
+</script>
+
+</body>
+</html>

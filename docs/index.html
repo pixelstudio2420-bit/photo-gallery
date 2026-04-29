@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📸 Photo Gallery — Documentation Hub</title>
+<meta name="description" content="คู่มือและเอกสารทั้งหมดสำหรับระบบ Photo Gallery (Laravel 12 + Tailwind)">
+<meta property="og:title" content="Photo Gallery Documentation">
+<meta property="og:description" content="คู่มือติดตั้ง เปิดใช้งาน และ scale ระบบ Photo Gallery">
+<meta property="og:type" content="website">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html { scroll-behavior: smooth; }
+  body { font-family: 'Prompt', ui-sans-serif, system-ui, sans-serif; }
+  code, pre { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+  .gradient-text {
+    background: linear-gradient(135deg, #6366f1 0%, #ec4899 50%, #f59e0b 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .hero-bg {
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, rgba(99,102,241,0.3) 0%, transparent 50%),
+      radial-gradient(ellipse at bottom right, #1e1b4b 0%, #0f172a 75%);
+  }
+  .doc-card {
+    position: relative; overflow: hidden;
+    border: 1px solid #e2e8f0; border-radius: 1rem;
+    transition: all .2s;
+    background: white;
+  }
+  .doc-card::before {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(135deg, transparent 0%, rgba(99,102,241,0.04) 100%);
+    opacity: 0; transition: opacity .2s;
+  }
+  .doc-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px -10px rgb(99 102 241 / 0.25);
+    border-color: #6366f1;
+  }
+  .doc-card:hover::before { opacity: 1; }
+  .doc-card .icon-bg {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 3rem; height: 3rem; border-radius: 0.75rem;
+    font-size: 1.5rem; margin-bottom: 1rem;
+  }
+  .quick-link {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.75rem 1rem; border-radius: 0.5rem;
+    border: 1px solid #e2e8f0;
+    transition: all .15s;
+  }
+  .quick-link:hover { background: #eef2ff; border-color: #6366f1; }
+  .pill { display: inline-block; padding: 0.125rem 0.625rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+  .pill-new   { background: #dcfce7; color: #166534; }
+  .pill-thai  { background: #fef3c7; color: #92400e; }
+  .pill-en    { background: #dbeafe; color: #1e40af; }
+  .pill-md    { background: #e5e7eb; color: #374151; }
+  .pill-html  { background: #fce7f3; color: #9f1239; }
+  .pill-host  { background: #ede9fe; color: #5b21b6; }
+  .pill-cf    { background: #ffedd5; color: #9a3412; }
+  .pill-r2    { background: #ede9fe; color: #5b21b6; }
+
+  /* Hostinger-branded card */
+  .doc-card.host-card { border-color: #ddd6fe; }
+  .doc-card.host-card:hover {
+    border-color: #673DE6;
+    box-shadow: 0 20px 40px -10px rgb(103 61 230 / 0.28);
+  }
+
+  .code-inline {
+    background: #1e293b; color: #e2e8f0;
+    padding: 0.125rem 0.5rem; border-radius: 0.25rem;
+    font-size: 0.8125rem;
+  }
+  .fade-in { animation: fadeIn .6s ease-out; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+
+<!-- ═══ HERO ═══ -->
+<header class="hero-bg text-white">
+  <div class="max-w-6xl mx-auto px-6 py-20 md:py-28 text-center fade-in">
+    <div class="inline-flex items-center gap-2 bg-white/10 backdrop-blur px-4 py-1.5 rounded-full text-sm text-indigo-200 mb-6">
+      <span>📸</span>
+      <span>Photo Gallery</span>
+      <span class="text-indigo-400">•</span>
+      <span>Documentation</span>
+    </div>
+    <h1 class="text-5xl md:text-7xl font-bold mb-6 leading-tight tracking-tight">
+      เอกสารทั้งหมด<br>
+      <span class="gradient-text">อยู่ที่เดียว</span>
+    </h1>
+    <p class="text-lg md:text-xl text-slate-300 max-w-2xl mx-auto mb-10">
+      ตั้งแต่ติดตั้งบนเครื่อง Local, Deploy ขึ้น Production,
+      ไปจนถึง Scale รองรับผู้ใช้ 50,000 คน
+    </p>
+    <div class="flex flex-wrap gap-3 justify-center">
+      <a href="#guides" class="bg-white text-slate-900 hover:bg-slate-100 px-6 py-3 rounded-lg font-semibold transition shadow-lg">
+        เริ่มอ่านคู่มือ →
+      </a>
+      <a href="#quick-start" class="bg-indigo-600 hover:bg-indigo-500 px-6 py-3 rounded-lg font-semibold transition shadow-lg">
+        Quick Start
+      </a>
+    </div>
+    <div class="mt-12 flex flex-wrap justify-center gap-6 text-sm text-slate-400">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 bg-green-400 rounded-full"></span>
+        <span>Laravel 12</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 bg-green-400 rounded-full"></span>
+        <span>Tailwind CSS</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 bg-green-400 rounded-full"></span>
+        <span>Production Ready</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ═══ MAIN ═══ -->
+<main class="max-w-6xl mx-auto px-6 py-16 space-y-20">
+
+  <!-- ── Guides Grid ── -->
+  <section id="guides">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl md:text-4xl font-bold mb-3">คู่มือหลัก</h2>
+      <p class="text-slate-600">เลือกคู่มือที่ตรงกับสิ่งที่คุณกำลังจะทำ</p>
+    </div>
+
+    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+      <!-- ✨ คู่มือฉบับสมบูรณ์ 2026 (เขียนใหม่ทั้งหมด) -->
+      <!-- NOTE: outer is div + 2 inner <a> (HTML disallows nested anchors) -->
+      <div class="doc-card p-6 md:col-span-2 lg:col-span-3"
+           style="border-color:#a5b4fc;background:linear-gradient(135deg,#eef2ff 0%,#f5f3ff 50%,#fdf4ff 100%);">
+        <div class="flex items-start gap-4 mb-4">
+          <div class="text-4xl">✨</div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1 flex-wrap">
+              <span class="pill" style="background:#4f46e5;color:white;">NEW · 2026</span>
+              <span class="pill pill-thai">ภาษาไทย</span>
+              <span class="pill pill-html">HTML</span>
+              <span class="pill" style="background:#dbeafe;color:#1e40af;">Verified</span>
+            </div>
+            <h3 class="text-2xl font-bold mb-2">คู่มือระบบฉบับสมบูรณ์ 2026 + Deploy Laravel Cloud</h3>
+            <p class="text-slate-600 leading-relaxed">
+              <strong>เขียนใหม่ทั้งหมด</strong> อ้างอิงเฉพาะระบบที่มีอยู่จริงในโค้ดเบสปัจจุบัน — ครอบคลุมทุก feature ที่ build เสร็จ:
+              AI Face Search, SlipOK, LINE delivery, Subscription, Add-on Store, Announcements, Chat,
+              Commission tier, Payout engine, 24+ admin sections, 30+ scheduled tasks
+            </p>
+          </div>
+        </div>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <a href="./MANUAL_2026.html"
+             class="block bg-white rounded-lg p-4 ring-1 ring-indigo-200 hover:ring-indigo-500 hover:shadow-md transition">
+            <div class="text-xs uppercase font-bold text-indigo-700 mb-1">📘 System Manual</div>
+            <div class="text-base font-bold text-slate-900 mb-1">คู่มือระบบ 10 sections</div>
+            <div class="text-sm text-slate-600">ลูกค้า · ช่างภาพ · แอดมิน · integration · cron · FAQ</div>
+            <div class="text-xs text-indigo-600 font-semibold mt-2">เปิดอ่าน →</div>
+          </a>
+          <a href="./DEPLOY_LARAVEL_CLOUD.html"
+             class="block bg-white rounded-lg p-4 ring-1 ring-violet-200 hover:ring-violet-500 hover:shadow-md transition">
+            <div class="text-xs uppercase font-bold text-violet-700 mb-1">📗 Deploy Laravel Cloud</div>
+            <div class="text-base font-bold text-slate-900 mb-1">15 ขั้นตอน step-by-step</div>
+            <div class="text-sm text-slate-600">มือใหม่ทำตามได้ ~30-60 นาที · ฟรี Hobby plan · SSL+Auto-scale</div>
+            <div class="text-xs text-violet-600 font-semibold mt-2">เริ่ม Deploy →</div>
+          </a>
+        </div>
+      </div>
+
+      <!-- 🐘 PGSQL FORK Sandbox banner -->
+      <a href="./deployment/sandbox-quickstart.html" class="doc-card p-6 block group md:col-span-2 lg:col-span-3" style="border-color:#bfdbfe;background:linear-gradient(135deg,#eff6ff 0%,#fef2f2 100%);">
+        <div class="flex items-start gap-4">
+          <div class="text-4xl">🐘</div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="pill pill-new">PGSQL FORK</span>
+              <span class="pill pill-thai">ไทย</span>
+              <span class="pill" style="background:#dbeafe;color:#1e3a8a;">Postgres + Cloud Sandbox</span>
+            </div>
+            <h3 class="text-xl font-bold mb-1">🚀 Sandbox Quickstart (Postgres) — 10 นาที</h3>
+            <p class="text-slate-600 text-sm mb-2">
+              นี่คือ <strong>Postgres fork</strong> ของโปรเจค — deploy บน Laravel Cloud Sandbox (free $30 credit) +
+              Serverless Postgres ที่ scale-to-zero ตอน traffic ต่ำ
+            </p>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span class="bg-white border border-slate-200 px-2 py-1 rounded">setup ~10 นาที</span>
+              <span class="bg-white border border-slate-200 px-2 py-1 rounded">$0/mo (Sandbox)</span>
+              <span class="bg-white border border-slate-200 px-2 py-1 rounded">scale-to-zero PG</span>
+              <span class="bg-white border border-slate-200 px-2 py-1 rounded">README.PGSQL.md</span>
+            </div>
+          </div>
+          <div class="text-blue-500 text-2xl group-hover:translate-x-1 transition">→</div>
+        </div>
+      </a>
+
+      <!-- Laravel Cloud guide (general) -->
+      <a href="./deployment/laravel-cloud.html" class="doc-card p-6 block group" style="border-color:#fecaca;background:linear-gradient(135deg,#fff 0%,#fef2f2 100%);">
+        <div class="icon-bg" style="background:#fee2e2;color:#FF2D20;">🔴</div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-thai">ไทย</span>
+          <span class="pill" style="background:#fee2e2;color:#c0210d;">Laravel Cloud</span>
+        </div>
+        <h3 class="text-xl font-bold mb-2 transition" style="color:inherit">
+          <span class="group-hover:text-[#FF2D20] transition">คู่มือ Laravel Cloud (Step-by-Step)</span>
+        </h3>
+        <p class="text-slate-600 text-sm mb-4">
+          Official Laravel PaaS — <em>git push = deploy</em> ใน ~25 นาที ·
+          Auto-scale + Singapore + Zero-ops
+        </p>
+        <div class="text-sm font-semibold group-hover:gap-2 inline-flex items-center gap-1 transition-all" style="color:#FF2D20;">
+          เริ่มทีละ step <span>→</span>
+        </div>
+      </a>
+
+      <!-- Hostinger-specific guide -->
+      <a href="./deployment/hostinger.html" class="doc-card host-card p-6 block group">
+        <div class="icon-bg" style="background:#ede9fe;color:#673DE6;">🟣</div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-thai">ไทย</span>
+          <span class="pill pill-host">Hostinger</span>
+        </div>
+        <h3 class="text-xl font-bold mb-2 transition" style="color:inherit">
+          <span class="group-hover:text-[#673DE6] transition">คู่มือ Hostinger (Step-by-Step)</span>
+        </h3>
+        <p class="text-slate-600 text-sm mb-4">
+          จากกด <em>จ่ายเงิน</em> จนเว็บขึ้น ใน ~35 นาที —
+          KVM 2 + Singapore + Cloudflare + SSL
+        </p>
+        <div class="text-sm font-semibold group-hover:gap-2 inline-flex items-center gap-1 transition-all" style="color:#673DE6;">
+          เริ่มทีละ step <span>→</span>
+        </div>
+      </a>
+
+      <!-- Cloudflare + R2 Setup Guide -->
+      <a href="./services/cloudflare-r2.html" class="doc-card p-6 block group">
+        <div class="icon-bg" style="background:#ffedd5;color:#F6821F;">🟠</div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-new">NEW</span>
+          <span class="pill pill-thai">ไทย</span>
+          <span class="pill pill-cf">Cloudflare</span>
+          <span class="pill pill-r2">R2</span>
+        </div>
+        <h3 class="text-xl font-bold mb-2 transition" style="color:inherit">
+          <span class="group-hover:text-[#F6821F] transition">Cloudflare + R2 Storage Setup</span>
+        </h3>
+        <p class="text-slate-600 text-sm mb-4">
+          CDN / DNS / Cache + S3-compatible object storage สำหรับเก็บรูป —
+          ~45 นาที, free tier พร้อมใช้
+        </p>
+        <div class="text-sm font-semibold group-hover:gap-2 inline-flex items-center gap-1 transition-all" style="color:#F6821F;">
+          ตั้งค่าทีละขั้น <span>→</span>
+        </div>
+      </a>
+
+      <!-- Web Installer (NEW) -->
+      <a href="./deployment/web-installer.html" class="doc-card p-6 block group" style="border-color:#a5f3fc;background:linear-gradient(135deg,#ecfeff 0%,#f0f9ff 100%);">
+        <div class="icon-bg" style="background:linear-gradient(135deg,#0ea5e9,#6366f1);color:white;">⚙️</div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-thai">ไทย</span>
+          <span class="pill pill-html">HTML</span>
+          <span class="pill" style="background:#fef3c7;color:#92400e;">🆕 ใหม่</span>
+        </div>
+        <h3 class="text-xl font-bold mb-2 group-hover:text-cyan-600 transition">
+          Web Installer Wizard
+        </h3>
+        <p class="text-slate-600 text-sm mb-4">
+          ติดตั้งผ่าน <code class="text-xs bg-cyan-100 px-1.5 py-0.5 rounded">/admin/deployment</code>
+          → 4 ขั้นตอน: APP_KEY → DB → Migrate → Admin · ไม่ต้องใช้ CLI
+        </p>
+        <div class="text-cyan-600 text-sm font-semibold group-hover:gap-2 inline-flex items-center gap-1 transition-all">
+          เริ่มอ่าน <span>→</span>
+        </div>
+      </a>
+
+      <!-- Deployment Guide (general) -->
+      <a href="./deployment/guide.html" class="doc-card p-6 block group">
+        <div class="icon-bg bg-indigo-100 text-indigo-600">🚀</div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-thai">ไทย</span>
+          <span class="pill pill-html">HTML</span>
+        </div>
+        <h3 class="text-xl font-bold mb-2 group-hover:text-indigo-600 transition">
+          คู่มือเปิดใช้งาน Online (ทุกเส้นทาง)
+        </h3>
+        <p class="text-slate-600 text-sm mb-4">
+          ครบ 4 เส้นทาง: Budget ฿300 → Enterprise ฿3,000+
+          พร้อม step-by-step ทุกระดับ
+        </p>
+        <div class="text-indigo-600 text-sm font-semibold group-hover:gap-2 inline-flex items-center gap-1 transition-all">
+          เริ่มอ่าน <span>→</span>
+        </div>
+      </a>
+
+      <!-- Installation Manual -->
+      <a href="./INSTALLATION.md" class="doc-card p-6 block group">
+        <div class="icon-bg bg-green-100 text-green-600">📦</div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-thai">ไทย</span>
+          <span class="pill pill-md">Markdown</span>
+        </div>
+        <h3 class="text-xl font-bold mb-2 group-hover:text-indigo-600 transition">
+          คู่มือติดตั้งแบบเต็ม
+        </h3>
+        <p class="text-slate-600 text-sm mb-4">
+          18 หัวข้อ ครอบคลุม Local Dev, OAuth, Payment,
+          Queue, SSL, Troubleshooting
+        </p>
+        <div class="text-indigo-600 text-sm font-semibold group-hover:gap-2 inline-flex items-center gap-1 transition-all">
+          เริ่มอ่าน <span>→</span>
+        </div>
+      </a>
+
+      <!-- Scaling Guide -->
+      <a href="./SCALING.html" class="doc-card p-6 block group">
+        <div class="icon-bg bg-rose-100 text-rose-600">📈</div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-en">EN</span>
+          <span class="pill pill-html">HTML</span>
+        </div>
+        <h3 class="text-xl font-bold mb-2 group-hover:text-indigo-600 transition">
+          Scaling to 50k+ Users
+        </h3>
+        <p class="text-slate-600 text-sm mb-4">
+          Architecture, CDN strategy, horizontal scaling,
+          MySQL read replicas, queue infrastructure
+        </p>
+        <div class="text-indigo-600 text-sm font-semibold group-hover:gap-2 inline-flex items-center gap-1 transition-all">
+          Read guide <span>→</span>
+        </div>
+      </a>
+
+      <!-- Deployment Scripts -->
+      <a href="./deployment/README.md" class="doc-card p-6 block group">
+        <div class="icon-bg bg-amber-100 text-amber-600">📜</div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-en">EN</span>
+          <span class="pill pill-md">Markdown</span>
+        </div>
+        <h3 class="text-xl font-bold mb-2 group-hover:text-indigo-600 transition">
+          Deployment Scripts
+        </h3>
+        <p class="text-slate-600 text-sm mb-4">
+          <code>provision.sh</code>, <code>deploy.sh</code>,
+          Nginx/Supervisor/Cron configs พร้อมใช้
+        </p>
+        <div class="text-indigo-600 text-sm font-semibold group-hover:gap-2 inline-flex items-center gap-1 transition-all">
+          ดูไฟล์ <span>→</span>
+        </div>
+      </a>
+
+      <!-- Scaling MD version -->
+      <a href="./SCALING.md" class="doc-card p-6 block group">
+        <div class="icon-bg bg-purple-100 text-purple-600">📐</div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-en">EN</span>
+          <span class="pill pill-md">Markdown</span>
+        </div>
+        <h3 class="text-xl font-bold mb-2 group-hover:text-indigo-600 transition">
+          Scaling Guide (Markdown)
+        </h3>
+        <p class="text-slate-600 text-sm mb-4">
+          เวอร์ชัน Markdown ของ Scaling Guide
+          สำหรับอ่านบน GitHub
+        </p>
+        <div class="text-indigo-600 text-sm font-semibold group-hover:gap-2 inline-flex items-center gap-1 transition-all">
+          View on GitHub <span>→</span>
+        </div>
+      </a>
+
+      <!-- Project README -->
+      <a href="../README.md" class="doc-card p-6 block group">
+        <div class="icon-bg bg-slate-100 text-slate-600">📄</div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="pill pill-en">EN</span>
+          <span class="pill pill-md">Markdown</span>
+        </div>
+        <h3 class="text-xl font-bold mb-2 group-hover:text-indigo-600 transition">
+          Project README
+        </h3>
+        <p class="text-slate-600 text-sm mb-4">
+          ภาพรวมโปรเจค, features หลัก, dependencies,
+          และคำสั่ง quick start
+        </p>
+        <div class="text-indigo-600 text-sm font-semibold group-hover:gap-2 inline-flex items-center gap-1 transition-all">
+          View README <span>→</span>
+        </div>
+      </a>
+
+    </div>
+  </section>
+
+  <!-- ── Quick Start ── -->
+  <section id="quick-start" class="bg-slate-900 text-white rounded-2xl p-8 md:p-12">
+    <div class="text-center mb-10">
+      <h2 class="text-3xl md:text-4xl font-bold mb-3">⚡ Quick Start</h2>
+      <p class="text-slate-400">เร็วสุดจาก zero ถึง deployed ใน 3 คำสั่ง</p>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+      <div class="text-center">
+        <div class="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold">1</div>
+        <div class="text-sm font-semibold mb-2">เช่า VPS</div>
+        <div class="text-xs text-slate-400">Ubuntu 22.04 อย่างน้อย 2GB RAM</div>
+      </div>
+      <div class="text-center">
+        <div class="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold">2</div>
+        <div class="text-sm font-semibold mb-2">SSH เข้าเครื่อง</div>
+        <div class="text-xs text-slate-400">รัน provision.sh</div>
+      </div>
+      <div class="text-center">
+        <div class="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold">3</div>
+        <div class="text-sm font-semibold mb-2">เสร็จใน ~10 นาที</div>
+        <div class="text-xs text-slate-400">Script ทำทุกอย่างให้</div>
+      </div>
+    </div>
+
+    <div class="mt-10 bg-black/40 rounded-lg p-6 max-w-3xl mx-auto font-mono text-sm overflow-x-auto">
+      <div class="text-slate-500 mb-2"># On fresh Ubuntu 22.04 VPS as root:</div>
+      <div><span class="text-green-400">curl</span> <span class="text-blue-400">-fsSL</span> https://raw.githubusercontent.com/YOUR/REPO/main/docs/deployment/provision.sh <span class="text-blue-400">-o</span> provision.sh</div>
+      <div><span class="text-green-400">sudo bash</span> provision.sh</div>
+      <div class="text-slate-500 mt-3"># Answer 6-7 questions → wait ~10 min → site is live 🎉</div>
+    </div>
+
+    <div class="text-center mt-8">
+      <a href="./deployment/guide.html#path-a" class="inline-block bg-white text-slate-900 hover:bg-slate-100 px-6 py-3 rounded-lg font-semibold transition">
+        ดู step-by-step เต็ม →
+      </a>
+    </div>
+  </section>
+
+  <!-- ── Quick Links ── -->
+  <section>
+    <div class="text-center mb-10">
+      <h2 class="text-3xl md:text-4xl font-bold mb-3">🔗 Quick Links</h2>
+      <p class="text-slate-600">ทางลัดไปยังหัวข้อที่คนเปิดบ่อย</p>
+    </div>
+
+    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+      <a href="./deployment/hostinger.html" class="quick-link" style="border-color:#ddd6fe;">
+        <span class="text-xl">🟣</span>
+        <div>
+          <div class="font-semibold text-sm">Hostinger Step-by-Step</div>
+          <div class="text-xs text-slate-500">จากจ่ายเงินจนเว็บขึ้น ~35 นาที</div>
+        </div>
+      </a>
+      <a href="./deployment/guide.html#choose-path" class="quick-link">
+        <span class="text-xl">🛤</span>
+        <div>
+          <div class="font-semibold text-sm">เลือกเส้นทาง Deploy</div>
+          <div class="text-xs text-slate-500">Budget / aaPanel / Forge / Enterprise</div>
+        </div>
+      </a>
+      <a href="./deployment/guide.html#path-b" class="quick-link">
+        <span class="text-xl">🎛</span>
+        <div>
+          <div class="font-semibold text-sm">ติดตั้งผ่าน aaPanel GUI</div>
+          <div class="text-xs text-slate-500">ไม่ต้องใช้ command line</div>
+        </div>
+      </a>
+      <a href="./deployment/guide.html#ext-google" class="quick-link">
+        <span class="text-xl">🔑</span>
+        <div>
+          <div class="font-semibold text-sm">ตั้งค่า Google OAuth</div>
+          <div class="text-xs text-slate-500">Drive API + Login</div>
+        </div>
+      </a>
+      <a href="./deployment/guide.html#ext-line" class="quick-link">
+        <span class="text-xl">💬</span>
+        <div>
+          <div class="font-semibold text-sm">ตั้งค่า LINE Messaging</div>
+          <div class="text-xs text-slate-500">Login + แจ้งเตือน</div>
+        </div>
+      </a>
+      <a href="./deployment/guide.html#ext-slipok" class="quick-link">
+        <span class="text-xl">🧾</span>
+        <div>
+          <div class="font-semibold text-sm">ตั้งค่า SlipOK</div>
+          <div class="text-xs text-slate-500">ตรวจสลิปอัตโนมัติ</div>
+        </div>
+      </a>
+      <a href="./deployment/guide.html#post-deploy" class="quick-link">
+        <span class="text-xl">✅</span>
+        <div>
+          <div class="font-semibold text-sm">Post-Deploy Checklist</div>
+          <div class="text-xs text-slate-500">48 รายการต้องทำ</div>
+        </div>
+      </a>
+      <a href="./deployment/guide.html#operations" class="quick-link">
+        <span class="text-xl">🔄</span>
+        <div>
+          <div class="font-semibold text-sm">Backup &amp; Operations</div>
+          <div class="text-xs text-slate-500">3-2-1 rule, re-deploy</div>
+        </div>
+      </a>
+      <a href="./deployment/guide.html#troubleshoot" class="quick-link">
+        <span class="text-xl">🛠</span>
+        <div>
+          <div class="font-semibold text-sm">แก้ปัญหาที่พบบ่อย</div>
+          <div class="text-xs text-slate-500">8 errors + fixes</div>
+        </div>
+      </a>
+      <a href="./deployment/guide.html#cost-summary" class="quick-link">
+        <span class="text-xl">💰</span>
+        <div>
+          <div class="font-semibold text-sm">สรุปค่าใช้จ่ายต่อปี</div>
+          <div class="text-xs text-slate-500">4 tiers เปรียบเทียบ</div>
+        </div>
+      </a>
+      <a href="./SCALING.html#architecture-overview" class="quick-link">
+        <span class="text-xl">🏗</span>
+        <div>
+          <div class="font-semibold text-sm">Architecture Overview</div>
+          <div class="text-xs text-slate-500">High-scale diagram</div>
+        </div>
+      </a>
+      <a href="./SCALING.html#cdn-strategy" class="quick-link">
+        <span class="text-xl">⚡</span>
+        <div>
+          <div class="font-semibold text-sm">CDN Strategy</div>
+          <div class="text-xs text-slate-500">Cache 95%+ pages at edge</div>
+        </div>
+      </a>
+      <a href="./INSTALLATION.md" class="quick-link">
+        <span class="text-xl">💻</span>
+        <div>
+          <div class="font-semibold text-sm">Local Dev Setup</div>
+          <div class="text-xs text-slate-500">Windows + XAMPP</div>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <!-- ── Stats / Info ── -->
+  <section class="grid md:grid-cols-4 gap-6">
+    <div class="bg-white border border-slate-200 rounded-xl p-6 text-center">
+      <div class="text-3xl font-bold text-indigo-600">4</div>
+      <div class="text-sm text-slate-600 mt-1">Deploy Paths</div>
+    </div>
+    <div class="bg-white border border-slate-200 rounded-xl p-6 text-center">
+      <div class="text-3xl font-bold text-indigo-600">95/95</div>
+      <div class="text-sm text-slate-600 mt-1">Smoke Tests Pass</div>
+    </div>
+    <div class="bg-white border border-slate-200 rounded-xl p-6 text-center">
+      <div class="text-3xl font-bold text-indigo-600">~฿300</div>
+      <div class="text-sm text-slate-600 mt-1">Min Monthly Cost</div>
+    </div>
+    <div class="bg-white border border-slate-200 rounded-xl p-6 text-center">
+      <div class="text-3xl font-bold text-indigo-600">10 min</div>
+      <div class="text-sm text-slate-600 mt-1">Zero to Deployed</div>
+    </div>
+  </section>
+
+  <!-- ── Tech Stack ── -->
+  <section>
+    <div class="text-center mb-10">
+      <h2 class="text-3xl md:text-4xl font-bold mb-3">🧰 Tech Stack</h2>
+      <p class="text-slate-600">สิ่งที่ใช้ในโปรเจค — ทั้งหมด battle-tested + production-ready</p>
+    </div>
+
+    <div class="grid md:grid-cols-4 gap-4">
+      <div class="bg-white border border-slate-200 rounded-lg p-4 text-center hover:border-indigo-300 transition">
+        <div class="text-2xl mb-2">🐘</div>
+        <div class="font-semibold text-sm">PHP 8.2</div>
+        <div class="text-xs text-slate-500 mt-1">Laravel 12</div>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-lg p-4 text-center hover:border-indigo-300 transition">
+        <div class="text-2xl mb-2">🎨</div>
+        <div class="font-semibold text-sm">Tailwind CSS</div>
+        <div class="text-xs text-slate-500 mt-1">v4 + Vite</div>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-lg p-4 text-center hover:border-indigo-300 transition">
+        <div class="text-2xl mb-2">🗄</div>
+        <div class="font-semibold text-sm">MySQL 8</div>
+        <div class="text-xs text-slate-500 mt-1">+ Redis cache</div>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-lg p-4 text-center hover:border-indigo-300 transition">
+        <div class="text-2xl mb-2">☁</div>
+        <div class="font-semibold text-sm">Cloudflare</div>
+        <div class="text-xs text-slate-500 mt-1">CDN + R2 + WAF</div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ═══ FOOTER ═══ -->
+<footer class="bg-slate-900 text-slate-400 py-12 mt-20">
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="grid md:grid-cols-3 gap-8">
+      <div>
+        <div class="text-white font-bold text-lg mb-2">📸 Photo Gallery</div>
+        <p class="text-sm">
+          ระบบขายภาพงาน event + สินค้าดิจิทัล<br>
+          Laravel 12 + Tailwind CSS
+        </p>
+      </div>
+      <div>
+        <div class="text-white font-semibold mb-3">Documentation</div>
+        <ul class="space-y-2 text-sm">
+          <li><a href="./deployment/hostinger.html" class="hover:text-white">Hostinger Step-by-Step</a></li>
+          <li><a href="./deployment/guide.html" class="hover:text-white">คู่มือเปิดใช้งาน (ทุกเส้นทาง)</a></li>
+          <li><a href="./INSTALLATION.md" class="hover:text-white">คู่มือติดตั้ง</a></li>
+          <li><a href="./SCALING.html" class="hover:text-white">Scaling Guide</a></li>
+          <li><a href="./deployment/README.md" class="hover:text-white">Deployment Scripts</a></li>
+        </ul>
+      </div>
+      <div>
+        <div class="text-white font-semibold mb-3">Resources</div>
+        <ul class="space-y-2 text-sm">
+          <li><a href="https://laravel.com/docs/12.x" target="_blank" class="hover:text-white">Laravel Docs ↗</a></li>
+          <li><a href="https://tailwindcss.com/docs" target="_blank" class="hover:text-white">Tailwind CSS ↗</a></li>
+          <li><a href="https://forge.laravel.com" target="_blank" class="hover:text-white">Laravel Forge ↗</a></li>
+          <li><a href="https://cloudflare.com" target="_blank" class="hover:text-white">Cloudflare ↗</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="border-t border-slate-800 mt-10 pt-6 text-center text-sm">
+      <p>Photo Gallery Documentation · Last updated <span id="update-date"></span></p>
+      <p class="mt-2 text-xs">Hosted on GitHub Pages</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('update-date').textContent = new Date().toLocaleDateString('th-TH', {
+    year: 'numeric', month: 'long', day: 'numeric'
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,112 @@
+@props([
+  /** customer | photographer (used to pick recommended provider) */
+  'role'         => 'customer',
+  /** lg | md */
+  'size'         => 'md',
+  /** true → render only recommended provider, large & centred */
+  'primaryOnly'  => false,
+  /** list of providers to hide e.g. ['line'] */
+  'exclude'      => [],
+  /** Hide the recommended badge on the primary button */
+  'hideRecommended' => false,
+  /** Label for secondary caption. Defaults based on role */
+  'intent'       => 'register',
+])
+
+@php
+  /** @var \App\Services\Auth\SocialAuthService $svc */
+  $svc       = app(\App\Services\Auth\SocialAuthService::class);
+  $providers = $svc->enabledProviders();
+
+  // remove excluded
+  foreach ((array) $exclude as $ex) {
+      unset($providers[$ex]);
+  }
+
+  $recommended = $svc->defaultProviderForRole($role);
+
+  // Reorder: recommended first
+  if (isset($providers[$recommended])) {
+      $recMeta   = $providers[$recommended];
+      unset($providers[$recommended]);
+      $providers = [$recommended => $recMeta] + $providers;
+  }
+
+  $primary   = $providers[$recommended] ?? null;
+  $secondary = array_filter($providers, fn($k) => $k !== $recommended, ARRAY_FILTER_USE_KEY);
+
+  $verb = $intent === 'login' ? 'เข้าสู่ระบบด้วย' : 'สมัครผ่าน';
+
+  $lgClass = 'py-3.5 text-base';
+  $mdClass = 'py-2.5 text-sm';
+  $btnSize = $size === 'lg' ? $lgClass : $mdClass;
+@endphp
+
+@php
+  // Build URL with optional role intent (so AuthController can redirect
+  // a new signup to photographer onboarding vs customer home).
+  $roleQuery = $intent === 'register' ? '?role=' . urlencode($role) : '';
+@endphp
+
+@if(empty($providers))
+  <div class="bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-xl p-3 text-sm dark:bg-yellow-500/10 dark:border-yellow-400/30 dark:text-yellow-300">
+    <i class="bi bi-exclamation-triangle mr-1"></i>ผู้ดูแลยังไม่ได้เปิดใช้ช่องทาง Social Login
+  </div>
+@else
+  <div class="space-y-2.5">
+    {{-- Primary (recommended) --}}
+    @if($primary)
+      <a
+        href="{{ $svc->providerUrl($recommended) . $roleQuery }}"
+        class="social-btn group relative w-full inline-flex items-center justify-center gap-3 {{ $btnSize }} font-semibold rounded-xl transition-all duration-200 shadow-sm hover:shadow-lg hover:-translate-y-0.5 {{ $primary['bg_class'] }} {{ $primary['text_class'] }}"
+        aria-label="{{ $verb }} {{ $primary['label'] }}"
+        data-provider="{{ $recommended }}"
+        onclick="this.classList.add('is-loading');"
+      >
+        <i class="bi {{ $primary['icon'] }} text-xl"></i>
+        <span>{{ $verb }} {{ $primary['label'] }}</span>
+        @unless($hideRecommended)
+          <span class="absolute -top-2 right-3 text-[.65rem] font-bold px-2 py-0.5 rounded-full bg-amber-400 text-amber-900 shadow">แนะนำ</span>
+        @endunless
+        <i class="bi bi-arrow-right-circle-fill absolute right-4 opacity-0 group-hover:opacity-100 transition"></i>
+      </a>
+    @endif
+
+    @if(!$primaryOnly && count($secondary))
+      <div class="flex items-center gap-2 my-2">
+        <hr class="flex-1 border-gray-200 dark:border-white/10">
+        <span class="text-xs text-gray-400 dark:text-gray-500">หรือใช้ช่องทางอื่น</span>
+        <hr class="flex-1 border-gray-200 dark:border-white/10">
+      </div>
+
+      <div class="grid {{ count($secondary) > 2 ? 'grid-cols-3' : 'grid-cols-' . count($secondary) }} gap-2">
+        @foreach($secondary as $name => $meta)
+          <a
+            href="{{ $svc->providerUrl($name) . $roleQuery }}"
+            class="social-btn inline-flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium rounded-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md {{ $meta['bg_class'] }} {{ $meta['text_class'] }}"
+            aria-label="{{ $verb }} {{ $meta['label'] }}"
+            data-provider="{{ $name }}"
+            onclick="this.classList.add('is-loading');"
+          >
+            <i class="bi {{ $meta['icon'] }}"></i>
+            <span>{{ $meta['label'] }}</span>
+          </a>
+        @endforeach
+      </div>
+    @endif
+  </div>
+@endif
+
+@once
+@push('styles')
+<style>
+  .social-btn.is-loading { opacity:.75; pointer-events:none; position:relative; }
+  .social-btn.is-loading::after {
+    content:''; width:14px; height:14px; border:2px solid currentColor; border-right-color:transparent;
+    border-radius:50%; margin-left:8px; animation:sbspin .8s linear infinite; display:inline-block;
+  }
+  @keyframes sbspin { to { transform:rotate(360deg); } }
+  .social-btn:focus-visible { outline:2px solid #6366f1; outline-offset:3px; }
+</style>
+@endpush
+@endonce
