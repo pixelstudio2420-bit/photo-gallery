@@ -25,29 +25,42 @@
        can be tuned via web-server headers if needed).
 ═══════════════════════════════════════════════════════════════════════ --}}
 @php
-    // Fallback path that lives in /public — the framework default.
+    // Always start with an absolute fallback so we never emit a bare
+    // storage key as href. If every other branch fails the browser will
+    // at least hit /favicon.ico (a real file in /public).
     $faviconUrl = asset('favicon.ico');
 
     $key = \App\Models\AppSetting::get('seo_favicon');
     if ($key) {
+        $candidate = '';
+
         // Prefer R2's public URL when configured. R2MediaService throws
-        // a StorageNotConfiguredException if R2 creds aren't set up; in
-        // that case we silently fall through to the local-disk path.
+        // StorageNotConfiguredException if R2 creds aren't set up — that
+        // bubbles into our catch and we fall through to the local disk.
         try {
-            $r2Url = app(\App\Services\Media\R2MediaService::class)->url($key);
-            if ($r2Url) {
-                $faviconUrl = $r2Url;
-            }
+            $candidate = (string) app(\App\Services\Media\R2MediaService::class)->url($key);
         } catch (\Throwable) {
-            // R2 not configured — try the local public disk next.
             try {
-                $localUrl = \Illuminate\Support\Facades\Storage::disk('public')->url($key);
-                if ($localUrl) {
-                    $faviconUrl = $localUrl;
-                }
+                $candidate = (string) \Illuminate\Support\Facades\Storage::disk('public')->url($key);
             } catch (\Throwable) {
-                // both failed — keep the /favicon.ico default already set.
+                $candidate = '';
             }
+        }
+
+        // Defensive sanity check.
+        //
+        // The S3 adapter's url() can return the bare object key (e.g.
+        // "system/favicon/user_0/abc.ico") when `filesystems.disks.r2.url`
+        // is unset or empty — that bare key, dropped into a <link href>,
+        // gets resolved by the browser RELATIVE to the current page, so
+        // a checkout page at /payment/checkout/foo would request
+        // /payment/checkout/system/favicon/user_0/abc.ico → 404.
+        //
+        // Only trust the candidate if it's an absolute URL (http:/https:)
+        // or an absolute path (leading /). Otherwise discard and let the
+        // /favicon.ico fallback take over.
+        if ($candidate !== '' && preg_match('#^(?:https?:)?/#i', $candidate)) {
+            $faviconUrl = $candidate;
         }
     }
 @endphp
