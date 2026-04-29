@@ -424,8 +424,69 @@ class EventController extends Controller
 
     public function destroy(Event $event)
     {
+        // Ownership check — without this any logged-in photographer could
+        // DELETE another photographer's event by guessing the ID. The
+        // existing route only requires `photographer` middleware, not a
+        // per-row authorization, so we enforce it here.
+        if ((int) $event->photographer_id !== (int) Auth::id()) {
+            abort(403, 'ไม่มีสิทธิ์ลบอีเวนต์นี้');
+        }
+
+        $profile = Auth::user()->photographerProfile;
+
+        // Pre-compute the displayable byte total BEFORE the delete so we
+        // can show the user a precise "freed X MB" number. Cheap query
+        // — single SUM over the indexed file_size column.
+        $freedBytes = 0;
+        try {
+            $freedBytes = (int) DB::table('event_photos')
+                ->where('event_id', $event->id)
+                ->sum('file_size');
+            // Apply the same derivative multiplier the quota service uses
+            // (originals + thumbnails + watermarked previews) so the
+            // refunded total matches what shows on the dashboard.
+            $freedBytes = (int) round($freedBytes * \App\Services\StorageQuotaService::DERIVATIVE_MULTIPLIER);
+        } catch (\Throwable) { /* counter is best-effort, never block the delete */ }
+
+        // Cascade delete — Event::booted() static `deleting` hook fires:
+        //   1. Sweeps cover_image from R2/S3/local across every enabled driver
+        //   2. Purges events/{id}/* directory tree across every driver
+        // Eloquent's per-row `deleted` observer on EventPhoto does NOT fire
+        // for FK cascades, which is why we re-sum below instead of trusting
+        // the running counter to have been decremented row-by-row.
         $event->delete();
-        return redirect()->route('photographer.events.index');
+
+        // Resync storage_used_bytes from the database of record. Without
+        // this, the photographer's dashboard would still show the bytes
+        // from the deleted photos as "in use" until the nightly recalc
+        // catches up — making it look like the delete didn't return any
+        // space. recalculate() does one SUM JOIN and writes the corrected
+        // total back via saveQuietly so we don't trigger model events.
+        if ($profile) {
+            try {
+                $quota = app(\App\Services\StorageQuotaService::class);
+                $remainingBytes = $quota->recalculate($profile);
+
+                $freedHuman    = $quota->humanBytes($freedBytes);
+                $remainingHuman = $quota->humanBytes($remainingBytes);
+
+                return redirect()->route('photographer.events.index')->with(
+                    'success',
+                    $freedBytes > 0
+                        ? "ลบอีเวนต์สำเร็จ — คืนพื้นที่จัดเก็บ {$freedHuman} (ใช้อยู่ตอนนี้: {$remainingHuman})"
+                        : 'ลบอีเวนต์สำเร็จ'
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Storage recalc after event delete failed', [
+                    'event_id'   => $event->id,
+                    'profile_id' => $profile->id ?? null,
+                    'error'      => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return redirect()->route('photographer.events.index')
+            ->with('success', 'ลบอีเวนต์สำเร็จ');
     }
 
     public function qrcode(Event $event)
