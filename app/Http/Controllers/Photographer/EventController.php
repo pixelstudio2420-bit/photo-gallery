@@ -125,9 +125,44 @@ class EventController extends Controller
         return ['ok' => true, 'status' => $requestedStatus];
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $events = Auth::user()->photographerProfile->events()->orderByDesc('created_at')->paginate(20);
+        $query = Auth::user()->photographerProfile->events();
+
+        // Status filter from the index page's chip strip. The 'active'
+        // chip aggregates both `active` and `published` because the
+        // photographer-facing UI doesn't surface a meaningful difference
+        // between the two — they're both "live and selling".
+        $status = $request->query('status', 'all');
+        if ($status !== 'all') {
+            if ($status === 'active') {
+                $query->whereIn('status', ['active', 'published']);
+            } else {
+                $query->where('status', $status);
+            }
+        }
+
+        // Free-text search. Postgres-friendly ILIKE so case-insensitive
+        // matches work without a wrapper LOWER() on every row. Falls back
+        // to LIKE on MySQL (still works, just case-sensitive on case-
+        // sensitive collations).
+        $q = trim((string) $request->query('q', ''));
+        if ($q !== '') {
+            $like = '%' . $q . '%';
+            $op = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $query->where(function ($w) use ($like, $op) {
+                $w->where('name',     $op, $like)
+                  ->orWhere('location', $op, $like);
+            });
+        }
+
+        // Eager-load photo count so the card meta line ("12 รูป") doesn't
+        // trigger one COUNT query per row.
+        $events = $query->withCount('photos')
+            ->orderByDesc('created_at')
+            ->paginate(12)
+            ->withQueryString();
+
         return view('photographer.events.index', compact('events'));
     }
 
