@@ -88,6 +88,18 @@
             <i class="bi bi-bell-fill"></i>
             <span class="absolute -top-1 -right-2 inline-flex items-center justify-center px-1.5 py-0.5 text-[0.6rem] font-bold leading-none text-white bg-rose-500 rounded-full hidden" id="pgNotifyBadge">0</span>
           </button>
+          {{-- Mobile-only backdrop. Closes the dropdown if user taps
+               anywhere outside it on a phone — gives the panel a
+               modal-ish feel without forcing position:fixed sizing
+               gymnastics on desktop. Hidden at sm+ where the regular
+               @click.away handler covers the same job. --}}
+          <div x-show="notifyOpen"
+               x-transition.opacity
+               x-cloak
+               class="fixed inset-0 z-40 bg-slate-900/30 sm:hidden"
+               @click="notifyOpen = false"
+               aria-hidden="true"></div>
+
           <div x-show="notifyOpen"
              x-transition:enter="transition ease-out duration-200"
              x-transition:enter-start="opacity-0 scale-95"
@@ -96,12 +108,41 @@
              x-transition:leave-start="opacity-100 scale-100"
              x-transition:leave-end="opacity-0 scale-95"
              x-cloak
-             class="absolute right-0 mt-2 w-[340px] max-h-[450px] overflow-hidden rounded-xl shadow-xl bg-white border-0 p-0 z-50 dark:bg-slate-800">
-            <div class="flex justify-between items-center px-3 py-2 bg-gradient-to-br from-blue-600 to-blue-700 text-white">
+             {{-- Width strategy:
+                  - Aim for 340px (the design-system default).
+                  - Cap at calc(100vw - 1rem) so on a 320px iPhone SE
+                    the panel still leaves 8px of breathing room on
+                    each side instead of overflowing the viewport.
+                  - Anchored right-0 so it tucks under the bell icon on
+                    every breakpoint (no awkward "centered on phone,
+                    right-aligned on desktop" jump). --}}
+             class="absolute right-0 mt-2 z-50
+                    w-[340px] max-w-[calc(100vw-1rem)]
+                    max-h-[75vh] sm:max-h-[450px]
+                    overflow-hidden rounded-xl shadow-2xl
+                    bg-white border-0 p-0 dark:bg-slate-800
+                    flex flex-col">
+            <div class="flex justify-between items-center px-3 py-2.5 bg-gradient-to-br from-blue-600 to-blue-700 text-white shrink-0">
               <span class="font-semibold text-sm"><i class="bi bi-bell mr-1"></i>การแจ้งเตือน</span>
-              <button class="border-0 text-white/50 p-0 text-xs bg-transparent cursor-pointer" id="pgMarkAllRead" style="display:none;" onclick="PgNotify.markAllRead()">อ่านแล้วทั้งหมด</button>
+              <div class="flex items-center gap-2">
+                <button class="border-0 text-white/70 hover:text-white p-0 text-xs bg-transparent cursor-pointer transition" id="pgMarkAllRead" style="display:none;" onclick="PgNotify.markAllRead()">อ่านแล้วทั้งหมด</button>
+                {{-- Mobile-only close button (the backdrop already closes
+                     the panel, but a visible × is more discoverable on a
+                     phone). Hidden at sm+ where the dropdown feels less
+                     like a modal. --}}
+                <button type="button"
+                        class="sm:hidden inline-flex items-center justify-center w-7 h-7 rounded-full bg-white/15 hover:bg-white/25 text-white text-xs transition border-0 cursor-pointer"
+                        @click="notifyOpen = false"
+                        title="ปิด">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+              </div>
             </div>
-            <div id="pgNotifyList" class="max-h-[380px] overflow-y-auto">
+            {{-- Inner list takes the remaining height inside the
+                 flex-col panel. Reserved height calc lets the user
+                 scroll through long notification lists without the
+                 panel overflowing the viewport on short phones. --}}
+            <div id="pgNotifyList" class="flex-1 min-h-0 overflow-y-auto">
               <div class="text-center text-gray-400 py-4 text-sm"><i class="bi bi-bell-slash mr-1"></i>ไม่มีการแจ้งเตือน</div>
             </div>
           </div>

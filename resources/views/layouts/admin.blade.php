@@ -134,10 +134,30 @@
                   id="notifyBadge">0</span>
           </button>
 
-          {{-- Notification dropdown --}}
-          <div class="absolute right-0 mt-2 w-[380px] max-h-[520px] overflow-hidden rounded-2xl shadow-2xl
-                      bg-white border border-gray-100 z-50
-                      dark:bg-slate-800 dark:border-white/[0.06]"
+          {{-- Mobile-only backdrop. Closes the dropdown when user taps
+               outside the panel on a phone — gives a modal-ish feel
+               without forcing fixed-positioning sizing tricks on
+               desktop. Hidden at sm+ where @click.outside is enough. --}}
+          <div x-show="notifyOpen"
+               x-transition.opacity
+               x-cloak
+               class="fixed inset-0 z-40 bg-slate-900/30 sm:hidden"
+               @click="notifyOpen = false"
+               aria-hidden="true"></div>
+
+          {{-- Notification dropdown.
+               Width: aims for 380px (design default), but caps at
+                      calc(100vw - 1rem) so on a 320px-wide iPhone SE
+                      it doesn't punch through the viewport edge.
+               Height: 75vh on phones (room for the URL bar + system
+                      gestures), capped at 520px on tablets+. --}}
+          <div class="absolute right-0 mt-2 z-50
+                      w-[380px] max-w-[calc(100vw-1rem)]
+                      max-h-[75vh] sm:max-h-[520px]
+                      overflow-hidden rounded-2xl shadow-2xl
+                      bg-white border border-gray-100
+                      dark:bg-slate-800 dark:border-white/[0.06]
+                      flex flex-col"
                x-show="notifyOpen"
                x-transition:enter="transition ease-out duration-200"
                x-transition:enter-start="opacity-0 scale-95 translate-y-1"
@@ -146,20 +166,34 @@
                x-transition:leave-start="opacity-100 scale-100"
                x-transition:leave-end="opacity-0 scale-95"
                x-cloak>
-            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-white/[0.06]">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-white/[0.06] shrink-0">
               <span class="font-bold text-sm text-slate-800 dark:text-gray-100">
                 การแจ้งเตือน <span class="text-gray-400 font-normal text-xs" id="notifyCountLabel"></span>
               </span>
               <div class="flex gap-2 items-center">
-                <button class="hidden text-xs text-indigo-500 hover:text-indigo-700 font-medium" id="markAllReadBtn" onclick="AdminNotify.markAllRead()">
+                <button class="hidden text-xs text-indigo-500 hover:text-indigo-700 font-medium border-0 bg-transparent cursor-pointer" id="markAllReadBtn" onclick="AdminNotify.markAllRead()">
                   <i class="bi bi-check2-all mr-0.5"></i>อ่านแล้ว
                 </button>
                 <button class="p-0 border-0 bg-transparent cursor-pointer text-gray-400 hover:text-indigo-500 transition-colors" onclick="AdminNotify.toggleSound()" id="soundToggleBtn" title="เสียง">
                   <i class="bi bi-volume-up-fill text-sm"></i>
                 </button>
+                {{-- Mobile-only explicit close button — the backdrop
+                     covers tap-to-close, but a visible × is the more
+                     discoverable affordance on a phone. --}}
+                <button type="button"
+                        class="sm:hidden inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 dark:bg-white/[0.08] text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/[0.12] transition border-0 cursor-pointer text-xs"
+                        @click="notifyOpen = false"
+                        title="ปิด">
+                  <i class="bi bi-x-lg"></i>
+                </button>
               </div>
             </div>
-            <div id="notifyList" class="max-h-[430px] overflow-y-auto"></div>
+            {{-- Inner list scrolls inside the flex-col panel. Removing
+                 the previous max-h-[430px] in favour of flex-1 means
+                 the list height tracks the panel height instead of
+                 being a fixed magic number that needed updating
+                 whenever the header changed. --}}
+            <div id="notifyList" class="flex-1 min-h-0 overflow-y-auto"></div>
           </div>
         </div>
 
