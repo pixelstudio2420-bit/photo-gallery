@@ -65,6 +65,48 @@ class DeliverOrderViaLineJob implements ShouldQueue
             return;
         }
         if (!$order->user_id) {
+            Log::info('DeliverOrderViaLineJob: order has no user_id, skipping', [
+                'order_id' => $this->orderId,
+            ]);
+            return;
+        }
+
+        // Diagnostic preflight — operators report "photos didn't show
+        // up in LINE" without an obvious culprit, so log every gate
+        // the delivery has to pass through. This lights up the chain
+        // (messaging toggle → token configured → buyer linked → push
+        // toggle on → photo-send toggle on → photo URLs resolvable)
+        // so a single tail of laravel.log shows exactly which gate
+        // turned the delivery into a no-op.
+        $messagingOn   = $line->isMessagingEnabled();
+        $hasLineLink   = \Illuminate\Support\Facades\DB::table('auth_social_logins')
+                          ->where('user_id', $order->user_id)
+                          ->where('provider', 'line')
+                          ->exists();
+        $tokenSet      = !empty(\App\Models\AppSetting::get('line_channel_access_token', ''));
+        $sendPhotosOn  = (string) \App\Models\AppSetting::get('delivery_line_send_photos', '1') === '1';
+
+        Log::info('DeliverOrderViaLineJob: preflight', [
+            'order_id'                  => $order->id,
+            'user_id'                   => $order->user_id,
+            'line_messaging_enabled'    => $messagingOn,
+            'line_channel_token_set'    => $tokenSet,
+            'buyer_has_line_link'       => $hasLineLink,
+            'delivery_send_photos'      => $sendPhotosOn,
+            'photo_count'               => $order->items->count(),
+        ]);
+
+        // Hard gates — abort with explicit log if any are missing.
+        if (!$messagingOn) {
+            Log::warning('DeliverOrderViaLineJob: LINE messaging disabled — skipping', ['order_id' => $order->id]);
+            return;
+        }
+        if (!$tokenSet) {
+            Log::warning('DeliverOrderViaLineJob: line_channel_access_token not configured — admin must set it on /admin/settings/line', ['order_id' => $order->id]);
+            return;
+        }
+        if (!$hasLineLink) {
+            Log::info('DeliverOrderViaLineJob: buyer has no LINE link, fallback delivery already used', ['order_id' => $order->id]);
             return;
         }
 
@@ -74,11 +116,27 @@ class DeliverOrderViaLineJob implements ShouldQueue
         $eventName   = $order->event?->name ?? 'ภาพถ่าย';
         $expiresAt   = $order->downloadTokens()->max('expires_at');
 
-        // ── Push photos (optional) ───────────────────────────────────
-        if (\App\Models\AppSetting::get('delivery_line_send_photos', '0') === '1'
-            && $photoCount > 0 && $photoCount <= 30) {
+        // ── Push photos ───────────────────────────────────────────────
+        // Default flipped 0 → 1: customers expect to receive their photos
+        // INTO the LINE chat after paying, not just a download link. The
+        // operator can still turn this off via AppSetting if their LINE
+        // account hits the 200-message free quota too quickly — but
+        // the average paid order ships ≤30 photos, well under the
+        // monthly cap of a small OA.
+        //
+        // The 30-photo cap stays — orders larger than that get just the
+        // download link to avoid spamming the customer's chat with 50
+        // images and to keep the per-message LINE payload under their
+        // batch limits.
+        if ($sendPhotosOn && $photoCount > 0 && $photoCount <= 30) {
             try {
                 $images = $this->collectPhotoUrls($order);
+                Log::info('DeliverOrderViaLineJob: photo URL resolution', [
+                    'order_id'         => $order->id,
+                    'requested_photos' => $photoCount,
+                    'resolved_urls'    => count($images),
+                ]);
+
                 if (count($images) > 0) {
                     $caption = "📸 รูปจาก {$eventName}\n"
                              . "คำสั่งซื้อ {$orderNumber} — {$photoCount} รูป\n"
@@ -91,6 +149,10 @@ class DeliverOrderViaLineJob implements ShouldQueue
                         $caption,
                         idempotencyPrefix: "order.{$order->id}.line.photos",
                     );
+                } else {
+                    Log::warning('DeliverOrderViaLineJob: no photo URLs resolved — likely R2 not configured / signed URL failed', [
+                        'order_id' => $order->id,
+                    ]);
                 }
             } catch (\Throwable $e) {
                 Log::warning('DeliverOrderViaLineJob: pushPhotos failed', [
@@ -98,6 +160,11 @@ class DeliverOrderViaLineJob implements ShouldQueue
                     'error'    => $e->getMessage(),
                 ]);
             }
+        } elseif ($photoCount > 30) {
+            Log::info('DeliverOrderViaLineJob: skipping photo push (>30 photos), download link only', [
+                'order_id'    => $order->id,
+                'photo_count' => $photoCount,
+            ]);
         }
 
         // ── Push download link (Flex bubble + plain-text fallback) ───
