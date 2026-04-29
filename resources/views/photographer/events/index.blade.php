@@ -249,8 +249,15 @@
         <a href="{{ route('photographer.events.show', $event) }}"
            class="block relative no-underline">
           <div class="ev-cover">
-            @if($event->cover_image)
-              <img src="{{ asset('storage/' . $event->cover_image) }}"
+            {{-- Use the model's cover_image_url accessor — it routes the
+                 stored key through StorageManager so R2 / S3 / local
+                 disks all resolve to the right public URL. The plain
+                 asset('storage/'.$key) shortcut only works when the
+                 file actually lives on the local public disk, which
+                 isn't true once the project switched to R2. --}}
+            @php $coverUrl = $event->cover_image_url; @endphp
+            @if($coverUrl)
+              <img src="{{ $coverUrl }}"
                    alt="{{ $event->name }}"
                    loading="lazy"
                    onerror="this.style.display='none'; this.parentElement.querySelector('.ev-cover-placeholder')?.classList.remove('hidden');">

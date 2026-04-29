@@ -195,6 +195,27 @@
           <button type="button" class="ml-auto text-emerald-600/60 hover:text-emerald-600 text-xs bg-transparent border-0 cursor-pointer" @click="show = false">&times;</button>
         </div>
       @endif
+      {{-- Warning flash — surfaced by controllers when an action partially
+           succeeded but with a caveat (e.g. event status auto-downgraded
+           from "เผยแพร่" to "ร่าง" because the photographer is on a tier
+           that can't publish yet). The controller already attaches the
+           message; this block was missing so the message never reached
+           the user, leading to "I clicked save but nothing changed"
+           confusion. --}}
+      @if (session('warning'))
+        <div class="flex items-start gap-2 mb-3 px-4 py-3 bg-amber-500/[0.08] text-amber-700 dark:text-amber-300 rounded-xl text-sm border border-amber-200 dark:border-amber-500/20" x-data="{ show: true }" x-show="show">
+          <i class="bi bi-exclamation-triangle-fill mr-1 mt-0.5 shrink-0"></i>
+          <span class="flex-1">{{ session('warning') }}</span>
+          <button type="button" class="text-amber-700/60 hover:text-amber-700 text-xs bg-transparent border-0 cursor-pointer" @click="show = false">&times;</button>
+        </div>
+      @endif
+      @if (session('error'))
+        <div class="flex items-start gap-2 mb-3 px-4 py-3 bg-rose-500/[0.08] text-rose-700 dark:text-rose-300 rounded-xl text-sm border border-rose-200 dark:border-rose-500/20" x-data="{ show: true }" x-show="show">
+          <i class="bi bi-x-octagon-fill mr-1 mt-0.5 shrink-0"></i>
+          <span class="flex-1">{{ session('error') }}</span>
+          <button type="button" class="text-rose-700/60 hover:text-rose-700 text-xs bg-transparent border-0 cursor-pointer" @click="show = false">&times;</button>
+        </div>
+      @endif
 
       {{-- ─────────────────────────────────────────────────────────────
            Google Connect Promo — shown only when photographer is missing
