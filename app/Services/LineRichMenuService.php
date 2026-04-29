@@ -150,7 +150,7 @@ class LineRichMenuService
      * @param string $richMenuId
      * @param string $imagePath   absolute path on disk (PNG/JPEG, ≤ 1 MB)
      */
-    public function uploadImage(string $richMenuId, string $imagePath): array
+    public function uploadImage(string $richMenuId, string $imagePath, ?int $expectedWidth = null, ?int $expectedHeight = null): array
     {
         if (!$this->isConfigured()) {
             return ['ok' => false, 'error' => 'channel access token not set'];
@@ -158,16 +158,53 @@ class LineRichMenuService
         if (!is_file($imagePath)) {
             return ['ok' => false, 'error' => "image file not found: {$imagePath}"];
         }
+
+        $mime = $this->guessImageMime($imagePath);
+        if (!in_array($mime, ['image/png', 'image/jpeg'], true)) {
+            return ['ok' => false, 'error' => 'image must be PNG or JPEG'];
+        }
+
+        // Validate / auto-resize against the menu's configured dimensions.
+        //
+        // LINE rejects an image upload with HTTP 400
+        // "The image size is not allowed for richmenu" when the file's
+        // pixel dimensions don't match the menu's `size` payload sent
+        // to /v2/bot/richmenu. Customers expect to drop in any image
+        // they have on hand (a screenshot, a Canva export at 1920x1080,
+        // a phone photo) — failing them with a 400 is a poor UX.
+        //
+        // When `$expectedWidth` / `$expectedHeight` are provided
+        // (deploy() passes them from $config['size']), we resize
+        // first and only abort if the resize itself fails. Falls
+        // back to the original bytes when GD isn't available so the
+        // service remains usable on minimal PHP installs.
+        if ($expectedWidth && $expectedHeight) {
+            $info = @getimagesize($imagePath);
+            $actualW = $info[0] ?? 0;
+            $actualH = $info[1] ?? 0;
+
+            if ($actualW !== $expectedWidth || $actualH !== $expectedHeight) {
+                $resized = $this->resizeToFit($imagePath, $mime, $expectedWidth, $expectedHeight);
+                if ($resized['ok']) {
+                    Log::info('linerichmenu.image_auto_resized', [
+                        'from' => "{$actualW}x{$actualH}",
+                        'to'   => "{$expectedWidth}x{$expectedHeight}",
+                    ]);
+                    $imagePath = $resized['path'];
+                } else {
+                    return ['ok' => false, 'error' =>
+                        "ภาพต้องมีขนาด {$expectedWidth}×{$expectedHeight} px " .
+                        "(อัปโหลด {$actualW}×{$actualH} px) — และ resize อัตโนมัติไม่สำเร็จ: {$resized['error']}"];
+                }
+            }
+        }
+
         $bytes = @file_get_contents($imagePath);
         if ($bytes === false) {
             return ['ok' => false, 'error' => 'failed to read image file'];
         }
         if (strlen($bytes) > 1024 * 1024) {
-            return ['ok' => false, 'error' => 'image exceeds 1 MB limit'];
-        }
-        $mime = $this->guessImageMime($imagePath);
-        if (!in_array($mime, ['image/png', 'image/jpeg'], true)) {
-            return ['ok' => false, 'error' => 'image must be PNG or JPEG'];
+            return ['ok' => false, 'error' => 'image exceeds 1 MB limit (after resize)'];
         }
 
         try {
@@ -186,6 +223,81 @@ class LineRichMenuService
                 'id'  => $richMenuId,
                 'err' => $e->getMessage(),
             ]);
+            return ['ok' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Resize an arbitrary image to exactly $w × $h using GD.
+     *
+     * Aspect ratio is NOT preserved — we letterbox/crop fit-to-fill the
+     * canvas because LINE requires an exact pixel match against the
+     * menu's `size`. The "ugly stretch" trade-off is acceptable for a
+     * one-off rich-menu deploy where the admin can re-upload a properly
+     * cropped image if the result looks bad. Better than failing with
+     * an opaque 400 from LINE.
+     *
+     * If quality starts < 92, JPEGs may exceed 1 MB at 2500×1686 — we
+     * fall back to progressively lower quality until it fits or we
+     * give up at 60.
+     *
+     * @return array{ok:bool, path?:string, error?:string}
+     */
+    private function resizeToFit(string $sourcePath, string $mime, int $w, int $h): array
+    {
+        if (!extension_loaded('gd')) {
+            return ['ok' => false, 'error' => 'GD extension not available'];
+        }
+
+        try {
+            $src = $mime === 'image/png'
+                ? @imagecreatefrompng($sourcePath)
+                : @imagecreatefromjpeg($sourcePath);
+            if (!$src) {
+                return ['ok' => false, 'error' => 'failed to decode source image'];
+            }
+
+            $dst = imagecreatetruecolor($w, $h);
+            // Preserve PNG transparency.
+            if ($mime === 'image/png') {
+                imagealphablending($dst, false);
+                imagesavealpha($dst, true);
+                $transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+                imagefilledrectangle($dst, 0, 0, $w, $h, $transparent);
+            }
+
+            imagecopyresampled(
+                $dst, $src,
+                0, 0, 0, 0,
+                $w, $h,
+                imagesx($src), imagesy($src)
+            );
+
+            $tmp = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'linemenu_' . bin2hex(random_bytes(8))
+                 . ($mime === 'image/png' ? '.png' : '.jpg');
+
+            if ($mime === 'image/png') {
+                // Compression level 9 = max. Still aim ≤ 1 MB.
+                imagepng($dst, $tmp, 9);
+            } else {
+                // Try descending quality until size fits the LINE 1 MB cap.
+                foreach ([92, 85, 78, 70, 60] as $q) {
+                    imagejpeg($dst, $tmp, $q);
+                    if (filesize($tmp) <= 1024 * 1024) {
+                        break;
+                    }
+                }
+            }
+
+            imagedestroy($src);
+            imagedestroy($dst);
+
+            if (!is_file($tmp) || filesize($tmp) === 0) {
+                return ['ok' => false, 'error' => 'resize wrote empty file'];
+            }
+            return ['ok' => true, 'path' => $tmp];
+        } catch (\Throwable $e) {
+            Log::warning('linerichmenu.resize_failed', ['err' => $e->getMessage()]);
             return ['ok' => false, 'error' => $e->getMessage()];
         }
     }
@@ -260,7 +372,14 @@ class LineRichMenuService
         }
         $id = $created['id'];
 
-        $uploaded = $this->uploadImage($id, $imagePath);
+        // Pass the menu's configured pixel dimensions through so
+        // uploadImage() can auto-resize the file to match before
+        // hitting LINE — admins almost never have an image that's
+        // exactly 2500×1686 / 2500×843 / 1200×810 sitting on disk.
+        $expectedW = (int) ($config['size']['width']  ?? 0) ?: null;
+        $expectedH = (int) ($config['size']['height'] ?? 0) ?: null;
+
+        $uploaded = $this->uploadImage($id, $imagePath, $expectedW, $expectedH);
         if (!$uploaded['ok']) {
             // Clean up the orphan menu so list() doesn't fill up with dead entries.
             $this->delete($id);
