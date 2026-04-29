@@ -29,6 +29,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <meta name="base-url" content="{{ url('/') }}">
+  @include('layouts.partials.favicon')
   <title>@yield('title', 'Dashboard') — Admin | {{ $siteName ?? config('app.name') }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
