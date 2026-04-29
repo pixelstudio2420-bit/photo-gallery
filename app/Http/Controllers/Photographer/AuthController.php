@@ -101,7 +101,140 @@ class AuthController extends Controller
         return redirect()->route('photographer.dashboard')
             ->with('success', 'เข้าสู่ระบบสำเร็จ — ยินดีต้อนรับกลับ ช่างภาพ!');
     }
-    public function showRegister() { return view('photographer.auth.register'); }
+    /**
+     * Show the photographer signup page.
+     *
+     * Three branches:
+     *   1. Guest (not logged in)        — full LINE/email signup form
+     *   2. Logged in WITHOUT profile    — "Become a photographer" claim form
+     *      (user already has User row + at least one social login from
+     *       earlier customer signup; we only need to spawn the
+     *       PhotographerProfile and route them to connect-google).
+     *   3. Logged in WITH profile       — bounce to dashboard (already a
+     *      photographer; no point showing the signup page).
+     */
+    public function showRegister()
+    {
+        if (Auth::check()) {
+            $userId = Auth::id();
+
+            // Already a photographer? Skip the signup page entirely.
+            if (PhotographerProfile::where('user_id', $userId)->exists()) {
+                return redirect()->route('photographer.dashboard')
+                    ->with('info', 'คุณเป็นช่างภาพอยู่แล้ว');
+            }
+
+            // What providers are already linked? We use this to skip the
+            // LINE step for customers who registered via LINE earlier.
+            $links = \DB::table('auth_social_logins')
+                ->where('user_id', $userId)
+                ->whereIn('provider', ['google', 'line'])
+                ->pluck('provider')
+                ->toArray();
+
+            return view('photographer.auth.register', [
+                'authedUser' => Auth::user(),
+                'hasLine'    => in_array('line', $links, true),
+                'hasGoogle'  => in_array('google', $links, true),
+            ]);
+        }
+
+        // Guest path — original signup UI.
+        return view('photographer.auth.register', [
+            'authedUser' => null,
+            'hasLine'    => false,
+            'hasGoogle'  => false,
+        ]);
+    }
+
+    /**
+     * "Become a photographer" — claim flow for an existing logged-in user
+     * (typically a customer who signed up with LINE earlier and now wants
+     * to start selling). Creates the PhotographerProfile in-place and
+     * routes them to /photographer/connect-google if Google isn't yet
+     * linked, otherwise straight to the dashboard.
+     *
+     * Idempotent: if a profile already exists, just bounces to dashboard
+     * without creating a duplicate.
+     */
+    public function claim(Request $request)
+    {
+        if (!Auth::check()) {
+            return redirect()->route('photographer.login')
+                ->with('error', 'กรุณาเข้าสู่ระบบก่อนเปิดบัญชีช่างภาพ');
+        }
+
+        $user = Auth::user();
+
+        // Already a photographer — no-op.
+        if (PhotographerProfile::where('user_id', $user->id)->exists()) {
+            return redirect()->route('photographer.dashboard')
+                ->with('info', 'คุณเป็นช่างภาพอยู่แล้ว');
+        }
+
+        // Spawn the profile. Same defaults as the email-signup path
+        // above — Creator tier, auto-approved, ready to upload.
+        $photographer = PhotographerProfile::create([
+            'user_id'           => $user->id,
+            'photographer_code' => 'PH-' . strtoupper(Str::random(8)),
+            'display_name'      => $request->input('display_name')
+                ?: trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''))
+                ?: 'ช่างภาพใหม่',
+            'status'            => 'approved',
+            'tier'              => PhotographerProfile::TIER_CREATOR,
+            'onboarding_stage'  => 'active',
+            'approved_at'       => now(),
+        ]);
+
+        // Notifications — same trio as the email register() path.
+        try {
+            app(\App\Services\LineNotifyService::class)
+                ->notifyNewRegistration([
+                    'name'  => $user->first_name,
+                    'email' => $user->email,
+                ], 'photographer');
+        } catch (\Throwable $e) {
+            Log::error('Line notification error: ' . $e->getMessage());
+        }
+
+        try {
+            $mail = app(\App\Services\MailService::class);
+            $mail->photographerWelcome($user->email, $user->first_name);
+
+            $adminEmail = \App\Models\AppSetting::get(
+                'admin_notification_email',
+                \App\Models\AppSetting::get('mail_from_email')
+            );
+            if ($adminEmail) {
+                $mail->adminNewPhotographerAlert($adminEmail, [
+                    'id'         => $photographer->id,
+                    'name'       => $photographer->display_name,
+                    'email'      => $user->email,
+                    'phone'      => $user->phone ?? null,
+                    'created_at' => now()->format('d/m/Y H:i'),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Photographer email failed: ' . $e->getMessage());
+        }
+
+        // Where to go next: if the admin has the require-google flag on,
+        // and Google isn't yet linked, push the user through the connect
+        // gate. Otherwise straight to the dashboard.
+        $require   = \App\Models\AppSetting::get('photographer_require_google_link', '1') === '1';
+        $hasGoogle = \DB::table('auth_social_logins')
+            ->where('user_id', $user->id)
+            ->where('provider', 'google')
+            ->exists();
+
+        if ($require && !$hasGoogle) {
+            return redirect()->route('photographer.connect-google')
+                ->with('success', 'เปิดบัญชีช่างภาพสำเร็จ — ขั้นตอนสุดท้าย: เชื่อม Google เพื่อเริ่มขาย');
+        }
+
+        return redirect()->route('photographer.dashboard')
+            ->with('success', 'ยินดีต้อนรับสู่ระบบช่างภาพ! เริ่มอัปโหลดผลงานได้เลย');
+    }
 
     /**
      * Show the "Connect Google" page — the required final step after LINE

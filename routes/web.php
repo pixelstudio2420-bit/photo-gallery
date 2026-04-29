@@ -1637,6 +1637,13 @@ Route::prefix('photographer')->name('photographer.')->group(function () {
     Route::post('/register', [\App\Http\Controllers\Photographer\AuthController::class, 'register'])
         ->name('register.post')
         ->middleware('rate.limit:5,10');
+    // "Claim" path — for an already-logged-in customer (typically signed
+    // up via LINE earlier) who wants to become a photographer without
+    // re-doing OAuth. Creates the photographer_profile in-place and
+    // routes them on to /connect-google.
+    Route::post('/register/claim', [\App\Http\Controllers\Photographer\AuthController::class, 'claim'])
+        ->name('register.claim')
+        ->middleware('rate.limit:10,10');
     Route::post('/logout', [\App\Http\Controllers\Photographer\AuthController::class, 'logout'])->name('logout');
 
     // Photographer Social Login (Google + LINE)
