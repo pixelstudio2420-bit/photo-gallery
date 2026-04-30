@@ -165,10 +165,30 @@
               <div class="mb-3">
                 <label class="block text-sm font-medium text-gray-700 mb-1.5 font-medium">Default OG Image</label>
                 @if(!empty($settings['seo_og_default_image']))
+                  @php
+                    // Same R2 → public-disk → asset() fallback as the
+                    // favicon preview below. R2-stored OG images would
+                    // 404 on the plain `asset('storage/'.$key)` path.
+                    $ogKey = $settings['seo_og_default_image'];
+                    $ogPreviewUrl = '';
+                    try {
+                        $ogPreviewUrl = (string) app(\App\Services\Media\R2MediaService::class)->url($ogKey);
+                    } catch (\Throwable) {
+                        try {
+                            $ogPreviewUrl = (string) \Illuminate\Support\Facades\Storage::disk('public')->url($ogKey);
+                        } catch (\Throwable) {
+                            $ogPreviewUrl = '';
+                        }
+                    }
+                    if (!preg_match('#^(?:https?:)?/#i', $ogPreviewUrl)) {
+                        $ogPreviewUrl = asset('storage/' . $ogKey);
+                    }
+                  @endphp
                   <div class="mb-2">
-                    <img src="{{ asset('storage/' . $settings['seo_og_default_image']) }}"
+                    <img src="{{ $ogPreviewUrl }}"
                        alt="OG Image Preview" class="border border-gray-200 rounded-lg p-1"
-                       style="max-height:120px;border-radius:10px;">
+                       style="max-height:120px;border-radius:10px;background:#f8fafc;"
+                       onerror="this.style.opacity='0.3';this.alt='⚠️ ไฟล์เก่าไม่พบ — อัปโหลดใหม่';">
                   </div>
                 @endif
                 <input type="file" name="seo_og_default_image" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" style="border-radius:10px;"
@@ -321,11 +341,40 @@
               <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-1.5 font-medium">Favicon</label>
                 @if(!empty($settings['seo_favicon']))
+                  @php
+                    // Resolve the stored key through R2 first (where the
+                    // file actually lives once R2 is configured), then
+                    // fall back to the local public disk. The plain
+                    // `asset('storage/'.$key)` shortcut only worked for
+                    // local-disk uploads, so on an R2-only deploy the
+                    // preview was 404'ing here even though the upload
+                    // itself succeeded.
+                    $faviconKey = $settings['seo_favicon'];
+                    $faviconPreviewUrl = '';
+                    try {
+                        $faviconPreviewUrl = (string) app(\App\Services\Media\R2MediaService::class)->url($faviconKey);
+                    } catch (\Throwable) {
+                        try {
+                            $faviconPreviewUrl = (string) \Illuminate\Support\Facades\Storage::disk('public')->url($faviconKey);
+                        } catch (\Throwable) {
+                            $faviconPreviewUrl = '';
+                        }
+                    }
+                    // Reject relative-looking URLs that would be resolved
+                    // against /admin/settings/seo and 404 again.
+                    if (!preg_match('#^(?:https?:)?/#i', $faviconPreviewUrl)) {
+                        $faviconPreviewUrl = asset('storage/' . $faviconKey);
+                    }
+                  @endphp
                   <div class="mb-2 flex items-center gap-2">
-                    <img src="{{ asset('storage/' . $settings['seo_favicon']) }}"
+                    <img src="{{ $faviconPreviewUrl }}"
                        alt="Favicon Preview"
-                       style="width:32px;height:32px;object-fit:contain;border:1px solid #e2e8f0;border-radius:6px;padding:2px;">
+                       style="width:32px;height:32px;object-fit:contain;border:1px solid #e2e8f0;border-radius:6px;padding:2px;background:#f8fafc;"
+                       onerror="this.style.opacity='0.3';this.alt='⚠️ ไฟล์เก่าไม่พบ — อัปโหลดใหม่';">
                     <span class="small text-gray-500">Current favicon</span>
+                    <a href="{{ $faviconPreviewUrl }}" target="_blank" rel="noopener" class="text-xs text-indigo-600 hover:underline ml-auto">
+                      <i class="bi bi-box-arrow-up-right"></i> เปิดในแท็บใหม่
+                    </a>
                   </div>
                 @endif
                 <input type="file" name="seo_favicon" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" style="border-radius:10px;"
