@@ -193,6 +193,11 @@ class EventController extends Controller
             'cover_image'     => 'nullable|image|max:5120',
             'drive_folder_url'=> 'nullable|url',
             'is_free'         => 'nullable|boolean',
+            // Photographer-level AI toggles. The DB column +
+            // public-facing gate already existed; this exposes the
+            // switch on the photographer's own form so they can
+            // opt out per-event without an admin round-trip.
+            'face_search_enabled' => 'nullable|boolean',
         ], [
             'price_per_photo.min' => "ราคาต่อภาพต้องไม่ต่ำกว่า {$minPrice} บาท",
         ]);
@@ -260,6 +265,11 @@ class EventController extends Controller
             'event_password'    => $validated['event_password'] ?? null,
             'status'            => $validated['status'],
             'shoot_date'        => $validated['shoot_date'] ?? null,
+            // Default ON for create — `face_search_enabled` is opt-out
+            // (database default is also true). The photographer can
+            // untick the form checkbox to disable the customer-side
+            // face-search button + API for this specific event.
+            'face_search_enabled' => $request->boolean('face_search_enabled', true),
         ]);
 
         if ($coverFile) {
@@ -326,6 +336,11 @@ class EventController extends Controller
             'cover_image'     => 'nullable|image|max:5120',
             'drive_folder_url'=> 'nullable|url',
             'is_free'         => 'nullable|boolean',
+            // Photographer-level AI toggles. The DB column +
+            // public-facing gate already existed; this exposes the
+            // switch on the photographer's own form so they can
+            // opt out per-event without an admin round-trip.
+            'face_search_enabled' => 'nullable|boolean',
         ], [
             'price_per_photo.min' => "ราคาต่อภาพต้องไม่ต่ำกว่า {$minPrice} บาท",
         ]);
@@ -411,6 +426,13 @@ class EventController extends Controller
             'event_password'    => $validated['event_password'] ?? null,
             'status'            => $validated['status'],
             'shoot_date'        => $validated['shoot_date'] ?? null,
+            // Honour the form checkbox if it was on the page; otherwise
+            // preserve the existing value so `boolean()` defaulting
+            // doesn't accidentally flip an admin-set value back to
+            // false on every save.
+            'face_search_enabled' => $request->has('face_search_enabled')
+                ? $request->boolean('face_search_enabled')
+                : $event->face_search_enabled,
         ]);
 
         $redirect = redirect()->route('photographer.events.index')->with('success', 'อัพเดทสำเร็จ');
