@@ -137,51 +137,10 @@
           </p>
         </div>
 
-        {{-- ── AI features (Face Search) ────────────────────────
-             Per-event toggle for the customer-side face search.
-             Database column was always there and defaulted ON; we
-             just never surfaced the switch to the photographer.
-
-             How the gate flows when OFF:
-               Public/FaceSearchController::show()   → 404
-               Public/FaceSearchController::search() → 403
-               public/events/show.blade.php          → "Face search"
-                                                       button hidden
-             So a photographer who unticks this for an event with
-             sensitive subjects (kids, weddings) gets a no-face-
-             search guarantee without an admin round-trip. ─── --}}
-        <div class="md:col-span-2">
-          <label class="block text-sm font-medium text-gray-700 mb-2">ฟีเจอร์ AI</label>
-          <label class="flex items-start gap-3 p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-300 cursor-pointer bg-white peer-checked:border-indigo-500 transition has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
-            <input type="checkbox" name="face_search_enabled" value="1"
-                   class="peer sr-only"
-                   {{ old('face_search_enabled', '1') === '1' ? 'checked' : '' }}>
-            <div class="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-violet-100 text-violet-600 peer-checked:bg-violet-200 peer-checked:text-violet-700 transition">
-              <i class="bi bi-search-heart text-xl"></i>
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="font-bold text-sm text-slate-800">ค้นหาด้วยใบหน้า (Face Search)</span>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                  <i class="bi bi-magic"></i> AI
-                </span>
-              </div>
-              <p class="text-xs text-slate-500 mt-1 leading-relaxed">
-                ลูกค้าอัปโหลด selfie แล้ว AI หาทุกรูปที่มีใบหน้าตรงกัน —
-                <strong>เปิด</strong> ช่วยเพิ่มยอดขาย /
-                <strong>ปิด</strong> สำหรับงานละเอียดอ่อน (เด็ก · งานแต่ง · งาน VIP)
-              </p>
-              <div class="mt-2 inline-flex items-center gap-1.5 text-[11px] font-semibold">
-                <span class="hidden peer-checked:inline text-indigo-600">
-                  <i class="bi bi-check-circle-fill"></i> เปิดใช้งาน — ลูกค้าค้นใบหน้าได้
-                </span>
-                <span class="inline peer-checked:hidden text-slate-400">
-                  <i class="bi bi-circle"></i> ปิด — ซ่อนปุ่มค้นใบหน้าจากลูกค้า
-                </span>
-              </div>
-            </div>
-          </label>
-        </div>
+        {{-- ── AI features (Face Search) ──────────────────────── --}}
+        @include('photographer.events._face_search_card', [
+            'checked' => old('face_search_enabled', '1') === '1',
+        ])
       </div>
       <div class="mt-6">
         <button type="submit" class="bg-gradient-to-br from-indigo-600 to-indigo-700 text-white font-medium px-6 py-2.5 rounded-lg border-none inline-flex items-center gap-1 transition hover:shadow-lg">
