@@ -222,7 +222,33 @@ class DeliverOrderViaLineJob implements ShouldQueue
     }
 
     /**
-     * Build [original_url, preview_url] pairs for the order's photos.
+     * Build [original_url, preview_url] pairs for the order's photos
+     * — the URLs LINE's image-message API will fetch on the customer's
+     * behalf when their phone renders the chat.
+     *
+     * Path priority (changed 2026-04-30 — operators reported watermarked
+     * previews showing in chat, but customers had ALREADY PAID and
+     * expected the unwatermarked originals to land in LINE):
+     *
+     *   originalContentUrl (the "tap to enlarge" target)
+     *     1. original_path        — full-resolution unwatermarked file
+     *     2. watermarked_path     — preview if original missing
+     *     3. thumbnail_path       — last-resort fallback
+     *
+     *   previewImageUrl (the in-chat thumbnail)
+     *     1. thumbnail_path       — purpose-built small image
+     *     2. watermarked_path     — fallback if thumbnail wasn't generated
+     *     3. original_path        — only if the others are unavailable
+     *
+     * LINE limits we still need to honour:
+     *   • originalContentUrl: ≤ 10 MB, JPEG/PNG, ≤ 4096×4096
+     *   • previewImageUrl:    ≤ 1 MB,  JPEG/PNG, ≤ 240×240
+     *
+     * Photographers' originals are typically 3-5 MB at 4000×3000, which
+     * fits cleanly inside LINE's per-message limits. If a photo blows
+     * past the 10 MB cap the LINE API will return 400 — the
+     * SendLinePushJob audit row captures the http_status + error so
+     * the admin can spot the offending photo on the order page.
      *
      * URL TTL — important for LINE. The default presigned-URL TTL on R2
      * is 60 minutes; a customer who taps a saved chat 24 h later would
@@ -243,21 +269,59 @@ class DeliverOrderViaLineJob implements ShouldQueue
         $photos = \App\Models\EventPhoto::whereIn('id', $photoIds)->get();
         foreach ($photos as $photo) {
             try {
-                $previewPath = $photo->watermarked_path ?: $photo->thumbnail_path;
-                $thumbPath   = $photo->thumbnail_path  ?: $previewPath;
+                // ── Pick the BEST path available for each role ──────
+                // Customer paid → they get the unwatermarked file as
+                // the "click to enlarge" target. This is the change
+                // from the prior implementation which sent watermarked
+                // previews even after payment.
+                $originalPath = $photo->original_path
+                             ?: $photo->watermarked_path
+                             ?: $photo->thumbnail_path;
 
-                $original = $previewPath ? $r2->signedReadUrl($previewPath, $ttlMin) : null;
-                $preview  = $thumbPath   ? $r2->signedReadUrl($thumbPath,  $ttlMin) : null;
+                $previewPath  = $photo->thumbnail_path
+                             ?: $photo->watermarked_path
+                             ?: $photo->original_path;
 
+                // Both paths are required for LINE to render the image
+                // message. Skip photos missing either rather than
+                // sending a partial message that LINE rejects.
+                if (!$originalPath || !$previewPath) {
+                    Log::info('DeliverOrderViaLineJob: skipping photo — missing path', [
+                        'photo_id'        => $photo->id,
+                        'has_original'    => (bool) $photo->original_path,
+                        'has_thumbnail'   => (bool) $photo->thumbnail_path,
+                        'has_watermarked' => (bool) $photo->watermarked_path,
+                    ]);
+                    continue;
+                }
+
+                $original = $r2->signedReadUrl($originalPath, $ttlMin);
+                $preview  = $r2->signedReadUrl($previewPath,  $ttlMin);
+
+                // LINE's image-message API only accepts HTTPS URLs.
+                // signedReadUrl() should always return https:// from
+                // R2 / Cloudflare custom domain, but guard anyway so
+                // a misconfigured public endpoint can't poison the
+                // payload silently.
                 if ($original && $preview
                     && str_starts_with($original, 'https://')
-                    && str_starts_with($preview, 'https://')) {
+                    && str_starts_with($preview,  'https://')) {
                     $urls[] = ['original_url' => $original, 'preview_url' => $preview];
+                } else {
+                    Log::warning('DeliverOrderViaLineJob: signed URL not HTTPS — skipping photo', [
+                        'photo_id'    => $photo->id,
+                        'original_ok' => $original ? str_starts_with($original, 'https://') : false,
+                        'preview_ok'  => $preview  ? str_starts_with($preview,  'https://') : false,
+                    ]);
                 }
-            } catch (\Throwable) {
+            } catch (\Throwable $e) {
                 // Skip photos whose URL signing fails (e.g. R2 not
                 // configured locally) — caller falls back to the web
                 // download link, which is always available.
+                Log::warning('DeliverOrderViaLineJob: URL signing failed', [
+                    'photo_id' => $photo->id,
+                    'error'    => $e->getMessage(),
+                ]);
                 continue;
             }
         }
