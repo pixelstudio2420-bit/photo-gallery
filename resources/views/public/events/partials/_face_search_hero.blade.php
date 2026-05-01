@@ -79,21 +79,43 @@
               อัปโหลดรูปเซลฟี่ — ระบบจะหารูปทั้งหมดของคุณในอีเวนต์นี้ ไม่ว่ากี่รูปก็ได้ราคาเหมาที่ถูกที่สุด
             </p>
 
-            {{-- Primary CTA — auth-gated --}}
+            {{--
+              Primary CTA — gold/amber gradient against the pink hero
+              for max contrast. The white-on-pink button it replaced
+              read as decoration; this one fights for the click.
+
+              Dark-mode note: the pink-fuchsia hero gradient is the
+              same colour in both themes (fixed background-image), so
+              one button style works for both. The amber→orange palette
+              + dark slate-900 text stays high-contrast on either page
+              theme. Pulsing glow ring draws the eye on first paint;
+              :hover halts the animation (less anxious) and intensifies
+              the shadow + arrow nudge.
+
+              `face-search-cta` class drives the keyframes — kept as a
+              class (not Tailwind utility) because @keyframes can't
+              live in arbitrary JIT-class form.
+            --}}
             @auth
               <button type="button"
                       onclick="document.getElementById('face-bundle-modal')?.showModal();"
-                      class="inline-flex items-center gap-2 bg-white text-rose-600 hover:bg-yellow-100 font-bold px-6 py-3 rounded-xl shadow-lg transition active:scale-95">
-                <i class="bi bi-search text-lg"></i>
+                      class="face-search-cta inline-flex items-center gap-3 px-7 py-3.5 rounded-2xl font-extrabold text-base text-slate-900 transition active:scale-95"
+                      style="background:linear-gradient(135deg,#fde68a 0%,#fbbf24 50%,#f59e0b 100%);box-shadow:0 12px 32px -8px rgba(251,191,36,.55), 0 0 0 0 rgba(251,191,36,.45);">
+                <span class="inline-flex w-8 h-8 rounded-xl bg-white/30 items-center justify-center shrink-0">
+                  <i class="bi bi-search text-lg"></i>
+                </span>
                 <span>ค้นหารูปของฉัน</span>
-                <i class="bi bi-arrow-right text-lg"></i>
+                <i class="bi bi-arrow-right text-xl face-search-arrow"></i>
               </button>
             @else
               <a href="{{ route('login') }}?intended={{ urlencode(request()->fullUrl()) }}"
-                 class="inline-flex items-center gap-2 bg-white text-rose-600 hover:bg-yellow-100 font-bold px-6 py-3 rounded-xl shadow-lg transition active:scale-95">
-                <i class="bi bi-search text-lg"></i>
+                 class="face-search-cta inline-flex items-center gap-3 px-7 py-3.5 rounded-2xl font-extrabold text-base text-slate-900 transition active:scale-95"
+                 style="background:linear-gradient(135deg,#fde68a 0%,#fbbf24 50%,#f59e0b 100%);box-shadow:0 12px 32px -8px rgba(251,191,36,.55), 0 0 0 0 rgba(251,191,36,.45);">
+                <span class="inline-flex w-8 h-8 rounded-xl bg-white/30 items-center justify-center shrink-0">
+                  <i class="bi bi-search text-lg"></i>
+                </span>
                 <span>เข้าสู่ระบบเพื่อค้นหา</span>
-                <i class="bi bi-arrow-right text-lg"></i>
+                <i class="bi bi-arrow-right text-xl face-search-arrow"></i>
               </a>
             @endauth
 
@@ -157,4 +179,56 @@
       </div>
     </div>
   </section>
+
+  {{--
+    Keyframes for the gold CTA. @once + @push so the styles only ship
+    when this partial actually renders (event has a face_match bundle)
+    and only once per page even if Blade re-includes the partial.
+
+    `faceSearchPulse` adds a soft outward halo (the second box-shadow
+    layer) that fades out, telegraphing "click me" without being
+    aggressive. Disabled when prefers-reduced-motion is on.
+
+    `:hover` swaps to a stronger static shadow + halts the animation,
+    paired with a translateX on the arrow icon to imply forward motion.
+  --}}
+  @once
+    @push('styles')
+    <style>
+      .face-search-cta{
+        position:relative;
+        animation: faceSearchPulse 2.4s ease-in-out infinite;
+        will-change: box-shadow, transform;
+      }
+      .face-search-cta:hover{
+        transform: translateY(-2px);
+        box-shadow:
+          0 22px 44px -10px rgba(251,191,36,.7),
+          0 0 0 6px rgba(251,191,36,.18) !important;
+        animation: none;
+      }
+      .face-search-cta:hover .face-search-arrow{ transform: translateX(4px); }
+      .face-search-cta .face-search-arrow{ transition: transform .2s ease; }
+
+      @keyframes faceSearchPulse{
+        0%,100%{
+          box-shadow:
+            0 12px 32px -8px rgba(251,191,36,.55),
+            0 0 0 0 rgba(251,191,36,.45);
+        }
+        50%{
+          box-shadow:
+            0 12px 32px -8px rgba(251,191,36,.55),
+            0 0 0 12px rgba(251,191,36,0);
+        }
+      }
+
+      /* Respect reduced-motion preference — kill the pulse, keep the
+         static shadow so the button still looks substantial. */
+      @media (prefers-reduced-motion: reduce){
+        .face-search-cta{ animation: none; }
+      }
+    </style>
+    @endpush
+  @endonce
 @endif
