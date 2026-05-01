@@ -301,6 +301,20 @@ return [
             ],
             ['id' => 'mk_line', 'label' => 'LINE Marketing', 'icon' => 'bi-chat-dots', 'route' => 'admin.marketing.line', 'permission' => 'marketing'],
             ['id' => 'mk_seo', 'label' => 'SEO & Social', 'icon' => 'bi-search', 'route' => 'admin.marketing.seo', 'permission' => 'marketing'],
+            // pSEO subsystem — auto-generated landing pages from event /
+            // photographer / category / location data. Sits under
+            // Marketing because it's a traffic-acquisition tool, even
+            // though the underlying tables are technically SEO infrastructure.
+            [
+                'id' => 'mk_pseo',
+                'label' => 'pSEO Landing',
+                'icon' => 'bi-globe',
+                'permission' => 'marketing',
+                'children' => [
+                    ['id' => 'pseo_dash',  'label' => 'Dashboard',  'icon' => 'bi-speedometer2', 'route' => 'admin.pseo.index', 'permission' => 'marketing'],
+                    ['id' => 'pseo_pages', 'label' => 'หน้า Landing','icon' => 'bi-list-ul',    'route' => 'admin.pseo.pages', 'permission' => 'marketing'],
+                ],
+            ],
         ],
     ],
 
