@@ -72,12 +72,10 @@
               <i class="bi bi-box-seam mr-1"></i>{{ __('nav.products') }}
             </a>
           </li>
-          <li>
-            <a class="px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('contact') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
-              href="{{ route('contact') }}">
-              <i class="bi bi-envelope mr-1"></i>{{ __('nav.contact') }}
-            </a>
-          </li>
+          {{-- "ติดต่อเรา" intentionally NOT in the top navbar — moved to
+               the footer to keep the desktop menu focused on browse-to-buy
+               actions (events, photographers, blog, products). The footer's
+               "ลิงก์สำคัญ" column carries the contact link instead. --}}
           {{-- B2B sales entry — hidden once the user is logged in as a
                photographer (they already converted) to avoid the "sell to
                existing customer" anti-pattern. --}}
@@ -444,12 +442,9 @@
               <i class="bi bi-box-seam mr-1"></i>{{ __('nav.products') }}
             </a>
           </li>
-          <li>
-            <a class="block px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('contact') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
-              href="{{ route('contact') }}">
-              <i class="bi bi-envelope mr-1"></i>{{ __('nav.contact') }}
-            </a>
-          </li>
+          {{-- "ติดต่อเรา" removed from mobile menu — same rationale as
+               the desktop nav: contact lives in the footer now to keep
+               the menu focused on browse/buy. --}}
         </ul>
 
         {{-- Mobile Language Switcher (only shown when multi-lang is enabled AND there's more than 1 language) --}}

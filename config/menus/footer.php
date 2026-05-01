@@ -37,10 +37,16 @@ return [
         [
             'title' => 'See More',
             'items' => [
-                ['label' => 'Home',   'route' => 'home'],
-                ['label' => 'Events', 'route' => 'events.index'],
-                ['label' => 'Blog',   'route' => 'blog.index'],
-                ['label' => 'Help',   'route' => 'help'],
+                ['label' => 'Home',         'route' => 'home'],
+                ['label' => 'Events',       'route' => 'events.index'],
+                ['label' => 'Photographers','route' => 'photographers.index'],
+                ['label' => 'Blog',         'route' => 'blog.index'],
+                ['label' => 'Help',         'route' => 'help'],
+                // Contact moved here from the top navbar (2026-05-01) —
+                // keeps the desktop nav focused on browse-to-buy actions
+                // while still giving customers a one-click path to
+                // support from the footer's universal "See More" column.
+                ['label' => 'Contact Us',   'route' => 'contact'],
             ],
         ],
         [
