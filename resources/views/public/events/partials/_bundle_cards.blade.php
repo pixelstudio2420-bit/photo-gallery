@@ -17,16 +17,37 @@
   seeding — the photographer can pin a different one from the admin.
 --}}
 
-@if(isset($packages) && $packages->where('is_active', true)->count() > 0)
-<section class="my-8" id="bundle-cards" x-data="{ mobileOpen: false }">
+@php
+  $activeCount = $packages->where('is_active', true)->count();
+  // Static-resolution of the desktop column count keeps Tailwind v4's
+  // class scanner happy (interpolated `lg:grid-cols-{{ N }}` strings get
+  // skipped by the @source pass and the class never makes it to CSS).
+  // We pick the densest layout the bundle count justifies, capped at 5.
+  $lgColsClass = match (true) {
+      $activeCount >= 5 => 'lg:grid-cols-5',
+      $activeCount === 4 => 'lg:grid-cols-4',
+      default            => 'lg:grid-cols-3',
+  };
+@endphp
+
+<section class="my-8" id="bundle-cards"
+         x-data="{
+           open: window.matchMedia('(min-width: 768px)').matches,
+           init() {
+             // Re-evaluate when the user resizes between mobile / desktop
+             // so the cards stay visible on rotated tablets, etc.
+             window.addEventListener('resize', () => {
+               if (window.matchMedia('(min-width: 768px)').matches) this.open = true;
+             });
+           }
+         }">
   <div class="max-w-6xl mx-auto px-4">
 
-    {{-- ── Mobile: collapsible header (tap to expand). On md+ this header
-         renders as a normal section title (no toggle). The chevron and
-         "ดู X แพ็กเกจ" hint only show on mobile, controlled by Alpine. --}}
+    {{-- ── Mobile: collapsible header bar. Hidden on md+ where the cards
+         render in their permanent grid above. --}}
     <button
       type="button"
-      @click="mobileOpen = !mobileOpen"
+      @click="open = !open"
       class="md:hidden w-full flex items-center justify-between gap-3 px-4 py-3 mb-3 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-500/10 dark:to-orange-500/10 border-2 border-amber-300 dark:border-amber-500/30 transition active:scale-[0.99]">
       <div class="flex items-center gap-3 min-w-0">
         <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shrink-0 shadow-md">
@@ -37,13 +58,13 @@
             เลือกแพ็กเกจคุ้มค่า
           </div>
           <div class="text-[11px] text-amber-700 dark:text-amber-400/80 mt-0.5">
-            <span x-show="!mobileOpen">{{ $packages->where('is_active', true)->count() }} แพ็กเกจ ลดสูงสุด 50%</span>
-            <span x-show="mobileOpen" x-cloak>แตะเพื่อปิด</span>
+            <span x-show="!open">{{ $activeCount }} แพ็กเกจ · ลดสูงสุด 50%</span>
+            <span x-show="open" x-cloak>แตะเพื่อปิด</span>
           </div>
         </div>
       </div>
       <i class="bi bi-chevron-down text-amber-700 dark:text-amber-400 text-xl transition-transform shrink-0"
-         :class="mobileOpen ? 'rotate-180' : ''"></i>
+         :class="open ? 'rotate-180' : ''"></i>
     </button>
 
     {{-- ── Desktop heading (md+) — always shown. --}}
@@ -56,15 +77,18 @@
       </p>
     </div>
 
-    {{-- ── Cards container — collapsed by default on mobile, always
-         expanded on md+. Uses x-show + x-collapse for the slide animation
-         (Alpine plugin available globally on the site). The md:!block
-         override forces the desktop layout to ignore Alpine's x-show
-         display:none. --}}
+    {{-- ── Cards container.
+         Mobile: x-show toggled by `open`, x-collapse animates the slide.
+         Desktop (md+): `open` initializes to true via matchMedia in
+         x-data init, so x-show evaluates true and the cards stay
+         expanded. The grid is laid out with a static lg:grid-cols class
+         resolved server-side (see $lgColsClass) so Tailwind's class
+         scanner picks it up.
+    --}}
     <div
-      x-show="mobileOpen || window.matchMedia('(min-width: 768px)').matches"
+      x-show="open"
       x-collapse
-      class="md:!block grid grid-cols-2 md:grid-cols-3 lg:grid-cols-{{ min(5, $packages->where('is_active', true)->count()) }} gap-3 md:gap-4">
+      class="grid grid-cols-2 md:grid-cols-3 {{ $lgColsClass }} gap-3 md:gap-4">
       @foreach($packages->where('is_active', true)->sortBy('sort_order') as $pkg)
         @php
           $isCount     = $pkg->bundle_type === 'count';
@@ -76,33 +100,33 @@
               : 0;
         @endphp
 
-        <div class="relative rounded-2xl overflow-hidden transition-all duration-200
+        <div class="relative rounded-2xl overflow-hidden transition-all duration-200 flex flex-col
                     {{ $pkg->is_featured
-                        ? 'ring-2 ring-amber-400 shadow-2xl scale-100 md:scale-105 bg-gradient-to-br from-amber-50 via-white to-amber-50 dark:from-amber-500/10 dark:via-slate-800 dark:to-amber-500/5'
-                        : 'bg-white dark:bg-slate-800 border border-gray-200 dark:border-white/[0.06] shadow-sm hover:shadow-md' }}">
+                        ? 'ring-2 ring-amber-400 shadow-xl bg-gradient-to-br from-amber-50 via-white to-amber-50 dark:from-amber-500/10 dark:via-slate-800 dark:to-amber-500/5 md:-translate-y-1'
+                        : 'bg-white dark:bg-slate-800 border border-gray-200 dark:border-white/[0.06] shadow-sm hover:shadow-md hover:-translate-y-0.5' }}">
 
-          {{-- Featured ribbon --}}
+          {{-- Featured ribbon — corner badge that doesn't compete with price --}}
           @if($pkg->is_featured)
-            <div class="absolute top-0 right-0 bg-gradient-to-l from-amber-400 to-yellow-300 text-amber-900 text-[10px] font-bold px-3 py-1 rounded-bl-xl">
+            <div class="absolute top-0 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-400 to-yellow-300 text-amber-900 text-[10px] font-bold px-3 py-1 rounded-b-lg shadow-md whitespace-nowrap">
               <i class="bi bi-star-fill mr-0.5"></i> ขายดีที่สุด
             </div>
           @endif
 
-          {{-- Badge (top-left) --}}
+          {{-- Badge (top-right corner, doesn't overlap featured ribbon) --}}
           @if($pkg->badge && !$pkg->is_featured)
-            <div class="absolute top-2 left-2 bg-indigo-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+            <div class="absolute top-2 right-2 bg-indigo-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
               {{ $pkg->badge }}
             </div>
           @endif
 
-          <div class="p-4 md:p-5 pt-8">
+          <div class="p-4 md:p-5 {{ $pkg->is_featured ? 'pt-9' : 'pt-7' }} flex-1 flex flex-col">
             {{-- Type icon --}}
-            <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-3 mx-auto
+            <div class="w-11 h-11 md:w-12 md:h-12 rounded-xl flex items-center justify-center mb-2.5 mx-auto
               @if($isFace) bg-pink-500/10 text-pink-500
               @elseif($isEventAll) bg-purple-500/10 text-purple-500
               @else bg-indigo-500/10 text-indigo-500
               @endif">
-              <i class="bi text-xl
+              <i class="bi text-lg md:text-xl
                 @if($isFace) bi-person-bounding-box
                 @elseif($isEventAll) bi-collection
                 @else bi-stack
@@ -110,32 +134,40 @@
             </div>
 
             {{-- Name --}}
-            <h3 class="font-bold text-center text-base md:text-lg mb-1">{{ $pkg->name }}</h3>
+            <h3 class="font-bold text-center text-sm md:text-base mb-0.5 leading-tight">{{ $pkg->name }}</h3>
             @if($pkg->bundle_subtitle)
-              <p class="text-center text-[11px] text-gray-500 dark:text-gray-400 mb-3 leading-tight">{{ $pkg->bundle_subtitle }}</p>
+              <p class="text-center text-[10px] md:text-[11px] text-gray-500 dark:text-gray-400 mb-2.5 leading-tight line-clamp-2">{{ $pkg->bundle_subtitle }}</p>
+            @else
+              <div class="mb-2.5"></div>
             @endif
 
-            {{-- Pricing Display --}}
-            <div class="text-center mb-4">
+            {{-- Pricing Display — pushed to mid-card via spacer above so
+                 prices align across siblings in the same grid row. --}}
+            <div class="text-center mb-3">
               @if($isFace)
-                <div class="text-xs text-gray-400 mb-0.5">ลด {{ (int) $pkg->discount_pct }}%</div>
-                <div class="text-2xl font-bold text-pink-600 dark:text-pink-400">ราคาผันแปร</div>
-                <div class="text-[11px] text-gray-500">สูงสุด ฿{{ number_format($pkg->max_price, 0) }}</div>
+                <div class="text-[10px] text-gray-400 mb-0.5">ส่วนลด {{ (int) $pkg->discount_pct }}%</div>
+                <div class="text-base md:text-lg font-bold text-pink-600 dark:text-pink-400 leading-tight">ราคาผันแปร</div>
+                <div class="text-[10px] text-gray-500 mt-0.5">สูงสุด ฿{{ number_format($pkg->max_price, 0) }}</div>
               @else
                 @if($pkg->original_price && $pkg->original_price > $pkg->price)
-                  <div class="text-xs text-gray-400 line-through">฿{{ number_format($pkg->original_price, 0) }}</div>
+                  <div class="text-[11px] text-gray-400 line-through">฿{{ number_format($pkg->original_price, 0) }}</div>
                 @endif
-                <div class="text-2xl md:text-3xl font-bold {{ $pkg->is_featured ? 'text-amber-600 dark:text-amber-400' : 'text-indigo-600 dark:text-indigo-400' }}">
+                <div class="text-xl md:text-2xl lg:text-3xl font-extrabold leading-none {{ $pkg->is_featured ? 'text-amber-600 dark:text-amber-400' : 'text-indigo-600 dark:text-indigo-400' }}">
                   ฿{{ number_format($pkg->price, 0) }}
                 </div>
                 @if($savingsPct > 0)
-                  <div class="text-[11px] text-emerald-600 font-semibold mt-0.5">ประหยัด {{ $savingsPct }}%</div>
+                  <div class="text-[10px] text-emerald-600 font-bold mt-1">ประหยัด {{ $savingsPct }}%</div>
                 @endif
                 @if($perPhoto)
-                  <div class="text-[11px] text-gray-500 mt-1">เพียง ฿{{ number_format($perPhoto, 0) }}/รูป</div>
+                  <div class="text-[10px] text-gray-500 mt-0.5">฿{{ number_format($perPhoto, 0) }}/รูป</div>
                 @endif
               @endif
             </div>
+
+            {{-- Spacer pushes the CTA to the bottom of every card so the
+                 buttons align horizontally across cards of varying
+                 height (different subtitles, etc.) --}}
+            <div class="flex-1"></div>
 
             {{-- CTA --}}
             @if($isFace)
