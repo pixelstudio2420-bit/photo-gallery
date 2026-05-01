@@ -75,16 +75,40 @@
         </div>
       </div>
 
-      {{-- Visual column — earnings calculator (the "see your income" moment) --}}
+      {{-- Visual column — earnings calculator (the "see your income" moment).
+           Pulls live numbers off the migrated subscription_plans rows so
+           the calculator stays in lock-step with whatever the operator
+           sets in /admin/subscriptions/plans. The hardcoded 890 + 0.80
+           that used to live here would silently lie if Pro's price ever
+           moved (which it just did, when the plan-redesign migration ran). --}}
+      @php
+        // Pull the prices we render below ONCE so the rest of the
+        // partial stays terse. fallbacks keep the calculator alive
+        // even if /promo loaded before the seed ran.
+        $proPlan      = $plans?->firstWhere('code', 'pro');
+        $freePlan     = $plans?->firstWhere('code', 'free');
+        $proPrice     = (int) ($proPlan?->price_thb ?? 890);
+        $freeKeepPct  = max(0, 100 - (int) ($freePlan?->commission_pct ?? 30));   // % the photographer keeps
+        $freeKeepFrac = number_format($freeKeepPct / 100, 2, '.', '');             // for the JS expression
+        $starterPrice = (int) ($plans?->firstWhere('code', 'starter')?->price_thb ?? 299);
+      @endphp
       <div class="lg:col-span-5 relative">
         <div class="relative rounded-3xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-white/60 dark:border-white/10 shadow-2xl shadow-indigo-500/15 p-6 sm:p-7"
              x-data="{
                pricePerPhoto: 50,
                photosPerEvent: 200,
                eventsPerMonth: 4,
+               proPrice: {{ $proPrice }},
+               freeKeepFrac: {{ $freeKeepFrac }},
                get monthlyRevenue() { return this.pricePerPhoto * this.photosPerEvent * this.eventsPerMonth; },
-               get yourCutFree() { return Math.round(this.monthlyRevenue * 0.80); },
-               get yourCutPro() { return this.monthlyRevenue - 890; }
+               get yourCutFree() { return Math.round(this.monthlyRevenue * this.freeKeepFrac); },
+               get yourCutPro() { return Math.max(0, this.monthlyRevenue - this.proPrice); },
+               // Pro break-even = subscription / commission delta. Falls
+               // back gracefully if Free commission ever drops to 0%.
+               get proBreakEven() {
+                 const delta = 1 - this.freeKeepFrac;
+                 return delta > 0 ? Math.round(this.proPrice / delta) : 0;
+               }
              }">
           <div class="flex items-center gap-2 mb-4">
             <span class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white text-base shadow-md">
@@ -128,14 +152,16 @@
                 </span>
               </div>
               <div class="flex justify-between items-baseline">
-                <span class="text-slate-500 dark:text-slate-500 text-xs">Free (20% commission) → ได้</span>
+                <span class="text-slate-500 dark:text-slate-500 text-xs">
+                  Free ({{ 100 - $freeKeepPct }}% commission) → ได้
+                </span>
                 <span class="font-semibold text-slate-600 dark:text-slate-400 text-sm">
                   ฿<span x-text="yourCutFree.toLocaleString()"></span>
                 </span>
               </div>
               <div class="flex justify-between items-baseline rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-500/10 dark:to-teal-500/10 px-3 py-2.5 border border-emerald-200 dark:border-emerald-400/30">
                 <span class="text-emerald-700 dark:text-emerald-300 font-semibold text-sm">
-                  Pro (890 / เดือน) → ได้
+                  Pro (฿{{ number_format($proPrice) }} / เดือน) → ได้
                 </span>
                 <span class="font-extrabold text-lg text-emerald-700 dark:text-emerald-300">
                   ฿<span x-text="yourCutPro.toLocaleString()"></span>
@@ -143,7 +169,7 @@
               </div>
               <p class="text-xs text-slate-500 dark:text-slate-500 mt-1">
                 <i class="bi bi-info-circle"></i>
-                Pro คุ้มค่ากว่าเมื่อรายได้ &gt; ฿<span x-text="(890/0.20).toLocaleString()"></span> / เดือน
+                Pro คุ้มค่ากว่าเมื่อรายได้ &gt; ฿<span x-text="proBreakEven.toLocaleString()"></span> / เดือน
               </p>
             </div>
           </div>
@@ -203,8 +229,9 @@
           ขาย ฿10,000 → ได้ ฿10,000 (Pixieset เก็บ ฿1,500)
         </p>
         <ul class="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
-          <li class="flex items-start gap-2"><i class="bi bi-check-lg text-indigo-500 mt-0.5"></i> Free tier: 20% commission, ไม่มี monthly fee</li>
-          <li class="flex items-start gap-2"><i class="bi bi-check-lg text-indigo-500 mt-0.5"></i> Starter ฿299: 0% commission</li>
+          <li class="flex items-start gap-2"><i class="bi bi-check-lg text-indigo-500 mt-0.5"></i> Free tier: {{ 100 - $freeKeepPct }}% commission, ไม่มี monthly fee</li>
+          <li class="flex items-start gap-2"><i class="bi bi-check-lg text-indigo-500 mt-0.5"></i> Starter ฿{{ number_format($starterPrice) }}: เก็บได้ 95%+</li>
+          <li class="flex items-start gap-2"><i class="bi bi-check-lg text-indigo-500 mt-0.5"></i> Pro ฿{{ number_format($proPrice) }}: 0% commission · เก็บเต็มทุกบาท</li>
           <li class="flex items-start gap-2"><i class="bi bi-check-lg text-indigo-500 mt-0.5"></i> Auto-payout ทุกวันจันทร์ — ไม่ต้องขอเอง</li>
         </ul>
       </div>
@@ -384,7 +411,13 @@
     <div class="space-y-3" x-data="{ open: 0 }">
       @php
         $faqs = [
-          ['q' => 'ใช้ฟรีจริงหรือ? มีค่าซ่อนไหม?', 'a' => 'ฟรีจริง ไม่ต้องผูกบัตรเครดิต. Free tier มีพื้นที่ 2 GB + AI 50 credits/เดือน + คอมมิชชั่น 20% ต่อรายการขาย. หากต้องการ 0% คอมมิชชั่นและฟีเจอร์เต็ม ต้องสมัคร paid tier (เริ่ม ฿299/เดือน)'],
+          ['q' => 'ใช้ฟรีจริงหรือ? มีค่าซ่อนไหม?', 'a' =>
+              'ฟรีจริง ไม่ต้องผูกบัตรเครดิต. Free tier มีพื้นที่ '
+              . ($freePlan?->storage_gb ?? 5) . ' GB + AI '
+              . number_format($freePlan?->monthly_ai_credits ?? 50) . ' credits/เดือน + คอมมิชชั่น '
+              . (100 - $freeKeepPct) . '% ต่อรายการขาย. '
+              . 'หากต้องการ 0% คอมมิชชั่นและฟีเจอร์เต็ม ต้องสมัคร paid tier (เริ่ม ฿'
+              . number_format($starterPrice) . '/เดือน)'],
           ['q' => 'รับเงินอย่างไร? เร็วแค่ไหน?', 'a' => 'Auto-payout ทุกวันจันทร์ผ่าน Omise transfer เข้าบัญชีไทยตามที่ผูกไว้ (PromptPay หรือเลขบัญชี). ขั้นต่ำ ฿500/รอบ. หาก Studio tier เลือก daily payout ได้.'],
           ['q' => 'ระบบ AI ใช้อะไร? แม่นแค่ไหน?', 'a' => 'ระบบ AI ของเราใช้เทคโนโลยี Face Recognition ระดับ enterprise — ความแม่นยำ 95-99% แม้จะใส่หมวก แว่นกันแดด หรือมุมเฉียง. การคัดรูปคุณภาพ + ตรวจจับรูปซ้ำใช้อัลกอริทึม perceptual hashing ที่ run บนเซิร์ฟเวอร์เราเอง — ภาพไม่ออกจากระบบของเรา'],
           ['q' => 'ถ้าอยากเปลี่ยน/ยกเลิก plan?', 'a' => 'เปลี่ยน tier ได้ตลอดในหน้า Subscription. ยกเลิกได้ทุกเมื่อโดยไม่มีค่าธรรมเนียม — เข้า dashboard กด "ยกเลิก" จะอยู่จนสิ้นรอบบิล แล้ว downgrade เป็น Free tier อัตโนมัติ. รูปและข้อมูลทั้งหมดยังคงอยู่.'],
