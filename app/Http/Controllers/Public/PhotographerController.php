@@ -53,6 +53,10 @@ class PhotographerController extends Controller
             });
         }
 
+        // Pull the province row inline so the card can show the
+        // photographer's home city without an N+1.
+        $query->leftJoin('thai_provinces as tp', 'tp.id', '=', 'pp.province_id');
+
         $query->select(
             'pp.user_id',
             'pp.display_name',
@@ -63,8 +67,11 @@ class PhotographerController extends Controller
             'pp.specialties',
             'pp.years_experience',
             'pp.province_id',
+            'pp.headline',
+            'pp.accepts_bookings',
             'u.first_name',
             'u.last_name',
+            'tp.name_th as province_name',
             DB::raw('COALESCE(ec.events_count, 0) as events_count')
         )
             ->orderByDesc('events_count')
