@@ -1981,6 +1981,21 @@ Route::middleware(['auth'])->get('/team/accept/{token}', [\App\Http\Controllers\
 | the path. Place at the END of routes/web.php so it never overrides
 | a more specific route.
 */
+/*
+| The catch-all for pSEO landing pages must EXCLUDE the prefixes used
+| by specific routes (photographers, events, admin, etc.) so it doesn't
+| swallow them when Laravel's route compiler picks the first match.
+|
+| Slug constraint:
+|   • starts with a lowercase letter or digit
+|   • contains only [a-z0-9-/] after that
+|   • CANNOT start with reserved prefixes: photographers/, events/,
+|     admin/, photographer/, login, register, api/, etc.
+|
+| The negative lookahead at the front of the regex is what enforces
+| the prefix exclusion. Routes that have their own dedicated handler
+| (e.g. /events/{slug}) keep priority; only un-routed slugs hit pSEO.
+*/
 Route::get('/{slug}', [\App\Http\Controllers\Public\LandingPageController::class, 'show'])
-    ->where('slug', '[a-z0-9][a-z0-9\-/]+')
+    ->where('slug', '^(?!photographers|events|admin|photographer|login|register|api|cart|checkout|orders|wishlist|profile|notifications|chat|line|webhook|payment|storage|s|p|legal|blog|products|gift|faq|help|contact|about|terms|privacy|cookie|refund|search|booking|home|seo-landing)[a-z0-9][a-z0-9\-/]+$')
     ->name('pseo.landing');
