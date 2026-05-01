@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Redesign subscription plans for sustainable profit + customer pull.
@@ -268,6 +269,17 @@ return new class extends Migration
         // NOT touch other columns the operator may have customised
         // (e.g. plan accent color, feature flags added later) by
         // restricting the update payload to this canonical set.
+        //
+        // Defensive column filter: an earlier draft of this migration
+        // referenced `max_photos_per_event` but the column was never
+        // actually added to subscription_plans on production (the column
+        // lives only in a sibling planning doc, not in the schema). When
+        // Laravel Cloud auto-runs migrations on every deploy, the missing
+        // column kills the whole pipeline and no later migration runs.
+        // We work around it by stripping any keys the actual DB schema
+        // doesn't recognize before each updateOrInsert call.
+        $existingColumns = Schema::getColumnListing('subscription_plans');
+
         foreach ($plans as $plan) {
             $plan['updated_at'] = $now;
 
@@ -275,6 +287,11 @@ return new class extends Migration
             if (!$exists) {
                 $plan['created_at'] = $now;
             }
+
+            // Drop any keys the schema doesn't have so this migration
+            // works against both the original schema AND any future one
+            // that adds/removes auxiliary columns.
+            $plan = array_intersect_key($plan, array_flip($existingColumns));
 
             DB::table('subscription_plans')->updateOrInsert(
                 ['code' => $plan['code']],
