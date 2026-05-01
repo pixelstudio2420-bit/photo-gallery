@@ -45,14 +45,23 @@
       }
   }
 
+  // Breadcrumb middle-segment label + link target. Different page types
+  // funnel back to a different index — photographer/category/combo
+  // pages link to /photographers (the search), location/event pages
+  // link to /events (the listings).
   $sectionLabel = match($page->type) {
     'location'      => 'อีเวนต์ตามพื้นที่',
-    'category'      => 'ประเภทช่างภาพ',
-    'combo'         => 'ค้นหาช่างภาพ',
+    'category'      => 'ช่างภาพ',
+    'combo'         => 'ช่างภาพ',
     'photographer'  => 'ช่างภาพ',
     'event_archive' => 'อีเวนต์ทั้งหมด',
-    'event'         => 'รายละเอียดอีเวนต์',
+    'event'         => 'อีเวนต์',
     default         => 'หน้า',
+  };
+  $sectionUrl = match($page->type) {
+    'location', 'event_archive', 'event' => url('/events'),
+    'category', 'combo', 'photographer'  => url('/photographers'),
+    default                               => url('/'),
   };
 @endphp
 
@@ -128,9 +137,14 @@
     <nav class="text-xs md:text-sm text-white/70 mb-5 flex items-center gap-1.5 flex-wrap" aria-label="Breadcrumb">
       <a href="{{ url('/') }}" class="hover:text-white transition">หน้าแรก</a>
       <i class="bi bi-chevron-right text-[10px]"></i>
-      <span class="hover:text-white">{{ $sectionLabel }}</span>
+      {{-- Middle segment is now a real <a> linking to the relevant
+           index (photographers / events / etc.) so users can step up
+           one level instead of the dead-end span we had before. --}}
+      <a href="{{ $sectionUrl }}" class="hover:text-white transition underline-offset-2 hover:underline">
+        {{ $sectionLabel }}
+      </a>
       <i class="bi bi-chevron-right text-[10px]"></i>
-      <span class="text-white font-medium truncate max-w-[280px] md:max-w-none">{{ $page->h1 ?? $page->title }}</span>
+      <span class="text-white font-medium truncate max-w-[280px] md:max-w-none" aria-current="page">{{ $page->h1 ?? $page->title }}</span>
     </nav>
 
     {{-- Two-column hero: text left, glass card right --}}

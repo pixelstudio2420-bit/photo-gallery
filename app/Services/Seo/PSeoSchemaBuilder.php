@@ -127,13 +127,17 @@ class PSeoSchemaBuilder
      */
     private function breadcrumb(SeoLandingPage $page): array
     {
+        // Same labels + URLs as the visible breadcrumb in show.blade.php.
+        // Keep these two paired — Google penalises Schema.org breadcrumbs
+        // that don't match the on-page breadcrumb the user actually sees.
         $section = match ($page->type) {
-            'location'      => ['name' => 'อีเวนต์ตามพื้นที่',  'url' => url('/events')],
-            'category'      => ['name' => 'ประเภทช่างภาพ',     'url' => url('/photographers')],
-            'combo'         => ['name' => 'ค้นหาช่างภาพ',       'url' => url('/photographers')],
-            'photographer'  => ['name' => 'ช่างภาพ',             'url' => url('/photographers')],
-            'event_archive' => ['name' => 'อีเวนต์',             'url' => url('/events')],
-            default         => ['name' => 'หน้าแรก',             'url' => url('/')],
+            'location'      => ['name' => 'อีเวนต์ตามพื้นที่', 'url' => url('/events')],
+            'category'      => ['name' => 'ช่างภาพ',           'url' => url('/photographers')],
+            'combo'         => ['name' => 'ช่างภาพ',           'url' => url('/photographers')],
+            'photographer'  => ['name' => 'ช่างภาพ',           'url' => url('/photographers')],
+            'event_archive' => ['name' => 'อีเวนต์ทั้งหมด',    'url' => url('/events')],
+            'event'         => ['name' => 'อีเวนต์',            'url' => url('/events')],
+            default         => ['name' => 'หน้าแรก',           'url' => url('/')],
         };
 
         return [
