@@ -56,6 +56,23 @@ class PricingPackage extends Model
         'purchase_count' => 'integer',
     ];
 
+    /**
+     * Register the audit observer at model-boot time instead of relying
+     * on AppServiceProvider::boot(). Service-provider registration
+     * occasionally misfires on Laravel Cloud (boot ordering / opcache
+     * staleness against newly-deployed code), and observers attached
+     * here run regardless of provider state — they're tied directly
+     * to the model class loading.
+     *
+     * Idempotent: Laravel's observer system de-duplicates by observer
+     * class name, so even if AppServiceProvider also registers the
+     * same observer we don't get double-fires.
+     */
+    protected static function booted(): void
+    {
+        static::observe(\App\Observers\PricingPackageAuditObserver::class);
+    }
+
     /* ───────── Scopes ───────── */
 
     public function scopeActive(Builder $q): Builder
