@@ -154,6 +154,13 @@ class AppServiceProvider extends ServiceProvider
         // if any bundles already exist for the event.
         if (class_exists(\App\Models\Event::class)) {
             \App\Models\Event::observe(\App\Observers\EventBundleSeederObserver::class);
+
+            // Auto-recalculate bundle prices when per_photo changes.
+            // Hooks the `updated` lifecycle and re-derives every count
+            // bundle through SmartPricingService so prices stay in sync
+            // with whatever the photographer just set. Free events and
+            // unchanged saves are skipped via wasChanged() guards.
+            \App\Models\Event::observe(\App\Observers\EventPriceChangeObserver::class);
         }
     }
 

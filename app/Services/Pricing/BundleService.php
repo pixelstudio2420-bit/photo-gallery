@@ -33,6 +33,7 @@ class BundleService
 {
     public function __construct(
         private readonly \App\Services\EventPriceResolver $priceResolver,
+        private readonly SmartPricingService $smartPricing,
     ) {}
 
     /* ═══════════════════════════════════════════════════════════════
@@ -205,21 +206,26 @@ class BundleService
         if ($type === 'count') {
             $count    = (int) ($def['count'] ?? 0);
             if ($count <= 0) return null;
-            $discount = (float) ($def['discount'] ?? 0);
-            $original = round($count * $perPhoto, 2);
-            $price    = round($original * (1 - $discount / 100), 2);
+            $featured = (bool) ($def['featured'] ?? false);
+
+            // Use SmartPricingService — picks the right discount % for
+            // the price tier (low/mid/premium), applies featured bonus,
+            // charm-snaps the result, and enforces a profit floor so
+            // we never sell a bundle below 1× the solo per-photo price.
+            $pricing = $this->smartPricing->computeBundlePrice($count, $perPhoto, $featured);
+
             return [
                 'event_id'        => $event->id,
                 'name'            => "{$count} รูป",
                 'photo_count'     => $count,
-                'price'           => $price,
-                'original_price'  => $original,
+                'price'           => $pricing['price'],
+                'original_price'  => $pricing['original_price'],
                 'bundle_type'     => 'count',
-                'discount_pct'    => $discount,
-                'description'     => "เลือกได้ {$count} รูป — เพียง ฿" . number_format($price / $count, 0) . "/รูป",
+                'discount_pct'    => $pricing['discount_pct'],
+                'description'     => "เลือกได้ {$count} รูป — เพียง ฿" . number_format($pricing['price'] / $count, 0) . "/รูป",
                 'bundle_subtitle' => $count <= 3 ? 'เหมาะสำหรับลูกค้าทั่วไป' : ($count >= 20 ? 'เหมาะสำหรับครอบครัว' : 'เหมาะสำหรับคนชอบเก็บความทรงจำ'),
                 'badge'           => $def['badge']    ?? null,
-                'is_featured'     => (bool) ($def['featured'] ?? false),
+                'is_featured'     => $featured,
                 'is_active'       => true,
                 'sort_order'      => $sortOrder,
             ];
@@ -402,16 +408,21 @@ class BundleService
                 continue;
             }
 
-            // count bundles: original_price = count × per_photo,
-            //                price          = original × (1 - discount/100)
+            // count bundles: re-derive everything via SmartPricingService
+            // so the new price uses the up-to-date tier curve + charm
+            // snap + profit floor. The bundle's existing is_featured
+            // flag is honoured (carries the +5% featured bonus through).
             if ($bundle->bundle_type === 'count' && $bundle->photo_count > 0) {
-                $discount = (float) ($bundle->discount_pct ?? 0);
-                $original = round($bundle->photo_count * $perPhoto, 2);
-                $price    = round($original * (1 - $discount / 100), 2);
+                $pricing = $this->smartPricing->computeBundlePrice(
+                    (int) $bundle->photo_count,
+                    $perPhoto,
+                    (bool) $bundle->is_featured
+                );
 
                 $bundle->update([
-                    'original_price' => $original,
-                    'price'          => $price,
+                    'price'          => $pricing['price'],
+                    'original_price' => $pricing['original_price'],
+                    'discount_pct'   => $pricing['discount_pct'],
                 ]);
                 $updated++;
                 continue;
@@ -454,10 +465,20 @@ class BundleService
             ->get();
 
         foreach ($bundles as $b) {
-            $discount = (float) ($b->discount_pct ?? 0);
-            $expected = round($b->photo_count * $perPhoto * (1 - $discount / 100), 2);
+            // Expected price comes from SmartPricingService — same curve
+            // the seeder + recalc use. So a bundle drifts only when it
+            // diverges from what current per_photo + tier + featured
+            // would produce, not from the row's own (possibly stale)
+            // discount_pct.
+            $pricing = $this->smartPricing->computeBundlePrice(
+                (int) $b->photo_count,
+                $perPhoto,
+                (bool) $b->is_featured
+            );
+            $expected = (float) $pricing['price'];
             $actual   = (float) $b->price;
             if ($expected <= 0) continue;
+
             $diffPct = abs($actual - $expected) / $expected * 100;
             if ($diffPct >= $thresholdPct) {
                 $drift[] = [

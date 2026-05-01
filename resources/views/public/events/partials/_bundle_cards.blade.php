@@ -142,11 +142,19 @@
               <div class="mb-2.5"></div>
             @endif
 
-            {{-- Pricing Display — pushed to mid-card via spacer above so
-                 prices align across siblings in the same grid row. --}}
+            {{-- Pricing Display.
+                 Loss-aversion frame: show "ประหยัด ฿X" (absolute amount)
+                 above "ลด N%" (percentage) — Thai consumers respond more
+                 strongly to the dollar amount they're saving than to the
+                 percentage off, especially above ฿500 of savings. --}}
+            @php
+              $savingsAmount = $pkg->original_price && $pkg->original_price > $pkg->price
+                  ? (float) $pkg->original_price - (float) $pkg->price
+                  : 0;
+            @endphp
             <div class="text-center mb-3">
               @if($isFace)
-                <div class="text-[10px] text-gray-400 mb-0.5">ส่วนลด {{ (int) $pkg->discount_pct }}%</div>
+                <div class="text-[10px] text-gray-400 mb-0.5">ส่วนลดสูงสุด {{ (int) $pkg->discount_pct }}%</div>
                 <div class="text-base md:text-lg font-bold text-pink-600 dark:text-pink-400 leading-tight">ราคาผันแปร</div>
                 <div class="text-[10px] text-gray-500 mt-0.5">สูงสุด ฿{{ number_format($pkg->max_price, 0) }}</div>
               @else
@@ -156,8 +164,10 @@
                 <div class="text-xl md:text-2xl lg:text-3xl font-extrabold leading-none {{ $pkg->is_featured ? 'text-amber-600 dark:text-amber-400' : 'text-indigo-600 dark:text-indigo-400' }}">
                   ฿{{ number_format($pkg->price, 0) }}
                 </div>
-                @if($savingsPct > 0)
-                  <div class="text-[10px] text-emerald-600 font-bold mt-1">ประหยัด {{ $savingsPct }}%</div>
+                @if($savingsAmount > 0)
+                  <div class="text-[11px] text-emerald-600 font-bold mt-1">
+                    💰 ประหยัด ฿{{ number_format($savingsAmount, 0) }}
+                  </div>
                 @endif
                 @if($perPhoto)
                   <div class="text-[10px] text-gray-500 mt-0.5">฿{{ number_format($perPhoto, 0) }}/รูป</div>
