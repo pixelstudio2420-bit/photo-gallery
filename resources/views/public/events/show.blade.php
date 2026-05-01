@@ -980,7 +980,19 @@
 
 @section('content-full')
 
-{{-- ============ Packages Strip ============ --}}
+{{-- ============ NEW: Beautiful Bundle Cards ============ --}}
+{{-- Full visual bundle showcase with psychology-driven design.
+     The legacy chip strip below stays for quick re-selection but the
+     cards above are the primary sales pitch. --}}
+@include('public.events.partials._bundle_cards')
+
+{{-- ============ NEW: Face Bundle Modal ============ --}}
+@include('public.events.partials._face_bundle_modal')
+
+{{-- ============ NEW: Smart Cart Upsell Widget (floating) ============ --}}
+@include('public.events.partials._cart_upsell_widget')
+
+{{-- ============ Legacy Packages Strip (compact chip nav) ============ --}}
 @if($packages->count() > 0)
 <div class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-white/[0.06] py-3">
   <div class="max-w-7xl mx-auto px-4">
@@ -1014,7 +1026,7 @@
 @endif
 
 {{-- ============ Gallery Toolbar (sticky) ============ --}}
-<div class="gallery-toolbar-bg backdrop-blur-xl border-b border-white/[0.06] shadow-lg sticky z-50" id="gallery-toolbar" style="display:none;">
+<div class="gallery-toolbar-bg backdrop-blur-xl border-b border-white/[0.06] shadow-lg sticky z-20" id="gallery-toolbar" style="display:none;">
   <div class="max-w-full mx-auto px-3 md:px-5">
     <div class="flex items-center justify-between gap-3 py-2">
 

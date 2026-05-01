@@ -1,0 +1,199 @@
+<?php
+
+namespace App\Http\Controllers\Photographer;
+
+use App\Http\Controllers\Controller;
+use App\Models\Event;
+use App\Models\PricingPackage;
+use App\Services\Pricing\BundleService;
+use App\Services\EventPriceResolver;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+/**
+ * Photographer-facing CRUD for an event's photo bundles.
+ *
+ * Routes (registered in routes/web.php under prefix /photographer):
+ *   GET    /events/{event}/packages              index — list & manage
+ *   POST   /events/{event}/packages              store — add custom bundle
+ *   PUT    /events/{event}/packages/{pkg}        update — edit bundle
+ *   DELETE /events/{event}/packages/{pkg}        destroy — delete
+ *   POST   /events/{event}/packages/template     applyTemplate — overwrite with preset
+ *   POST   /events/{event}/packages/{pkg}/feature toggleFeatured — pin "best value"
+ *
+ * Authorization: every action verifies the event belongs to the current
+ * photographer. We don't lean on a policy class because the rule is a
+ * one-liner — but we centralize it via `$this->authorizeOwnership($event)`
+ * so changes ripple through automatically.
+ */
+class EventPackageController extends Controller
+{
+    public function __construct(
+        private readonly BundleService $bundles,
+        private readonly EventPriceResolver $priceResolver,
+    ) {}
+
+    /* ───────── Index ───────── */
+
+    public function index(Event $event)
+    {
+        $this->authorizeOwnership($event);
+
+        $packages = PricingPackage::where('event_id', $event->id)
+            ->orderBy('sort_order')
+            ->orderBy('photo_count')
+            ->get();
+
+        $perPhoto = $this->priceResolver->perPhoto($event->id);
+        $templates = $this->bundles->templates();
+        $suggestedTemplate = $this->bundles->templateKeyForCategory(optional($event->category)->slug);
+
+        // Stats: total revenue from these bundles + per-bundle counts
+        $stats = [
+            'total_purchases' => $packages->sum('purchase_count'),
+            'total_revenue'   => $packages->sum(fn ($p) => $p->purchase_count * (float) $p->price),
+            'best_seller'     => $packages->sortByDesc('purchase_count')->first(),
+        ];
+
+        return view('photographer.events.packages.index', compact(
+            'event', 'packages', 'perPhoto', 'templates', 'suggestedTemplate', 'stats'
+        ));
+    }
+
+    /* ───────── Store (custom bundle) ───────── */
+
+    public function store(Request $request, Event $event)
+    {
+        $this->authorizeOwnership($event);
+
+        $validated = $request->validate([
+            'name'            => 'required|string|max:100',
+            'bundle_type'     => 'required|in:count,face_match,event_all',
+            'photo_count'     => 'nullable|integer|min:1|max:10000',
+            'price'           => 'required|numeric|min:0',
+            'original_price'  => 'nullable|numeric|min:0',
+            'discount_pct'    => 'nullable|numeric|min:0|max:100',
+            'max_price'       => 'nullable|numeric|min:0',
+            'description'     => 'nullable|string|max:500',
+            'bundle_subtitle' => 'nullable|string|max:200',
+            'badge'           => 'nullable|string|max:50',
+            'is_featured'     => 'nullable|boolean',
+            'sort_order'      => 'nullable|integer',
+        ]);
+
+        // Defensive validation: face_match needs discount_pct + max_price.
+        if ($validated['bundle_type'] === 'face_match') {
+            $validated['discount_pct'] = $validated['discount_pct'] ?? 50;
+            $validated['max_price']    = $validated['max_price']    ?? 1500;
+            $validated['photo_count']  = null;
+        }
+
+        // event_all: photo_count is informational; if not supplied, count
+        // all photos in the event.
+        if ($validated['bundle_type'] === 'event_all' && empty($validated['photo_count'])) {
+            $validated['photo_count'] = max(1, \App\Models\EventPhoto::where('event_id', $event->id)->count());
+        }
+
+        $validated['event_id']    = $event->id;
+        $validated['is_active']   = true;
+        $validated['is_featured'] = $request->boolean('is_featured');
+        $validated['sort_order']  = $validated['sort_order'] ?? PricingPackage::where('event_id', $event->id)->max('sort_order') + 1;
+
+        PricingPackage::create($validated);
+
+        return back()->with('success', 'เพิ่มแพ็กเกจสำเร็จ');
+    }
+
+    /* ───────── Update ───────── */
+
+    public function update(Request $request, Event $event, PricingPackage $package)
+    {
+        $this->authorizeOwnership($event);
+        $this->authorizePackage($event, $package);
+
+        $validated = $request->validate([
+            'name'            => 'required|string|max:100',
+            'photo_count'     => 'nullable|integer|min:1|max:10000',
+            'price'           => 'required|numeric|min:0',
+            'original_price'  => 'nullable|numeric|min:0',
+            'discount_pct'    => 'nullable|numeric|min:0|max:100',
+            'max_price'       => 'nullable|numeric|min:0',
+            'description'     => 'nullable|string|max:500',
+            'bundle_subtitle' => 'nullable|string|max:200',
+            'badge'           => 'nullable|string|max:50',
+            'is_featured'     => 'nullable|boolean',
+            'is_active'       => 'nullable|boolean',
+            'sort_order'      => 'nullable|integer',
+        ]);
+
+        $validated['is_featured'] = $request->boolean('is_featured');
+        $validated['is_active']   = $request->boolean('is_active', true);
+
+        $package->update($validated);
+
+        return back()->with('success', 'อัปเดตแพ็กเกจสำเร็จ');
+    }
+
+    /* ───────── Destroy ───────── */
+
+    public function destroy(Event $event, PricingPackage $package)
+    {
+        $this->authorizeOwnership($event);
+        $this->authorizePackage($event, $package);
+
+        $package->delete();
+
+        return back()->with('success', 'ลบแพ็กเกจสำเร็จ');
+    }
+
+    /* ───────── Apply template (overwrite) ───────── */
+
+    public function applyTemplate(Request $request, Event $event)
+    {
+        $this->authorizeOwnership($event);
+
+        $request->validate([
+            'template' => 'required|string|in:standard,sports,wedding,concert,corporate',
+        ]);
+
+        $created = $this->bundles->applyTemplate($event, $request->template);
+
+        return back()->with('success', "ใช้เทมเพลตสำเร็จ — สร้าง {$created} แพ็กเกจใหม่");
+    }
+
+    /* ───────── Toggle featured ───────── */
+
+    public function toggleFeatured(Event $event, PricingPackage $package)
+    {
+        $this->authorizeOwnership($event);
+        $this->authorizePackage($event, $package);
+
+        // Unset other featured packages — only one can be the "best value".
+        if (!$package->is_featured) {
+            PricingPackage::where('event_id', $event->id)
+                ->where('id', '!=', $package->id)
+                ->update(['is_featured' => false]);
+        }
+
+        $package->update(['is_featured' => !$package->is_featured]);
+
+        return back()->with('success', $package->is_featured ? 'ตั้งเป็น "ขายดีที่สุด" สำเร็จ' : 'ยกเลิก "ขายดีที่สุด" สำเร็จ');
+    }
+
+    /* ───────── Auth helpers ───────── */
+
+    private function authorizeOwnership(Event $event): void
+    {
+        $userId = Auth::id();
+        if ($event->photographer_id !== $userId) {
+            abort(403, 'อีเวนต์นี้ไม่ใช่ของคุณ');
+        }
+    }
+
+    private function authorizePackage(Event $event, PricingPackage $package): void
+    {
+        if ($package->event_id !== $event->id) {
+            abort(404);
+        }
+    }
+}

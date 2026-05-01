@@ -18,6 +18,9 @@
     <a href="{{ route('photographer.events.photos.index', $event) }}" class="font-medium px-5 py-2 rounded-lg inline-flex items-center gap-1 transition" style="background:rgba(37,99,235,0.08);color:#2563eb;">
       <i class="bi bi-images mr-1"></i> จัดการรูปภาพ
     </a>
+    <a href="{{ route('photographer.events.packages.index', $event) }}" class="font-medium px-5 py-2 rounded-lg inline-flex items-center gap-1 transition" style="background:rgba(168,85,247,0.08);color:#a855f7;">
+      <i class="bi bi-box-seam mr-1"></i> แพ็กเกจ
+    </a>
     <a href="{{ route('photographer.events.edit', $event) }}" class="font-medium px-5 py-2 rounded-lg inline-flex items-center gap-1 transition" style="background:rgba(245,158,11,0.08);color:#f59e0b;">
       <i class="bi bi-pencil mr-1"></i> แก้ไข
     </a>

@@ -54,6 +54,22 @@ class OrderObserver
                 }
             }
 
+            // Bundle purchase counter — increment when an order containing a
+            // pricing_packages bundle transitions to paid. Used by the
+            // photographer bundle-stats dashboard to highlight best-sellers
+            // and by future "show 'X people bought this' social proof" UI.
+            // Cheap: a single indexed UPDATE per package.
+            if ($order->status === 'paid' && $order->package_id) {
+                try {
+                    DB::table('pricing_packages')
+                        ->where('id', $order->package_id)
+                        ->increment('purchase_count');
+                } catch (\Throwable $e) {
+                    // Counter is denormalized — never block payment confirmation.
+                    Log::info('OrderObserver.bundle_counter_skipped: ' . $e->getMessage());
+                }
+            }
+
             // Reverse photographer payouts on refund / cancellation.
             // Without this, the platform refunds the buyer but the
             // photographer still gets paid by the disbursement cron —

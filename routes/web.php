@@ -680,6 +680,14 @@ Route::middleware(['auth', 'no.back'])->group(function () {
         Route::post('/cart/add', [\App\Http\Controllers\Api\CartApiController::class, 'add']);
         Route::delete('/cart/{item}', [\App\Http\Controllers\Api\CartApiController::class, 'remove']);
         Route::post('/cart/bundle', [\App\Http\Controllers\Api\CartApiController::class, 'addBundle']);
+        // Smart upsell suggestion — given the current cart for an event, returns
+        // the next bundle that gives the buyer the best per-photo savings.
+        Route::get('/cart/upsell-suggestion', [\App\Http\Controllers\Api\CartApiController::class, 'upsellSuggestion'])->name('cart.upsell');
+        // Face-match bundle quote — given the photo IDs that face-search returned,
+        // returns the bundle price + savings breakdown so the modal can render it.
+        Route::post('/cart/face-bundle/quote', [\App\Http\Controllers\Api\CartApiController::class, 'faceBundleQuote'])->name('cart.face-bundle.quote');
+        // Add a face-match bundle to the cart (creates a virtual bundle item).
+        Route::post('/cart/face-bundle/add', [\App\Http\Controllers\Api\CartApiController::class, 'addFaceBundle'])->name('cart.face-bundle.add');
         Route::post('/cart/coupon', [\App\Http\Controllers\Api\CouponApiController::class, 'apply'])->name('cart.coupon.apply');
         Route::post('/cart/coupon/remove', [\App\Http\Controllers\Api\CouponApiController::class, 'remove'])->name('cart.coupon.remove');
         Route::post('/cart/referral', [\App\Http\Controllers\Api\CouponApiController::class, 'applyReferral'])->name('cart.referral.apply');
@@ -1718,6 +1726,17 @@ Route::prefix('photographer')->name('photographer.')->group(function () {
         // Events
         Route::resource('events', \App\Http\Controllers\Photographer\EventController::class);
         Route::get('events/{event}/qrcode', [\App\Http\Controllers\Photographer\EventController::class, 'qrcode'])->name('events.qrcode');
+
+        // ── Per-event photo bundles (volume / face-match / event-all) ────
+        // Photographers manage their own bundle pricing here; the public
+        // event page reads the same rows. Auto-seeded on event create via
+        // EventBundleSeederObserver.
+        Route::get('events/{event}/packages',                    [\App\Http\Controllers\Photographer\EventPackageController::class, 'index'])->name('events.packages.index');
+        Route::post('events/{event}/packages',                   [\App\Http\Controllers\Photographer\EventPackageController::class, 'store'])->name('events.packages.store');
+        Route::put('events/{event}/packages/{package}',          [\App\Http\Controllers\Photographer\EventPackageController::class, 'update'])->name('events.packages.update');
+        Route::delete('events/{event}/packages/{package}',       [\App\Http\Controllers\Photographer\EventPackageController::class, 'destroy'])->name('events.packages.destroy');
+        Route::post('events/{event}/packages/template',          [\App\Http\Controllers\Photographer\EventPackageController::class, 'applyTemplate'])->name('events.packages.template');
+        Route::post('events/{event}/packages/{package}/feature', [\App\Http\Controllers\Photographer\EventPackageController::class, 'toggleFeatured'])->name('events.packages.feature');
 
         // Portfolio archival (manual) — wipes originals but keeps previews + cover
         Route::post('events/{event}/archive-to-portfolio', [\App\Http\Controllers\Photographer\EventController::class, 'archiveToPortfolio'])->name('events.archive-portfolio');

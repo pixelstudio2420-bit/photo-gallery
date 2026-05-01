@@ -2,10 +2,28 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 
+/**
+ * Photo bundle pricing.
+ *
+ * One row = one purchasable bundle. Three flavors (`bundle_type`):
+ *   • count       — buyer selects N photos, pays a fixed bundle price
+ *   • face_match  — buyer runs face search; price = base × found-count × discount,
+ *                   capped at max_price. Photo count is per-buyer dynamic.
+ *   • event_all   — flat-fee "download every photo" pass for the event
+ *
+ * Marketing fields (badge, is_featured, original_price, bundle_subtitle) drive
+ * the public-facing card UI; they're optional and the cards still render
+ * sensibly without them.
+ */
 class PricingPackage extends Model
 {
     protected $table = 'pricing_packages';
+
+    public const TYPE_COUNT       = 'count';
+    public const TYPE_FACE_MATCH  = 'face_match';
+    public const TYPE_EVENT_ALL   = 'event_all';
 
     protected $fillable = [
         'name',
@@ -14,18 +32,93 @@ class PricingPackage extends Model
         'description',
         'is_active',
         'event_id',
+        // Bundle-marketing fields (added 2026-05-01)
+        'bundle_type',
+        'discount_pct',
+        'max_price',
+        'original_price',
+        'badge',
+        'is_featured',
+        'sort_order',
+        'bundle_subtitle',
+        'purchase_count',
     ];
 
     protected $casts = [
-        'is_active'   => 'boolean',
-        'price'       => 'decimal:2',
-        'photo_count' => 'integer',
+        'is_active'      => 'boolean',
+        'is_featured'    => 'boolean',
+        'price'          => 'decimal:2',
+        'original_price' => 'decimal:2',
+        'max_price'      => 'decimal:2',
+        'discount_pct'   => 'decimal:2',
+        'photo_count'    => 'integer',
+        'sort_order'     => 'integer',
+        'purchase_count' => 'integer',
     ];
 
-    public function scopeActive($query)
+    /* ───────── Scopes ───────── */
+
+    public function scopeActive(Builder $q): Builder
     {
-        return $query->where('is_active', true)->orderBy('photo_count');
+        return $q->where('is_active', true)->orderBy('sort_order')->orderBy('photo_count');
     }
+
+    /** Bundles that apply to a given event (event-specific OR global fallback). */
+    public function scopeForEvent(Builder $q, int $eventId): Builder
+    {
+        return $q->where(fn ($w) => $w->where('event_id', $eventId)->orWhereNull('event_id'));
+    }
+
+    public function scopeOfType(Builder $q, string $type): Builder
+    {
+        return $q->where('bundle_type', $type);
+    }
+
+    public function scopeCountBundles(Builder $q): Builder
+    {
+        return $q->where('bundle_type', self::TYPE_COUNT);
+    }
+
+    public function scopeFaceMatch(Builder $q): Builder
+    {
+        return $q->where('bundle_type', self::TYPE_FACE_MATCH);
+    }
+
+    public function scopeEventAll(Builder $q): Builder
+    {
+        return $q->where('bundle_type', self::TYPE_EVENT_ALL);
+    }
+
+    /* ───────── Computed helpers ───────── */
+
+    /** True if the bundle stores a fixed price (count + event_all) vs computed (face_match). */
+    public function hasFixedPrice(): bool
+    {
+        return $this->bundle_type !== self::TYPE_FACE_MATCH;
+    }
+
+    /** Per-photo price for display ("เพียง ฿80/รูป"). Null for face_match (dynamic). */
+    public function getPerPhotoPriceAttribute(): ?float
+    {
+        if (!$this->photo_count || $this->photo_count <= 0) return null;
+        return round((float) $this->price / $this->photo_count, 2);
+    }
+
+    /** Savings amount (original − price). Used for "ประหยัด ฿X" badge. */
+    public function getSavingsAmountAttribute(): float
+    {
+        if (!$this->original_price) return 0.0;
+        return max(0, (float) $this->original_price - (float) $this->price);
+    }
+
+    /** Savings percentage shown as "-25%". Returns 0 when not on sale. */
+    public function getSavingsPctAttribute(): float
+    {
+        if (!$this->original_price || $this->original_price <= 0) return 0.0;
+        return round(((float) $this->original_price - (float) $this->price) / (float) $this->original_price * 100, 0);
+    }
+
+    /* ───────── Relations ───────── */
 
     public function event()
     {

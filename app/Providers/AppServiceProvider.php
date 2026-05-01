@@ -147,6 +147,14 @@ class AppServiceProvider extends ServiceProvider
         if (class_exists(\App\Models\SeoPage::class)) {
             \App\Models\SeoPage::observe(\App\Observers\SeoPageObserver::class);
         }
+
+        // Auto-seed default photo bundles on Event creation. The observer
+        // dispatches synchronously after the event row is inserted; bundle
+        // rows reference the new event_id directly. Idempotent — bails out
+        // if any bundles already exist for the event.
+        if (class_exists(\App\Models\Event::class)) {
+            \App\Models\Event::observe(\App\Observers\EventBundleSeederObserver::class);
+        }
     }
 
     /**
