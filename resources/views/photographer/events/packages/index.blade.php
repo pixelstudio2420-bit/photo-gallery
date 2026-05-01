@@ -33,9 +33,65 @@
     </div>
   @endif
 
+  @if(session('error'))
+    <div class="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 text-sm">
+      <i class="bi bi-exclamation-circle mr-1"></i>{{ session('error') }}
+    </div>
+  @endif
+
   @if($errors->any())
     <div class="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 text-sm">
       <i class="bi bi-exclamation-circle mr-1"></i>{{ $errors->first() }}
+    </div>
+  @endif
+
+  {{-- ── Price-drift warning ──────────────────────────────────────
+       Surfaces bundles whose price doesn't match what (price_per_photo
+       × count × discount%) currently yields. Common cause: photographer
+       changed the per-photo price after bundles were seeded, leaving
+       the bundle prices stale (and possibly far cheaper than intended).
+       Single-click "Recalculate" rebuilds them from the current price. --}}
+  @if(!empty($priceDrift))
+    <div class="mb-5 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border-2 border-amber-300 dark:border-amber-500/30">
+      <div class="flex items-start gap-3 mb-3">
+        <i class="bi bi-exclamation-triangle-fill text-amber-500 text-2xl shrink-0 mt-0.5"></i>
+        <div class="flex-1 min-w-0">
+          <div class="font-bold text-amber-900 dark:text-amber-200 mb-1">
+            ราคาแพ็กเกจไม่ตรงกับราคา/รูปปัจจุบัน ({{ count($priceDrift) }} แพ็กเกจ)
+          </div>
+          <p class="text-xs text-amber-800 dark:text-amber-300/80 leading-relaxed mb-2">
+            ราคา/รูปปัจจุบันคือ <strong>฿{{ number_format($perPhoto, 0) }}</strong> แต่ราคาแพ็กเกจบางใบยังคำนวณจากราคาเดิม —
+            ลูกค้าอาจได้ส่วนลดมาก/น้อยกว่าที่ตั้งใจ
+          </p>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-slate-800 rounded-lg p-3 mb-3 text-xs space-y-1">
+        @foreach($priceDrift as $d)
+          <div class="flex items-center justify-between gap-2 py-1 border-b border-amber-100 dark:border-amber-500/10 last:border-0">
+            <div class="flex items-center gap-2">
+              <span class="font-medium">{{ $d['bundle']->name }}</span>
+              <span class="text-gray-400">·</span>
+              <span class="text-gray-500">ส่วนลด {{ (int) $d['bundle']->discount_pct }}%</span>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="text-red-500 line-through">฿{{ number_format($d['actual'], 0) }}</span>
+              <i class="bi bi-arrow-right text-amber-500"></i>
+              <span class="text-emerald-600 font-bold">฿{{ number_format($d['expected'], 0) }}</span>
+              <span class="text-[10px] text-gray-400">({{ $d['drift_pct'] }}% off)</span>
+            </div>
+          </div>
+        @endforeach
+      </div>
+
+      <form method="POST" action="{{ route('photographer.events.packages.recalculate', $event) }}"
+            onsubmit="return confirm('ปรับราคาแพ็กเกจ {{ count($priceDrift) }} ใบให้ตรงกับราคา/รูปปัจจุบัน (฿{{ number_format($perPhoto, 0) }}) — ส่วนลด% เดิมจะถูกเก็บไว้ ยืนยันหรือไม่?');">
+        @csrf
+        <button type="submit" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition shadow-md">
+          <i class="bi bi-arrow-clockwise"></i>
+          ปรับราคาทั้งหมดให้ตรงกับ ฿{{ number_format($perPhoto, 0) }}/รูป
+        </button>
+      </form>
     </div>
   @endif
 

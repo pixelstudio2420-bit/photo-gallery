@@ -1736,6 +1736,7 @@ Route::prefix('photographer')->name('photographer.')->group(function () {
         Route::put('events/{event}/packages/{package}',          [\App\Http\Controllers\Photographer\EventPackageController::class, 'update'])->name('events.packages.update');
         Route::delete('events/{event}/packages/{package}',       [\App\Http\Controllers\Photographer\EventPackageController::class, 'destroy'])->name('events.packages.destroy');
         Route::post('events/{event}/packages/template',          [\App\Http\Controllers\Photographer\EventPackageController::class, 'applyTemplate'])->name('events.packages.template');
+        Route::post('events/{event}/packages/recalculate',       [\App\Http\Controllers\Photographer\EventPackageController::class, 'recalculate'])->name('events.packages.recalculate');
         Route::post('events/{event}/packages/{package}/feature', [\App\Http\Controllers\Photographer\EventPackageController::class, 'toggleFeatured'])->name('events.packages.feature');
 
         // Portfolio archival (manual) — wipes originals but keeps previews + cover

@@ -55,8 +55,13 @@ class EventPackageController extends Controller
             'best_seller'     => $packages->sortByDesc('purchase_count')->first(),
         ];
 
+        // Detect bundles whose price has drifted from what the current
+        // per-photo + discount would yield. Drives the warning banner +
+        // "Recalculate" CTA in the view.
+        $priceDrift = $this->bundles->detectPriceDrift($event);
+
         return view('photographer.events.packages.index', compact(
-            'event', 'packages', 'perPhoto', 'templates', 'suggestedTemplate', 'stats'
+            'event', 'packages', 'perPhoto', 'templates', 'suggestedTemplate', 'stats', 'priceDrift'
         ));
     }
 
@@ -159,6 +164,31 @@ class EventPackageController extends Controller
         $created = $this->bundles->applyTemplate($event, $request->template);
 
         return back()->with('success', "ใช้เทมเพลตสำเร็จ — สร้าง {$created} แพ็กเกจใหม่");
+    }
+
+    /* ───────── Recalculate prices from current per-photo ───────── */
+
+    /**
+     * Re-derive bundle prices from the event's current per-photo price.
+     *
+     * Use case: photographer originally created the event at ฿100/photo,
+     * the seeder set 3 รูป=฿270 etc, then they bumped per-photo to ฿200.
+     * Without recalc the buyer still pays ฿270 for 3 photos (= ฿90/photo,
+     * 55% discount instead of the intended 10%). This action brings every
+     * count + event_all bundle back in line, preserving each row's
+     * existing discount_pct so manual percentage tweaks stay intact.
+     */
+    public function recalculate(Event $event)
+    {
+        $this->authorizeOwnership($event);
+
+        [$updated, $skipped] = $this->bundles->recalculatePrices($event);
+
+        if ($updated === 0 && $skipped === 0) {
+            return back()->with('error', 'ยังไม่ได้ตั้งราคา/รูปสำหรับอีเวนต์นี้ — กรุณาตั้งราคาก่อน');
+        }
+
+        return back()->with('success', "ปรับราคาแพ็กเกจสำเร็จ ({$updated} ปรับแล้ว, {$skipped} ข้าม)");
     }
 
     /* ───────── Toggle featured ───────── */

@@ -361,6 +361,118 @@ class BundleService
     }
 
     /* ═══════════════════════════════════════════════════════════════
+     * Recalculation — re-derive bundle prices from current per-photo
+     * ═══════════════════════════════════════════════════════════════ */
+
+    /**
+     * Recalculate price + original_price on every count/event_all bundle
+     * for `$event` using the current `event.price_per_photo`. Each row's
+     * existing `discount_pct` is preserved, so the photographer's manual
+     * tweaks to the discount percentage still apply.
+     *
+     * face_match bundles are skipped — their price is computed at view
+     * time anyway (count × per_photo × discount, capped), so they always
+     * stay in sync with the live per_photo without needing a row update.
+     *
+     * Use case: photographer creates an event at ฿100/photo, system
+     * seeds bundles {3 rooks=฿270, 6=฿480, ...}, then a week later the
+     * photographer raises per_photo to ฿200. Without recalc the buyer
+     * still pays ฿270 for 3 photos = ฿90/photo (a 55% discount instead
+     * of the intended 10%). This method brings the bundles back in line.
+     *
+     * @return array  [$updated, $skipped] count breakdown.
+     */
+    public function recalculatePrices(Event $event): array
+    {
+        $perPhoto = $this->priceResolver->perPhoto($event->id);
+        if ($perPhoto <= 0) {
+            return [0, 0];
+        }
+
+        $bundles = PricingPackage::where('event_id', $event->id)->get();
+        $updated = 0;
+        $skipped = 0;
+
+        foreach ($bundles as $bundle) {
+            // face_match: nothing to update (price = 0 placeholder; live
+            // computation in calculateFaceBundle() always uses the
+            // current per_photo).
+            if ($bundle->bundle_type === self::TYPE_FACE_MATCH) {
+                $skipped++;
+                continue;
+            }
+
+            // count bundles: original_price = count × per_photo,
+            //                price          = original × (1 - discount/100)
+            if ($bundle->bundle_type === 'count' && $bundle->photo_count > 0) {
+                $discount = (float) ($bundle->discount_pct ?? 0);
+                $original = round($bundle->photo_count * $perPhoto, 2);
+                $price    = round($original * (1 - $discount / 100), 2);
+
+                $bundle->update([
+                    'original_price' => $original,
+                    'price'          => $price,
+                ]);
+                $updated++;
+                continue;
+            }
+
+            // event_all: keep the user's manually-set price untouched
+            // (they pick a flat fee like ฿2,990 and don't want it to
+            // drift just because per_photo changed). Only refresh the
+            // original_price (slashed-out display) for accurate discount %.
+            if ($bundle->bundle_type === 'event_all' && $bundle->photo_count > 0) {
+                $original = round($bundle->photo_count * $perPhoto, 2);
+                $bundle->update(['original_price' => $original]);
+                $updated++;
+                continue;
+            }
+
+            $skipped++;
+        }
+
+        return [$updated, $skipped];
+    }
+
+    /**
+     * Detect bundles whose price has drifted significantly from what the
+     * current per-photo + discount would yield. Used by the photographer
+     * UI to surface a "your bundles may be off" warning banner.
+     *
+     * Returns a list of [bundle, expected_price, actual_price, drift_pct]
+     * tuples — empty array means everything is in sync.
+     */
+    public function detectPriceDrift(Event $event, float $thresholdPct = 5.0): array
+    {
+        $perPhoto = $this->priceResolver->perPhoto($event->id);
+        if ($perPhoto <= 0) return [];
+
+        $drift = [];
+        $bundles = PricingPackage::where('event_id', $event->id)
+            ->where('bundle_type', 'count')
+            ->where('photo_count', '>', 0)
+            ->get();
+
+        foreach ($bundles as $b) {
+            $discount = (float) ($b->discount_pct ?? 0);
+            $expected = round($b->photo_count * $perPhoto * (1 - $discount / 100), 2);
+            $actual   = (float) $b->price;
+            if ($expected <= 0) continue;
+            $diffPct = abs($actual - $expected) / $expected * 100;
+            if ($diffPct >= $thresholdPct) {
+                $drift[] = [
+                    'bundle'    => $b,
+                    'expected'  => $expected,
+                    'actual'    => $actual,
+                    'drift_pct' => round($diffPct, 1),
+                ];
+            }
+        }
+
+        return $drift;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
      * Stats — invoked from Order observer when a paid order has a package
      * ═══════════════════════════════════════════════════════════════ */
 
