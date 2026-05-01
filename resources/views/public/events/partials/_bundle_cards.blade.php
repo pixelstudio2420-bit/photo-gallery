@@ -18,7 +18,7 @@
 --}}
 
 @php
-  $activeCount = $packages->where('is_active', true)->count();
+  $activeCount = isset($packages) ? $packages->where('is_active', true)->count() : 0;
   // Static-resolution of the desktop column count keeps Tailwind v4's
   // class scanner happy (interpolated `lg:grid-cols-{{ N }}` strings get
   // skipped by the @source pass and the class never makes it to CSS).
@@ -30,6 +30,7 @@
   };
 @endphp
 
+@if($activeCount > 0)
 <section class="my-8" id="bundle-cards"
          x-data="{
            open: window.matchMedia('(min-width: 768px)').matches,
