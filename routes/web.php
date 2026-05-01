@@ -950,6 +950,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             // Audit log — append-only forensic trail of every pricing
             // change. Read-only by design (no mutation actions exposed).
             Route::get('/audit', [\App\Http\Controllers\Admin\PricingAuditController::class, 'index'])->name('audit');
+            // Smart-pricing endpoints — read-only calc + bulk recompute.
+            // The `calculate-price` GET feeds the modal's "auto" button;
+            // `recalculate-all` POST sweeps every event-bound package
+            // through SmartPricingService::computeBundlePrice.
+            Route::get('/calculate-price', [\App\Http\Controllers\Admin\PackageController::class, 'calculatePrice'])->name('calculate-price');
+            Route::post('/recalculate-all', [\App\Http\Controllers\Admin\PackageController::class, 'recalculateAll'])->name('recalculate-all');
             Route::post('/', [\App\Http\Controllers\Admin\PackageController::class, 'store'])->name('store');
             Route::put('/{id}', [\App\Http\Controllers\Admin\PackageController::class, 'update'])->name('update');
             Route::delete('/{id}', [\App\Http\Controllers\Admin\PackageController::class, 'destroy'])->name('destroy');

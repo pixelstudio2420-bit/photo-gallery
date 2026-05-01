@@ -96,6 +96,84 @@
   </form>
 </div>
 
+{{--
+  Bulk Smart-Pricing recalc bar — same form posts whether a single
+  event is filtered (uses ?event_id) or "all events" (no filter).
+  Dispatches the existing #recalc-confirm-modal Alpine state below;
+  Alpine submits the form on confirm to avoid an accidental "missed
+  the price hike" run.
+--}}
+<div class="flex items-start justify-between gap-3 mb-3 p-4 rounded-xl bg-gradient-to-br from-indigo-500/[0.06] to-purple-500/[0.06] border border-indigo-500/15">
+  <div class="flex items-start gap-3">
+    <div class="w-10 h-10 rounded-lg bg-indigo-500/15 text-indigo-600 flex items-center justify-center shrink-0">
+      <i class="bi bi-magic text-lg"></i>
+    </div>
+    <div class="min-w-0">
+      <div class="font-semibold text-slate-800 mb-0.5">คำนวณราคาแพ็กเกจอัตโนมัติ</div>
+      <div class="text-xs text-slate-600 leading-relaxed">
+        ระบบจะคำนวณราคาทุกแพ็กเกจ (ยกเว้น <code class="bg-slate-100 px-1 rounded text-[10px]">face_match</code>)
+        จาก <strong>ราคา/ภาพของแต่ละอีเวนต์</strong> + ขนาด bundle + curve ส่วนลดตาม tier (low / mid / premium)
+        พร้อม charm pricing
+        @if(request('event_id'))
+          — ตอนนี้กำลังกรองเฉพาะอีเวนต์ ID <strong>{{ request('event_id') }}</strong>
+        @else
+          — รันทุกอีเวนต์ที่ตั้ง <code class="bg-slate-100 px-1 rounded text-[10px]">price_per_photo</code> ไว้แล้ว
+        @endif
+        · <span class="text-slate-500">หลังคำนวณยังแก้ไขแยกรายแพ็กเกจได้ตามต้องการ</span>
+      </div>
+    </div>
+  </div>
+  <button type="button"
+          x-data
+          @click="$dispatch('open-recalc-modal')"
+          class="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white text-sm font-semibold shadow-md shadow-indigo-500/25 transition">
+    <i class="bi bi-magic"></i>
+    <span>คำนวณราคาทั้งหมด</span>
+  </button>
+</div>
+
+{{-- Recalculate confirmation modal — second-step gate so a misclick
+     can't suddenly rewrite every package price on the platform. --}}
+<div x-data="{ open: false }" x-on:open-recalc-modal.window="open = true" x-cloak>
+  <div x-show="open" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div x-show="open" x-transition.opacity class="fixed inset-0 bg-black/40" @click="open = false"></div>
+    <div x-show="open" x-transition class="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+      <div class="text-center">
+        <div class="w-14 h-14 rounded-full bg-indigo-500/10 flex items-center justify-center mx-auto mb-4">
+          <i class="bi bi-magic text-2xl text-indigo-500"></i>
+        </div>
+        <h6 class="font-bold text-lg mb-2">คำนวณราคาแพ็กเกจใหม่?</h6>
+        <p class="text-gray-600 text-sm mb-2 leading-relaxed">
+          ระบบจะเขียนทับราคาเดิมของทุกแพ็กเกจ
+          @if(request('event_id'))
+            ใน <strong>อีเวนต์ ID {{ request('event_id') }}</strong>
+          @else
+            ใน <strong>ทุกอีเวนต์</strong>
+          @endif
+          ด้วยราคาที่คำนวณจาก curve ของ Smart Pricing
+        </p>
+        <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5 mb-5 leading-relaxed">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          แพ็กเกจ <code>face_match</code> และแพ็กเกจไม่ผูกอีเวนต์จะถูกข้าม
+          (ไม่มี <code>price_per_photo</code> ให้คำนวณ)
+        </p>
+        <div class="flex gap-2 justify-center">
+          <button type="button" @click="open = false" class="text-sm rounded-lg bg-gray-500/10 text-gray-600 font-medium px-5 py-2 transition hover:bg-gray-500/[0.15]">ยกเลิก</button>
+          <form method="POST" action="{{ route('admin.packages.recalculate-all') }}">
+            @csrf
+            @if(request('event_id'))
+              <input type="hidden" name="event_id" value="{{ request('event_id') }}">
+            @endif
+            <button type="submit" class="text-sm rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-semibold px-5 py-2 transition">
+              <i class="bi bi-magic mr-1"></i>คำนวณเลย
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 @if(session('success'))
 <div class="flex items-center gap-2 mb-3 px-4 py-3 rounded-xl bg-emerald-500/10 text-emerald-800">
   <i class="bi bi-check-circle-fill"></i> {{ session('success') }}
@@ -297,8 +375,27 @@
               <input type="number" name="photo_count" id="pkgPhotoCount" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" required min="1" placeholder="10">
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1.5">ราคา (บาท) <span class="text-red-500">*</span></label>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5 flex items-center justify-between gap-2">
+                <span>ราคา (บาท) <span class="text-red-500">*</span></span>
+                {{--
+                  Smart-Pricing auto-fill button. Hits
+                  /admin/packages/calculate-price with current event_id
+                  + photo_count and writes the suggested price into the
+                  field below. The field stays editable — admin can
+                  tweak after auto-fill if a manual override is wanted.
+                --}}
+                <button type="button" id="pkgAutoCalc"
+                        class="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/15 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="คำนวณอัตโนมัติจากราคา/ภาพของอีเวนต์">
+                  <i class="bi bi-magic"></i>
+                  <span>คำนวณอัตโนมัติ</span>
+                </button>
+              </label>
               <input type="number" name="price" id="pkgPrice" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" required min="0" step="0.01" placeholder="199.00">
+              {{-- Inline hint that appears AFTER auto-calc fills the
+                   field. Stays hidden by default and after a manual
+                   edit so the admin doesn't think the value is locked. --}}
+              <p id="pkgAutoCalcHint" class="hidden text-[11px] text-emerald-600 mt-1.5 leading-snug"></p>
             </div>
             <div class="md:col-span-2">
               <label class="block text-sm font-medium text-gray-700 mb-1.5">รายละเอียด</label>
@@ -391,6 +488,79 @@ function confirmDelete(id, name) {
   document.getElementById('deleteForm').action = '/admin/packages/' + id;
   window.dispatchEvent(new CustomEvent('open-delete-modal'));
 }
+
+/* ──────────────────────────────────────────────────────────────────
+   Auto-calculate price (Smart Pricing)
+   ──────────────────────────────────────────────────────────────────
+   Reads the modal's current event_id + photo_count, calls the
+   /admin/packages/calculate-price endpoint, and writes the result
+   into the Price field. Edits to the field clear the hint so the
+   admin doesn't think their override is being lied about. */
+(function () {
+  const btn         = document.getElementById('pkgAutoCalc');
+  const eventSel    = document.getElementById('pkgEventId');
+  const photoInput  = document.getElementById('pkgPhotoCount');
+  const priceInput  = document.getElementById('pkgPrice');
+  const hint        = document.getElementById('pkgAutoCalcHint');
+  if (!btn) return;
+
+  // The route() helper isn't available in JS, so we hardcode the
+  // path. Server-side route name is admin.packages.calculate-price.
+  const ENDPOINT = '{{ route('admin.packages.calculate-price') }}';
+
+  btn.addEventListener('click', async () => {
+    const photoCount = parseInt(photoInput.value, 10);
+    const eventId    = eventSel.value;
+
+    if (!photoCount || photoCount < 1) {
+      hint.textContent = 'กรุณาใส่จำนวนรูปก่อน แล้วลองใหม่';
+      hint.className = 'text-[11px] text-amber-600 mt-1.5 leading-snug';
+      hint.classList.remove('hidden');
+      photoInput.focus();
+      return;
+    }
+
+    const params = new URLSearchParams({ photo_count: String(photoCount) });
+    if (eventId) params.set('event_id', eventId);
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-arrow-repeat animate-spin"></i><span>กำลังคำนวณ...</span>';
+
+    try {
+      const res = await fetch(`${ENDPOINT}?${params}`, {
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin',
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+
+      priceInput.value = data.price;
+
+      const tierTH = ({ low: 'ราคาประหยัด', mid: 'ราคากลาง', premium: 'ราคาพรีเมียม' })[data.tier] || data.tier;
+      const sourceTH = data.source === 'event' ? 'จากอีเวนต์ที่เลือก' : 'จากค่าเฉลี่ยทั้งระบบ';
+      hint.innerHTML =
+        '<i class="bi bi-check-circle-fill"></i> ' +
+        `คำนวณ ${sourceTH}: ราคา/ภาพ ฿${data.per_photo.toLocaleString()} (${tierTH}) · ` +
+        `ลด ${data.discount_pct}% · ประหยัด ฿${data.savings.toLocaleString()} ` +
+        `<span class="opacity-60">(แก้ไขได้ตามต้องการ)</span>`;
+      hint.className = 'text-[11px] text-emerald-600 mt-1.5 leading-snug';
+      hint.classList.remove('hidden');
+    } catch (e) {
+      hint.textContent = 'คำนวณไม่สำเร็จ — ลองใหม่อีกครั้ง';
+      hint.className = 'text-[11px] text-red-600 mt-1.5 leading-snug';
+      hint.classList.remove('hidden');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-magic"></i><span>คำนวณอัตโนมัติ</span>';
+    }
+  });
+
+  // Hide the hint once the admin starts overriding the value — keeps
+  // the UI honest about whether the visible price is auto vs manual.
+  priceInput.addEventListener('input', () => {
+    hint.classList.add('hidden');
+  });
+})();
 </script>
 @endpush
 
