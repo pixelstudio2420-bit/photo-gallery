@@ -230,12 +230,27 @@ class PSeoService
     {
         $stats = ['created' => 0, 'updated' => 0, 'skipped' => 0];
 
+        // Pull approved photographers along with the new enrichment
+        // fields (province, headline, specialties, etc) so the rendered
+        // landing page can showcase a real bio rather than a placeholder.
+        // event_count drives the min_data_points gate.
         $rows = DB::table('photographer_profiles as pp')
             ->leftJoin('event_events as e', 'e.photographer_id', '=', 'pp.user_id')
+            ->leftJoin('thai_provinces as p', 'p.id', '=', 'pp.province_id')
             ->where('pp.status', 'approved')
-            ->select('pp.user_id', 'pp.display_name', 'pp.bio')
+            ->select(
+                'pp.user_id', 'pp.display_name', 'pp.headline', 'pp.bio',
+                'pp.specialties', 'pp.years_experience', 'pp.profile_completion',
+                'pp.avatar', 'pp.instagram_handle',
+                'p.name_th as province_th', 'p.name_en as province_en'
+            )
             ->selectRaw('COUNT(DISTINCT e.id) FILTER (WHERE e.status = ?) as event_count', ['active'])
-            ->groupBy('pp.user_id', 'pp.display_name', 'pp.bio')
+            ->groupBy(
+                'pp.user_id', 'pp.display_name', 'pp.headline', 'pp.bio',
+                'pp.specialties', 'pp.years_experience', 'pp.profile_completion',
+                'pp.avatar', 'pp.instagram_handle',
+                'p.name_th', 'p.name_en'
+            )
             ->get();
 
         foreach ($rows as $row) {
@@ -244,19 +259,43 @@ class PSeoService
                 continue;
             }
 
+            // Skip photographers with very low profile completion — no
+            // point publishing thin content. Threshold matches Google's
+            // helpful-content guidance.
+            if ((int) ($row->profile_completion ?? 0) < 40) {
+                $stats['skipped']++;
+                continue;
+            }
+
+            // Pretty specialty list ("งานแต่ง · ปริญญา · กีฬา").
+            $specialties = is_string($row->specialties) ? json_decode($row->specialties, true) : ($row->specialties ?? []);
+            $specialtyText = is_array($specialties) ? implode(' · ', array_slice($specialties, 0, 5)) : '';
+
             $slug = 'photographers/' . $this->slugify($row->display_name . '-' . $row->user_id);
             $vars = [
-                'name'        => $row->display_name,
-                'event_count' => (int) $row->event_count,
-                'bio'         => Str::limit($row->bio ?? '', 100),
-                'brand'       => config('app.name', 'Loadroop'),
-                'year'        => now()->year,
+                'name'         => $row->display_name,
+                'headline'     => $row->headline ?? $specialtyText ?? 'ช่างภาพมืออาชีพ',
+                'event_count'  => (int) $row->event_count,
+                'bio'          => Str::limit($row->bio ?? '', 200),
+                'specialties'  => $specialtyText,
+                'experience'   => (int) ($row->years_experience ?? 0),
+                'location'     => $row->province_th ?? '',
+                'location_en'  => $row->province_en ?? '',
+                'instagram'    => $row->instagram_handle ?? '',
+                'brand'        => config('app.name', 'Loadroop'),
+                'year'         => now()->year,
             ];
 
             $page = $this->upsertPage($template, $slug, $vars, [
                 'photographer_id' => $row->user_id,
                 'data_count'      => (int) $row->event_count,
+                'province_id'     => null, // set below if known
             ]);
+
+            // Auto-set hero_image to avatar (only on first generate).
+            if ($page->wasRecentlyCreated && !empty($row->avatar)) {
+                $page->update(['hero_image' => $row->avatar]);
+            }
 
             $stats[$page->wasRecentlyCreated ? 'created' : 'updated']++;
         }

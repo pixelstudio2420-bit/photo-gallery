@@ -405,11 +405,140 @@
           @enderror
         </div>
         <div class="md:col-span-2">
-          <label class="block text-sm font-medium text-gray-700 mb-1.5">ประวัติย่อ</label>
-          <textarea name="bio" class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 @error('bio') border-red-500 @enderror" rows="3">{{ old('bio', $photographer->bio) }}</textarea>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">หัวข้อสั้นๆ (Headline) <span class="text-xs text-gray-400 font-normal">— เช่น "ช่างภาพงานแต่งงาน กรุงเทพ"</span></label>
+          <input type="text" name="headline" maxlength="200"
+                 value="{{ old('headline', $photographer->headline) }}"
+                 placeholder="ช่างภาพ Pre-wedding & งานแต่งงาน 5+ ปี"
+                 class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+          <p class="text-[11px] text-gray-400 mt-1">แสดงใต้ชื่อบนโปรไฟล์สาธารณะ + ใช้ใน SEO meta</p>
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">ประวัติย่อ (Bio)</label>
+          <textarea name="bio" class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 @error('bio') border-red-500 @enderror" rows="3" placeholder="เล่าเกี่ยวกับสไตล์การถ่ายภาพ ประสบการณ์ จุดเด่น...">{{ old('bio', $photographer->bio) }}</textarea>
           @error('bio')
             <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
           @enderror
+        </div>
+
+        {{-- ── Experience + Specialties ─────────────────────── --}}
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">ประสบการณ์ (ปี)</label>
+          <input type="number" name="years_experience" min="0" max="60"
+                 value="{{ old('years_experience', $photographer->years_experience) }}"
+                 class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">เวลาตอบกลับ (ชั่วโมง)</label>
+          <input type="number" name="response_time_hours" min="1" max="168"
+                 value="{{ old('response_time_hours', $photographer->response_time_hours) }}"
+                 placeholder="เช่น 24"
+                 class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+          <p class="text-[11px] text-gray-400 mt-1">ใช้แสดง badge "ตอบกลับภายใน X ชม."</p>
+        </div>
+
+        {{-- ── Specialties (tag input) ─────────────────────── --}}
+        <div class="md:col-span-2" x-data="{ items: {{ json_encode(old('specialties', $photographer->specialties ?? [])) }}, input: '' }">
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">ความเชี่ยวชาญ (Specialties)</label>
+          <div class="flex flex-wrap gap-2 mb-2 min-h-[40px] p-2 border border-gray-200 rounded-lg bg-gray-50">
+            <template x-for="(item, i) in items" :key="i">
+              <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-medium">
+                <span x-text="item"></span>
+                <input type="hidden" :name="'specialties[]'" :value="item">
+                <button type="button" @click="items.splice(i, 1)" class="hover:text-indigo-900"><i class="bi bi-x"></i></button>
+              </span>
+            </template>
+            <span x-show="items.length === 0" class="text-xs text-gray-400">เพิ่มความเชี่ยวชาญ เช่น งานแต่ง, ปริญญา, สปอร์ต</span>
+          </div>
+          <div class="flex gap-2">
+            <input type="text" x-model="input" @keydown.enter.prevent="if(input.trim()) { items.push(input.trim()); input='' }"
+                   placeholder="พิมพ์แล้วกด Enter — เช่น งานแต่ง, Pre-wedding"
+                   class="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm">
+            <button type="button" @click="if(input.trim()) { items.push(input.trim()); input='' }"
+                    class="px-4 py-2 bg-indigo-500 text-white rounded-lg text-sm">+</button>
+          </div>
+        </div>
+
+        {{-- ── Languages ─────────────────────── --}}
+        <div class="md:col-span-2" x-data="{ items: {{ json_encode(old('languages', $photographer->languages ?? [])) }}, input: '' }">
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">ภาษาที่สื่อสารได้</label>
+          <div class="flex flex-wrap gap-2 mb-2 min-h-[40px] p-2 border border-gray-200 rounded-lg bg-gray-50">
+            <template x-for="(item, i) in items" :key="i">
+              <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium">
+                <span x-text="item.toUpperCase()"></span>
+                <input type="hidden" :name="'languages[]'" :value="item">
+                <button type="button" @click="items.splice(i, 1)"><i class="bi bi-x"></i></button>
+              </span>
+            </template>
+            <span x-show="items.length === 0" class="text-xs text-gray-400">เลือกหรือพิมพ์</span>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            @foreach(['th' => 'ไทย', 'en' => 'English', 'zh' => '中文', 'ja' => '日本語', 'ko' => '한국어'] as $code => $label)
+              <button type="button" @click="if(!items.includes('{{ $code }}')) items.push('{{ $code }}')"
+                      class="px-3 py-1 text-xs rounded-full bg-white border border-gray-200 hover:bg-emerald-50">
+                + {{ $label }}
+              </button>
+            @endforeach
+          </div>
+        </div>
+
+        {{-- ── Equipment list ─────────────────────── --}}
+        <div class="md:col-span-2" x-data="{ items: {{ json_encode(old('equipment', $photographer->equipment ?? [])) }}, input: '' }">
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">อุปกรณ์ (Equipment) <span class="text-xs text-gray-400 font-normal">— กล้อง, เลนส์</span></label>
+          <div class="space-y-1 mb-2">
+            <template x-for="(item, i) in items" :key="i">
+              <div class="flex items-center gap-2">
+                <input type="text" :value="item" @input="items[i] = $event.target.value" :name="'equipment[]'"
+                       class="flex-1 px-3 py-1.5 border border-gray-200 rounded text-sm">
+                <button type="button" @click="items.splice(i, 1)" class="px-2 py-1.5 text-red-500 hover:bg-red-50 rounded"><i class="bi bi-trash text-xs"></i></button>
+              </div>
+            </template>
+          </div>
+          <button type="button" @click="items.push('')" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-xs">+ เพิ่มอุปกรณ์</button>
+          <p class="text-[11px] text-gray-400 mt-1">ตัวอย่าง: Canon R5, Sigma 85mm f/1.4 Art</p>
+        </div>
+
+        {{-- ── Social media + contact ─────────────────────── --}}
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5"><i class="bi bi-globe text-blue-500"></i> Website</label>
+          <input type="url" name="website_url" maxlength="300"
+                 value="{{ old('website_url', $photographer->website_url) }}"
+                 placeholder="https://yourwebsite.com"
+                 class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5"><i class="bi bi-instagram text-pink-500"></i> Instagram</label>
+          <div class="relative">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">@</span>
+            <input type="text" name="instagram_handle" maxlength="80"
+                   value="{{ old('instagram_handle', $photographer->instagram_handle) }}"
+                   placeholder="username"
+                   class="w-full pl-7 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5"><i class="bi bi-facebook text-blue-600"></i> Facebook URL</label>
+          <input type="url" name="facebook_url" maxlength="300"
+                 value="{{ old('facebook_url', $photographer->facebook_url) }}"
+                 placeholder="https://facebook.com/yourpage"
+                 class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5"><i class="bi bi-line text-green-500"></i> LINE ID <span class="text-xs text-gray-400 font-normal">(เก็บส่วนตัว)</span></label>
+          <input type="text" name="line_id" maxlength="80"
+                 value="{{ old('line_id', $photographer->line_id) }}"
+                 class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm">
+        </div>
+
+        {{-- ── Booking acceptance toggle ─────────────────────── --}}
+        <div class="md:col-span-2">
+          <label class="flex items-start gap-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200 cursor-pointer">
+            <input type="hidden" name="accepts_bookings" value="0">
+            <input type="checkbox" name="accepts_bookings" value="1" {{ ($photographer->accepts_bookings ?? true) ? 'checked' : '' }} class="w-5 h-5 mt-0.5">
+            <div>
+              <div class="text-sm font-semibold text-emerald-800"><i class="bi bi-check-circle-fill"></i> รับงานใหม่</div>
+              <div class="text-xs text-emerald-700 mt-0.5">ลูกค้าจะเห็น badge "รับงาน" บนโปรไฟล์ — ปิดเมื่อยุ่งหรือกำลังหยุดพัก</div>
+            </div>
+          </label>
         </div>
       </div>
 

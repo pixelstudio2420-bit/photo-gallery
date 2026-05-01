@@ -34,30 +34,51 @@ class ProfileController extends Controller
         }
 
         $validated = $request->validate([
-            'display_name'     => ['nullable', 'string', 'max:200'],
-            'bio'              => ['nullable', 'string', 'max:2000'],
-            'portfolio_url'    => ['nullable', 'url', 'max:500'],
-            'province_id'      => ['nullable', 'integer', 'exists:thai_provinces,id'],
-            // R2MediaService.auth.avatar enforces 2MB max + jpeg/png/webp.
-            // Allow 4MB through the form so the friendly client-side UX
-            // doesn't reject before the server-side resize step that the
-            // ImageProcessorService runs would have shrunk it. The R2 service
-            // re-validates regardless.
-            'avatar'           => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-            'remove_avatar'    => ['nullable', 'boolean'],
+            'display_name'        => ['nullable', 'string', 'max:200'],
+            'headline'            => ['nullable', 'string', 'max:200'],
+            'bio'                 => ['nullable', 'string', 'max:2000'],
+            'phone'               => ['nullable', 'string', 'max:30'],
+            'portfolio_url'       => ['nullable', 'url', 'max:500'],
+            'website_url'         => ['nullable', 'url', 'max:300'],
+            'instagram_handle'    => ['nullable', 'string', 'max:80', 'regex:/^[A-Za-z0-9._]+$/'],
+            'facebook_url'        => ['nullable', 'url', 'max:300'],
+            'line_id'             => ['nullable', 'string', 'max:80'],
+            'province_id'         => ['nullable', 'integer', 'exists:thai_provinces,id'],
+            'years_experience'    => ['nullable', 'integer', 'min:0', 'max:60'],
+            'specialties'         => ['nullable', 'array'],
+            'specialties.*'       => ['string', 'max:60'],
+            'languages'           => ['nullable', 'array'],
+            'languages.*'         => ['string', 'max:10'],
+            'equipment'           => ['nullable', 'array'],
+            'equipment.*'         => ['string', 'max:200'],
+            'service_areas'       => ['nullable', 'array'],
+            'service_areas.*'     => ['integer', 'exists:thai_provinces,id'],
+            'accepts_bookings'    => ['nullable', 'boolean'],
+            'response_time_hours' => ['nullable', 'integer', 'min:1', 'max:168'],
+            'avatar'              => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+            'remove_avatar'       => ['nullable', 'boolean'],
         ]);
 
-        $profile->fill([
-            'display_name'  => $validated['display_name']  ?? $profile->display_name,
-            'bio'           => $validated['bio']           ?? $profile->bio,
-            'portfolio_url' => $validated['portfolio_url'] ?? $profile->portfolio_url,
-            // province_id is exists-validated above, so any non-null value
-            // is guaranteed to reference a real thai_provinces row. Nulling
-            // out is allowed (photographer wants to remove their location).
-            'province_id'   => array_key_exists('province_id', $validated)
-                ? $validated['province_id']
-                : $profile->province_id,
-        ]);
+        // Build the fill payload — only update fields that were submitted
+        // so partial-form posts don't blank out unrelated columns.
+        $fillData = [];
+        $textFields = [
+            'display_name', 'headline', 'bio', 'phone', 'portfolio_url',
+            'website_url', 'instagram_handle', 'facebook_url', 'line_id',
+        ];
+        foreach ($textFields as $f) {
+            if (array_key_exists($f, $validated)) $fillData[$f] = $validated[$f];
+        }
+        if (array_key_exists('province_id', $validated))      $fillData['province_id']      = $validated['province_id'];
+        if (array_key_exists('years_experience', $validated)) $fillData['years_experience'] = $validated['years_experience'];
+        if (array_key_exists('specialties', $validated))      $fillData['specialties']      = array_values(array_filter($validated['specialties'] ?? []));
+        if (array_key_exists('languages', $validated))        $fillData['languages']        = array_values(array_filter($validated['languages'] ?? []));
+        if (array_key_exists('equipment', $validated))        $fillData['equipment']        = array_values(array_filter($validated['equipment'] ?? []));
+        if (array_key_exists('service_areas', $validated))    $fillData['service_areas']    = array_map('intval', $validated['service_areas'] ?? []);
+        if (array_key_exists('response_time_hours', $validated)) $fillData['response_time_hours'] = $validated['response_time_hours'];
+        $fillData['accepts_bookings'] = $request->boolean('accepts_bookings');
+
+        $profile->fill($fillData);
 
         // ── Avatar upload / removal ───────────────────────────────────────
         // Photographer avatars use auth.avatar — the SAME slot as customer
@@ -101,6 +122,12 @@ class ProfileController extends Controller
             $profile->avatar = null;
             $avatarChanged = true;
         }
+
+        // Recompute the profile-completion score now that field values
+        // are merged. Drives the dashboard "complete your profile to
+        // rank higher" prompt + the pSEO photographer-page generator's
+        // gate. Must happen BEFORE save() so the column is persisted.
+        $profile->profile_completion = $profile->computeProfileCompletion();
 
         $profile->save();
         $profile->syncTier();

@@ -20,22 +20,76 @@ class PhotographerProfile extends Model
         'billing_mode','credits_balance_cached','credits_last_recalc_at',
         // Subscription system (added 2026-04-24)
         'current_subscription_id','subscription_plan_code','subscription_status','subscription_renews_at',
+        // Slug + location (added earlier)
+        'slug','province_id',
+        // Profile enrichment for pSEO (added 2026-05-01)
+        'district_id','headline','languages','equipment','service_areas',
+        'website_url','instagram_handle','facebook_url','line_id',
+        'accepts_bookings','response_time_hours','profile_completion',
     ];
     protected $casts = [
-        'commission_rate'        => 'decimal:2',
-        'approved_at'            => 'datetime',
-        'contract_signed_at'     => 'datetime',
-        'promptpay_verified_at'  => 'datetime',
+        'commission_rate'         => 'decimal:2',
+        'approved_at'             => 'datetime',
+        'contract_signed_at'      => 'datetime',
+        'promptpay_verified_at'   => 'datetime',
         'storage_recalculated_at' => 'datetime',
-        'credits_last_recalc_at' => 'datetime',
-        'portfolio_samples'      => 'array',
-        'specialties'            => 'array',
-        'years_experience'       => 'integer',
-        'storage_quota_bytes'    => 'integer',
-        'storage_used_bytes'     => 'integer',
-        'credits_balance_cached' => 'integer',
-        'subscription_renews_at' => 'datetime',
+        'credits_last_recalc_at'  => 'datetime',
+        'portfolio_samples'       => 'array',
+        'specialties'             => 'array',
+        'languages'               => 'array',
+        'equipment'               => 'array',
+        'service_areas'           => 'array',
+        'years_experience'        => 'integer',
+        'storage_quota_bytes'     => 'integer',
+        'storage_used_bytes'      => 'integer',
+        'credits_balance_cached'  => 'integer',
+        'subscription_renews_at'  => 'datetime',
+        'accepts_bookings'        => 'boolean',
+        'response_time_hours'     => 'integer',
+        'profile_completion'      => 'integer',
     ];
+
+    /**
+     * Compute the profile-completion score (0-100) based on which
+     * key fields are filled. Drives the photographer dashboard
+     * "complete your profile to rank higher" prompt and the pSEO
+     * generator's `min_data_points` gate. Cheap to call — pure
+     * field checks, no DB hits.
+     */
+    public function computeProfileCompletion(): int
+    {
+        $score = 0;
+        // Each weighted field — totals to 100.
+        $checks = [
+            'display_name'      => 10,
+            'bio'               => 15,
+            'avatar'            => 10,
+            'phone'             => 5,
+            'province_id'       => 10,
+            'specialties'       => 10,
+            'years_experience'  => 5,
+            'portfolio_url'     => 5,
+            'languages'         => 5,
+            'equipment'         => 5,
+            'instagram_handle'  => 5,
+            'facebook_url'      => 5,
+            'headline'          => 10,
+        ];
+        foreach ($checks as $field => $weight) {
+            $val = $this->{$field} ?? null;
+            if (is_array($val) ? count($val) > 0 : !empty($val)) {
+                $score += $weight;
+            }
+        }
+        return min(100, $score);
+    }
+
+    /* ───────── Relations ───────── */
+
+    public function province()
+    {
+        return $this->belongsTo(\App\Models\ThaiProvince::class, 'province_id');
+    }
 
     // Billing modes — controls how uploads are metered/charged
     public const BILLING_COMMISSION = 'commission';
