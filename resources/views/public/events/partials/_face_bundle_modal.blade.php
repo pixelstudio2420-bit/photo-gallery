@@ -28,7 +28,11 @@
 @endphp
 
 @if($faceBundle)
-<dialog id="face-bundle-modal" class="rounded-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm p-0 max-w-md w-full mx-auto bg-white dark:bg-slate-800 shadow-2xl">
+<dialog id="face-bundle-modal"
+        class="rounded-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm p-0
+               w-[calc(100%-2rem)] max-w-md max-h-[90vh] overflow-y-auto
+               bg-white dark:bg-slate-800 shadow-2xl
+               fixed inset-0 m-auto">
   <div x-data="faceBundleModal({{ $event->id }}, {{ $faceBundle->id }})" class="p-6">
 
     {{-- Close button --}}
