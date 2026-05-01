@@ -104,21 +104,40 @@
 
             {{-- CTA --}}
             @if($isFace)
-              <button type="button" onclick="document.getElementById('face-bundle-modal')?.showModal();"
-                      class="w-full py-2 rounded-xl text-xs md:text-sm font-semibold transition
-                             bg-gradient-to-br from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white">
-                <i class="bi bi-search mr-1"></i> ค้นหารูปของฉัน
-              </button>
-            @elseif($isEventAll)
-              <form method="POST" action="{{ route('cart.add') ?? '#' }}" data-bundle-add class="m-0">
-                @csrf
-                <input type="hidden" name="event_id" value="{{ $event->id }}">
-                <input type="hidden" name="package_id" value="{{ $pkg->id }}">
-                <button type="submit" class="w-full py-2 rounded-xl text-xs md:text-sm font-semibold transition
-                                              bg-gradient-to-br from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-white">
-                  <i class="bi bi-bag-plus mr-1"></i> ซื้อเลย
+              {{-- Face-bundle modal is only rendered when @auth (the
+                   /api/cart/face-bundle/* endpoints require auth). For
+                   anonymous browsers, the same button takes them to login
+                   first with an `intended` URL back to this event page. --}}
+              @auth
+                <button type="button" onclick="document.getElementById('face-bundle-modal')?.showModal();"
+                        class="w-full py-2 rounded-xl text-xs md:text-sm font-semibold transition
+                               bg-gradient-to-br from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white">
+                  <i class="bi bi-search mr-1"></i> ค้นหารูปของฉัน
                 </button>
-              </form>
+              @else
+                <a href="{{ route('login') }}?intended={{ urlencode(request()->fullUrl()) }}"
+                   class="w-full block text-center py-2 rounded-xl text-xs md:text-sm font-semibold transition
+                          bg-gradient-to-br from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white">
+                  <i class="bi bi-search mr-1"></i> เข้าสู่ระบบเพื่อค้นหา
+                </a>
+              @endauth
+            @elseif($isEventAll)
+              @auth
+                <form method="POST" action="/api/cart/bundle" data-bundle-add class="m-0"
+                      onsubmit="event.preventDefault(); fetch(this.action, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content, 'Accept': 'application/json' }, body: JSON.stringify({ event_id: {{ $event->id }}, package_id: {{ $pkg->id }}, photo_ids: ['all'] }) }).then(r => r.ok ? window.location.href = '/cart' : alert('เพิ่มลงตะกร้าไม่สำเร็จ'));">
+                  @csrf
+                  <button type="submit" class="w-full py-2 rounded-xl text-xs md:text-sm font-semibold transition
+                                                bg-gradient-to-br from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-white">
+                    <i class="bi bi-bag-plus mr-1"></i> ซื้อเลย
+                  </button>
+                </form>
+              @else
+                <a href="{{ route('login') }}?intended={{ urlencode(request()->fullUrl()) }}"
+                   class="w-full block text-center py-2 rounded-xl text-xs md:text-sm font-semibold transition
+                          bg-gradient-to-br from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-white">
+                  <i class="bi bi-bag-plus mr-1"></i> เข้าสู่ระบบเพื่อซื้อ
+                </a>
+              @endauth
             @else
               <button type="button" data-pkg-select="{{ $pkg->id }}" data-pkg-count="{{ $pkg->photo_count }}"
                       class="w-full py-2 rounded-xl text-xs md:text-sm font-semibold transition

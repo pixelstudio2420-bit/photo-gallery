@@ -987,10 +987,16 @@
 @include('public.events.partials._bundle_cards')
 
 {{-- ============ NEW: Face Bundle Modal ============ --}}
-@include('public.events.partials._face_bundle_modal')
+{{-- Anonymous users can still see the bundle cards (price/feature is
+     public marketing info), but the face-search modal + cart upsell
+     widget hit auth-gated /api/cart/* endpoints. Wrap them in @auth so
+     anonymous browsers don't trigger 401s on every page load. --}}
+@auth
+  @include('public.events.partials._face_bundle_modal')
 
-{{-- ============ NEW: Smart Cart Upsell Widget (floating) ============ --}}
-@include('public.events.partials._cart_upsell_widget')
+  {{-- ============ NEW: Smart Cart Upsell Widget (floating) ============ --}}
+  @include('public.events.partials._cart_upsell_widget')
+@endauth
 
 {{-- ============ Legacy Packages Strip (compact chip nav) ============ --}}
 @if($packages->count() > 0)
