@@ -10,31 +10,44 @@ use Illuminate\Support\Facades\Cache;
 
 /**
  * Resolves the commission_rate (photographer keep %) to apply for a single
- * earned amount, applying the platform's tier system.
+ * earned amount.
  *
- * Resolution order (highest-priority match wins):
- *   1. CommissionTier matched against the photographer's lifetime gross
- *      revenue. Highest tier the photographer has crossed wins.
- *   2. Photographer's individual `commission_rate` override on
- *      photographer_profiles.commission_rate (manually set by admin).
- *   3. Global default = 100 - app_settings.platform_commission (default 80%).
+ * Resolution model
+ * ────────────────
+ * The photographer's *active subscription plan* is the baseline:
+ *   keep% = 100 - subscription_plans.commission_pct
  *
- * Why this resolver?
- * ──────────────────
- * Before this service, OrderFulfillmentService read profile.commission_rate
- * directly. That meant a photographer who had earned ฿500k lifetime sat on
- * the same starting rate as a brand-new account, even when admin had
- * configured a tier system saying "earn ≥ ฿100k → keep 85%". Now the tier
- * is consulted FIRST, and the profile rate is only the fallback. The admin
- * can still pin a specific photographer's rate by setting the profile
- * column above any tier — handy for top-100 partners on bespoke contracts.
+ * The tier system + profile override can ONLY raise that baseline (they
+ * act as upward overrides — loyalty bonus / VIP rate). They cannot
+ * undercut the plan rate, so a Pro-tier subscriber (kept 100%) doesn't
+ * accidentally drop to an 80% global default.
+ *
+ * Resolution order (rate-wise; the function takes the MAX of these):
+ *   1. Subscription plan baseline  ← NEW (this is where the plan
+ *      commission_pct column finally has effect on real payouts)
+ *   2. CommissionTier matched against lifetime revenue (loyalty bonus)
+ *   3. Profile.commission_rate override (admin-pinned VIP rate)
+ *   4. Global fallback when no plan is attached at all
+ *      = 100 - app_settings.platform_commission (default 80%)
+ *
+ * Why the change
+ * ──────────────
+ * Before, the resolver ignored subscription_plans.commission_pct entirely
+ * — the marketing pages showed a Pro tier with "0% commission" but the
+ * actual money split read from a separate AppSetting + Tier ladder. That
+ * meant:
+ *   • Free-tier subscribers (commission_pct=30) still kept 80% by default
+ *   • Pro/Business/Studio subscribers (commission_pct=0) showed
+ *     "0% commission" in the UI but lost whatever the tier resolver said
+ *
+ * After this change, the Free plan's 30% commission_pct now actually
+ * deducts 30% on every photo order, and Pro keeps 100% as advertised.
  *
  * Caching
  * ───────
- * Lifetime revenue is recalculated every 30 min (cache key per photographer).
- * That's tight enough to feel near-real-time for tier transitions, loose
- * enough that a 1k-payouts/day photographer doesn't trigger a SUM scan
- * on every paid order.
+ * Lifetime revenue: 30-min cache (existing).
+ * Subscription-plan rate: not cached — reads a single indexed lookup
+ * by user_id, so a SUM scan isn't involved.
  */
 class CommissionResolver
 {
@@ -50,27 +63,70 @@ class CommissionResolver
     {
         $profile = PhotographerProfile::where('user_id', $photographerId)->first();
 
-        // Tier-based rate (priority 1)
+        // 1. Plan baseline — this is the rate the photographer signed up
+        //    for via their active subscription. If no subscription is
+        //    attached, returns null and we fall through to the global
+        //    default at the end.
+        $planRate = $this->resolvePlanRate($photographerId, $profile);
+
+        // 2. Tier rate (loyalty bonus based on lifetime revenue).
         $tierRate = $this->resolveTierRate($photographerId);
 
-        // Profile override (priority 2). The DB stores `commission_rate` as
-        // the photographer's KEEP rate (e.g. 80 → keep 80%, platform takes 20%).
+        // 3. Profile override (admin VIP pin). The DB stores
+        //    `commission_rate` as the KEEP rate (80 → keep 80%, platform
+        //    takes 20%).
         $profileRate = $profile && $profile->commission_rate !== null
             ? (float) $profile->commission_rate
             : null;
 
-        // Global default (priority 3) — the historical fallback.
+        // 4. Global fallback when no plan applies — the historical default.
         $defaultRate = 100.0 - (float) AppSetting::get('platform_commission', 20);
 
-        // Pick the photographer-friendliest of (tier, profile) — admin-set
-        // profile.commission_rate is treated as a FLOOR: a manual VIP rate
-        // is never undercut by an automatically-resolved tier.
-        if ($tierRate !== null && $profileRate !== null) {
-            return max($tierRate, $profileRate);
+        // The plan rate is the AUTHORITATIVE baseline. Tier and profile
+        // act as UPWARD overrides only — they raise the rate when the
+        // photographer has earned a loyalty boost or is on a VIP contract,
+        // but they cannot undercut the plan rate. (If a Free-plan user has
+        // an admin-set 95% override, they keep 95% — admin takes precedence.
+        // If they don't, they get exactly the 70% the Free plan defines.)
+        $baseline = $planRate ?? $defaultRate;
+
+        $rate = $baseline;
+        if ($tierRate    !== null && $tierRate    > $rate) $rate = $tierRate;
+        if ($profileRate !== null && $profileRate > $rate) $rate = $profileRate;
+
+        return $rate;
+    }
+
+    /**
+     * Look up the keep% from the photographer's currently-attached
+     * subscription plan. Returns null when no `subscription_plan_code`
+     * is set on the profile (i.e. brand-new signup or legacy account
+     * predating the plan system) so the caller can fall back.
+     *
+     * The KEEP rate is `100 - commission_pct` because the plan column
+     * stores the platform's TAKE percentage (the inverse). e.g. Free
+     * plan with commission_pct=30 → keep 70%.
+     */
+    private function resolvePlanRate(int $photographerId, ?PhotographerProfile $profile): ?float
+    {
+        $code = $profile?->subscription_plan_code;
+        if (!$code) {
+            return null;
         }
-        if ($tierRate !== null)    return $tierRate;
-        if ($profileRate !== null) return $profileRate;
-        return $defaultRate;
+
+        // Single indexed lookup; no caching layer here because the cost
+        // is already trivial vs the rest of the resolver. If this becomes
+        // a hotspot we can wrap it with Cache::remember keyed by code.
+        $commissionPct = \Illuminate\Support\Facades\DB::table('subscription_plans')
+            ->where('code', $code)
+            ->where('is_active', 1)
+            ->value('commission_pct');
+
+        if ($commissionPct === null) {
+            return null;
+        }
+
+        return 100.0 - (float) $commissionPct;
     }
 
     /**
