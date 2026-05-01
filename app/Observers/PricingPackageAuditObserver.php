@@ -76,41 +76,30 @@ class PricingPackageAuditObserver
      */
     private function log(PricingPackage $package, string $action, ?array $old, ?array $new): void
     {
-        try {
-            $reason   = $package->auditReason ?? null;
-            $roleHint = $package->auditRole ?? $this->guessRole();
+        // DEBUG MODE: re-throw failures so they surface during the
+        // 2026-05-01 verification window. The previous swallow-into-Log
+        // approach hid an exception that wasn't visible from tinker
+        // (Laravel Cloud sends Log::error to CloudWatch, not the local
+        // file system). Once the audit pipeline is verified end-to-end
+        // we'll restore the safe try/catch fallback.
+        $reason   = $package->auditReason ?? null;
+        $roleHint = $package->auditRole ?? $this->guessRole();
 
-            // Sanitize old/new values for the JSON cast. Eloquent's
-            // getOriginal()/getChanges() can include Carbon instances
-            // (cast attributes) or unserializable types in rare cases;
-            // run them through json_encode → json_decode to flatten.
-            $oldClean = $old !== null ? $this->safeJsonEncode($old) : null;
-            $newClean = $new !== null ? $this->safeJsonEncode($new) : null;
+        $oldClean = $old !== null ? $this->safeJsonEncode($old) : null;
+        $newClean = $new !== null ? $this->safeJsonEncode($new) : null;
 
-            PricingPackageLog::create([
-                'package_id'      => $package->id,
-                'event_id'        => $package->event_id,
-                'action'          => $action,
-                'old_values'      => $oldClean,
-                'new_values'      => $newClean,
-                'changed_by'      => Auth::id(),
-                'changed_by_role' => $roleHint,
-                'reason'          => $reason,
-                'ip_address'      => $this->ip(),
-                'created_at'      => now(),
-            ]);
-        } catch (\Throwable $e) {
-            // Use error (not warning) during initial rollout so failures
-            // can't hide in the noise on Cloud's log stream.
-            Log::error('PricingPackageAuditObserver: log write failed', [
-                'package_id' => $package->id ?? null,
-                'action'     => $action,
-                'error'      => $e->getMessage(),
-                'class'      => get_class($e),
-                'file'       => basename($e->getFile()),
-                'line'       => $e->getLine(),
-            ]);
-        }
+        PricingPackageLog::create([
+            'package_id'      => $package->id,
+            'event_id'        => $package->event_id,
+            'action'          => $action,
+            'old_values'      => $oldClean,
+            'new_values'      => $newClean,
+            'changed_by'      => Auth::id(),
+            'changed_by_role' => $roleHint,
+            'reason'          => $reason,
+            'ip_address'      => $this->ip(),
+            'created_at'      => now(),
+        ]);
     }
 
     /**
