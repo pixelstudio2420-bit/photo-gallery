@@ -23,12 +23,37 @@ class CommissionController extends Controller
     // ═══════════════════════════════════════
     public function index()
     {
-        $defaultRate = (float) AppSetting::get('platform_commission', 20);
+        // ── Plan-based commission breakdown ────────────────────────────
+        // Since 2026-04-30 the AUTHORITATIVE commission source is the
+        // photographer's subscription plan (`subscription_plans.commission_pct`).
+        // The legacy `platform_commission` AppSetting only acts as a
+        // fallback for accounts with no plan attached. So the dashboard
+        // banner needs to reflect plan rates, not the legacy single number.
+        $plans = DB::table('subscription_plans')
+            ->where('is_active', 1)
+            ->orderBy('sort_order')
+            ->get(['code', 'name', 'commission_pct', 'is_public']);
+
+        // "Default rate" = the rate a brand-new photographer effectively
+        // pays. Brand-new accounts are auto-assigned to the Free plan, so
+        // that's what we display. Fall back to the legacy AppSetting if
+        // the Free plan row somehow isn't there.
+        $freePlan = $plans->firstWhere('code', 'free');
+        $defaultPlatformPct = $freePlan
+            ? (float) $freePlan->commission_pct
+            : (float) AppSetting::get('platform_commission', 30);
+
+        // Per-plan photographer counts (so the banner can show
+        // "X photographers on Free, Y on Pro, …" for context).
+        $planCounts = PhotographerProfile::where('status', 'approved')
+            ->select('subscription_plan_code', DB::raw('COUNT(*) as count'))
+            ->groupBy('subscription_plan_code')
+            ->pluck('count', 'subscription_plan_code');
 
         // Overall stats
         $stats = [
-            'default_platform_rate'     => $defaultRate,
-            'default_photographer_rate' => 100 - $defaultRate,
+            'default_platform_rate'     => $defaultPlatformPct,
+            'default_photographer_rate' => 100 - $defaultPlatformPct,
             'total_revenue'             => PhotographerPayout::sum('gross_amount'),
             'total_platform_fee'        => PhotographerPayout::sum('platform_fee'),
             'total_photographer_payout' => PhotographerPayout::sum('payout_amount'),
@@ -69,7 +94,7 @@ class CommissionController extends Controller
             ->limit(10)
             ->get();
 
-        return view('admin.commission.index', compact('stats', 'topEarners', 'distribution', 'tiers', 'recentLogs'));
+        return view('admin.commission.index', compact('stats', 'topEarners', 'distribution', 'tiers', 'recentLogs', 'plans', 'planCounts'));
     }
 
     // ═══════════════════════════════════════

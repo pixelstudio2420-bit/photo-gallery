@@ -39,27 +39,38 @@
     {{-- Left Column: Forms --}}
     <div class="lg:col-span-2 space-y-6">
 
-      {{-- Card 1: อัตราเริ่มต้น --}}
+      {{-- Card 1: อัตรา Fallback (เมื่อช่างภาพไม่มีแผน) --}}
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 dark:bg-slate-800 dark:border-white/[0.06]">
-        <div class="px-6 py-4 border-b border-gray-100 dark:border-white/[0.06]">
-          <h6 class="font-semibold text-sm"><i class="bi bi-percent mr-1 text-indigo-500"></i>อัตราเริ่มต้น</h6>
+        <div class="px-6 py-4 border-b border-gray-100 dark:border-white/[0.06] flex items-center justify-between">
+          <h6 class="font-semibold text-sm"><i class="bi bi-percent mr-1 text-indigo-500"></i>อัตรา Fallback (เมื่อช่างภาพไม่มีแผน)</h6>
+          <span class="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full dark:bg-amber-500/15 dark:text-amber-400">
+            <i class="bi bi-info-circle mr-0.5"></i>ใช้น้อย
+          </span>
         </div>
-        <div class="p-6" x-data="{ rate: {{ $settings['platform_commission'] ?? 20 }} }">
+        <div class="p-6" x-data="{ rate: {{ $settings['platform_commission'] ?? 30 }} }">
+          {{-- ── แจ้งเตือนว่านี่ไม่ใช่ค่าจริงในการคำนวณรายได้แล้ว ── --}}
+          <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 dark:bg-blue-500/10 dark:border-blue-500/30 dark:text-blue-300 leading-relaxed">
+            <i class="bi bi-info-circle mr-1"></i>
+            ตั้งแต่ 30/04/2026 ระบบใช้ <strong>ค่าคอมมิชชั่นจากแผนสมาชิก</strong> เป็นหลัก (Free 30% / Starter 5% / Pro+ 0%)
+            ค่านี้จะถูกใช้เฉพาะกรณีที่ช่างภาพไม่ได้ถูกผูกกับแผนใดๆ เท่านั้น —
+            <a href="{{ route('admin.subscriptions.plans') }}" class="underline font-medium hover:text-blue-900 dark:hover:text-blue-200">ไปจัดการแผนสมาชิก →</a>
+          </div>
+
           <div class="space-y-1 mb-4">
-            <label for="platform_commission" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">ค่าแพลตฟอร์ม (%)</label>
+            <label for="platform_commission" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">ค่าแพลตฟอร์ม Fallback (%)</label>
             <input type="number" name="platform_commission" id="platform_commission"
               class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-slate-700 dark:border-white/[0.1] dark:text-gray-100"
-              value="{{ $settings['platform_commission'] ?? 20 }}"
+              value="{{ $settings['platform_commission'] ?? 30 }}"
               min="1" max="50" step="1"
               x-model.number="rate">
-            <p class="text-gray-500 dark:text-gray-400 text-xs mt-1">เปอร์เซ็นต์ที่แพลตฟอร์มได้รับจากยอดขาย</p>
+            <p class="text-gray-500 dark:text-gray-400 text-xs mt-1">เปอร์เซ็นต์ที่แพลตฟอร์มเก็บ — ใช้เฉพาะกรณีบัญชี legacy ที่ยังไม่มี subscription_plan_code</p>
           </div>
           <div class="flex items-center gap-3 p-4 bg-indigo-50 rounded-xl dark:bg-indigo-500/10">
             <div class="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center dark:bg-indigo-500/20">
               <i class="bi bi-camera text-indigo-500"></i>
             </div>
             <div>
-              <div class="text-sm text-gray-600 dark:text-gray-400">ช่างภาพได้รับ</div>
+              <div class="text-sm text-gray-600 dark:text-gray-400">ช่างภาพได้รับ (fallback)</div>
               <div class="text-lg font-bold text-indigo-600 dark:text-indigo-400">
                 <span x-text="Math.max(0, 100 - rate)"></span>%
               </div>
@@ -242,14 +253,21 @@
         </div>
       </div>
 
-      {{-- Quick Info --}}
+      {{-- Quick Info — ลำดับการคำนวณค่าคอมมิชชั่นจริง --}}
       <div class="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl p-5 text-white shadow-sm">
-        <h6 class="font-semibold text-sm mb-2"><i class="bi bi-info-circle mr-1"></i>วิธีคำนวณ</h6>
-        <p class="text-white/80 text-xs leading-relaxed">
-          เมื่อมีการขายภาพถ่าย ระบบจะแบ่งรายได้ตามอัตราที่กำหนด เช่น หากค่าแพลตฟอร์ม 20% ช่างภาพจะได้รับ 80% ของยอดขาย
+        <h6 class="font-semibold text-sm mb-2"><i class="bi bi-info-circle mr-1"></i>ลำดับการคำนวณ Commission</h6>
+        <p class="text-white/80 text-xs leading-relaxed mb-3">
+          ระบบจะหาอัตรา <strong>keep%</strong> (ช่างภาพได้รับ) โดยเริ่มจากแผนสมาชิก แล้วใช้ค่าที่ <strong>สูงที่สุด</strong> ระหว่างแผน, tier และ profile override:
         </p>
-        <div class="mt-3 pt-3 border-t border-white/20 text-xs text-white/70">
-          <i class="bi bi-arrow-right-circle mr-1"></i>อัตราเฉพาะช่างภาพจะมีผลเหนือกว่าอัตราเริ่มต้น
+        <ol class="text-xs text-white/85 space-y-1.5 list-decimal list-inside leading-relaxed">
+          <li><strong>แผนสมาชิก</strong> — Free=70%, Starter=95%, Pro+=100%</li>
+          <li><strong>Tier ตาม lifetime revenue</strong> (เพิ่ม keep% ได้)</li>
+          <li><strong>Profile override</strong> (admin ตั้ง VIP rate)</li>
+          <li><strong>Fallback ในการ์ดข้างซ้าย</strong> — ใช้เฉพาะบัญชี legacy ที่ไม่มีแผน</li>
+        </ol>
+        <div class="mt-3 pt-3 border-t border-white/20 text-xs text-white/70 leading-relaxed">
+          <i class="bi bi-arrow-right-circle mr-1"></i>
+          Tier และ Profile override เพิ่ม keep% เท่านั้น — ไม่ลดลงต่ำกว่าแผน
         </div>
       </div>
 

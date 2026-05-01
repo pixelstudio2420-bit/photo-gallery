@@ -209,12 +209,16 @@
       @php
         $cMin = (float) \App\Models\AppSetting::get('min_commission_rate', 0);
         $cMax = (float) \App\Models\AppSetting::get('max_commission_rate', 100);
-        // Default to the configured photographer share so the prefilled
-        // number matches whatever the Commission Settings screen promises.
-        $cDefault = (float) \App\Models\AppSetting::get(
-            'photographer_commission_rate',
-            100 - (float) \App\Models\AppSetting::get('platform_commission', 20)
-        );
+        // Default to the Free plan's keep% (since 2026-04-30 the plan IS the
+        // source of truth — this admin form is for creating a brand-new
+        // photographer who'll start on Free unless explicitly upgraded).
+        $freeCommissionPct = \Illuminate\Support\Facades\DB::table('subscription_plans')
+            ->where('code', 'free')
+            ->where('is_active', 1)
+            ->value('commission_pct');
+        $cDefault = $freeCommissionPct !== null
+            ? 100 - (float) $freeCommissionPct
+            : 100 - (float) \App\Models\AppSetting::get('platform_commission', 30);
         $cDefault = max($cMin, min($cMax, $cDefault));
         $platformShare = 100 - $cDefault;
       @endphp

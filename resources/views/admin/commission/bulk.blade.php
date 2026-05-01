@@ -16,14 +16,24 @@
 </div>
 
 @php
+  // Bounds still come from AppSetting so admins can clamp manually-set
+  // rates within a sane range (e.g. min 50%, max 99%).
   $cMin = (float) \App\Models\AppSetting::get('min_commission_rate', 0);
   $cMax = (float) \App\Models\AppSetting::get('max_commission_rate', 100);
-  $cDefault = (float) \App\Models\AppSetting::get(
-      'photographer_commission_rate',
-      100 - (float) \App\Models\AppSetting::get('platform_commission', 20)
-  );
-  // Clamp the default between the configured bounds so the pre-filled
-  // number is never rejected by the server on submit.
+
+  // Pre-filled rate: prefer the Free plan's keep% (since 2026-04-30 the
+  // plan IS the source of truth — see CommissionResolver). Fall back to
+  // the legacy AppSetting only if the Free plan row is missing.
+  $freePlanCommission = \Illuminate\Support\Facades\DB::table('subscription_plans')
+      ->where('code', 'free')
+      ->where('is_active', 1)
+      ->value('commission_pct');
+
+  $cDefault = $freePlanCommission !== null
+      ? 100 - (float) $freePlanCommission
+      : 100 - (float) \App\Models\AppSetting::get('platform_commission', 30);
+
+  // Clamp so the pre-filled number is never rejected by the server.
   $cDefault = max($cMin, min($cMax, $cDefault));
 @endphp
 

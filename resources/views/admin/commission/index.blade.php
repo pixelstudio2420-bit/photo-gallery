@@ -20,24 +20,55 @@
   </div>
 </div>
 
-{{-- Default Rate Banner --}}
+{{-- Plan-based Commission Banner ───────────────────────────────────
+     Since 2026-04-30 commission is determined by the photographer's
+     subscription plan, not a single global number. Show every plan +
+     its rate so admins immediately see the truth. --}}
 <div class="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-400 rounded-2xl p-6 mb-6 text-white">
-  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+  <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
     <div>
-      <h5 class="font-bold text-lg mb-1">อัตราค่าคอมมิชชั่นเริ่มต้น</h5>
-      <p class="text-white/70 text-sm mb-0">อัตราที่ใช้สำหรับช่างภาพใหม่และการคำนวณ Payout</p>
+      <h5 class="font-bold text-lg mb-1">อัตราค่าคอมมิชชั่นตามแผน</h5>
+      <p class="text-white/70 text-sm mb-0">
+        ค่าคอมมิชชั่นถูกกำหนดโดยแผนสมาชิกของช่างภาพแต่ละคน — ช่างภาพใหม่จะถูก assign อัตโนมัติเข้าแผน <span class="font-semibold">Free</span>
+      </p>
     </div>
-    <div class="flex items-center gap-8">
-      <div class="text-center">
-        <div class="text-3xl font-bold">{{ number_format(100 - $stats['default_platform_rate'], 0) }}%</div>
-        <small class="text-white/70">ช่างภาพได้รับ</small>
+    <a href="{{ route('admin.subscriptions.plans') }}" class="inline-flex items-center px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-lg text-xs font-medium transition shrink-0">
+      <i class="bi bi-grid-3x3-gap mr-1"></i> จัดการแผน
+    </a>
+  </div>
+
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+    @foreach($plans as $plan)
+      @php
+        $keepPct  = 100 - (float) $plan->commission_pct;
+        $count    = $planCounts[$plan->code] ?? 0;
+        $isPublic = (int) $plan->is_public === 1;
+      @endphp
+      <div class="bg-white/15 rounded-xl p-3 text-center backdrop-blur-sm {{ $isPublic ? '' : 'opacity-60' }}">
+        <div class="text-xs text-white/70 mb-0.5">{{ $plan->name }}</div>
+        <div class="text-2xl font-bold leading-tight">{{ number_format($keepPct, 0) }}%</div>
+        <div class="text-[10px] text-white/60 mt-0.5">
+          ช่างภาพได้
+          @if(!$isPublic) <span class="ml-1 px-1 py-0.5 bg-white/20 rounded text-[8px]">ซ่อน</span> @endif
+        </div>
+        <div class="mt-1.5 pt-1.5 border-t border-white/20 text-[10px] text-white/70">
+          <i class="bi bi-people mr-0.5"></i>{{ $count }} คน
+        </div>
       </div>
-      <div class="text-white/40 text-2xl">/</div>
-      <div class="text-center">
-        <div class="text-3xl font-bold">{{ number_format($stats['default_platform_rate'], 0) }}%</div>
-        <small class="text-white/70">แพลตฟอร์ม</small>
-      </div>
+    @endforeach
+  </div>
+
+  {{-- Fallback rate (used when a profile has no subscription_plan_code at all) --}}
+  <div class="mt-4 pt-4 border-t border-white/20 flex flex-wrap items-center justify-between gap-2 text-xs text-white/70">
+    <div>
+      <i class="bi bi-info-circle mr-1"></i>
+      ค่าเริ่มต้น (เมื่อช่างภาพยังไม่มีแผน):
+      <span class="font-semibold text-white">{{ number_format(100 - $stats['default_platform_rate'], 0) }}% / {{ number_format($stats['default_platform_rate'], 0) }}%</span>
+      (ช่างภาพ / แพลตฟอร์ม)
     </div>
+    <a href="{{ route('admin.commission.settings') }}" class="hover:text-white transition">
+      ตั้งค่าขั้นสูง <i class="bi bi-arrow-right ml-0.5"></i>
+    </a>
   </div>
 </div>
 

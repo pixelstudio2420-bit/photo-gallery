@@ -260,11 +260,11 @@
                             focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 focus:outline-none">
             </div>
 
-            {{-- Commission --}}
+            {{-- Commission Rate (Fallback) — ใช้กรณีบัญชี legacy เท่านั้น --}}
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Commission Rate (%)
-                <span class="font-normal text-slate-400 dark:text-slate-500">— ช่างภาพได้รับเปอร์เซ็นต์นี้</span>
+                Commission Rate Fallback (%)
+                <span class="font-normal text-slate-400 dark:text-slate-500">— ใช้เฉพาะบัญชีที่ไม่มีแผน</span>
               </label>
               <div class="relative">
                 <input type="number" name="settings[photographer_commission_rate]"
@@ -277,6 +277,11 @@
                               focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 focus:outline-none">
                 <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400 dark:text-slate-500">%</span>
               </div>
+              <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1 leading-snug">
+                <i class="bi bi-info-circle mr-0.5"></i>
+                ค่าจริงในการคำนวณรายได้ดึงจากแผนสมาชิกของช่างภาพ
+                (<a href="{{ route('admin.subscriptions.plans') }}" class="text-indigo-500 hover:text-indigo-600 underline">จัดการแผน</a>)
+              </p>
             </div>
           </div>
         </div>
