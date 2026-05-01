@@ -3,14 +3,53 @@
 @section('title', 'จัดการแพ็คเกจ')
 
 @section('content')
-<div class="flex justify-between items-center mb-6">
-  <h4 class="font-bold text-xl tracking-tight">
-    <i class="bi bi-box-seam mr-2 text-indigo-500"></i>จัดการแพ็คเกจ
-  </h4>
+<div class="flex justify-between items-center mb-4">
+  <div>
+    <h4 class="font-bold text-xl tracking-tight">
+      <i class="bi bi-box-seam mr-2 text-indigo-500"></i>จัดการแพ็คเกจ
+    </h4>
+    <p class="text-xs text-gray-500 mt-1">
+      ภาพรวมทุกแพ็กเกจในระบบ — ช่างภาพแก้ไขเฉพาะอีเวนต์ตัวเองได้ที่หน้า
+      <a href="#" class="text-indigo-500 hover:underline">photographer/events/&lt;event&gt;/packages</a>
+    </p>
+  </div>
   <button type="button" onclick="openAddModal()"
     class="bg-gradient-to-br from-indigo-500 to-indigo-600 text-white rounded-lg font-medium text-sm px-5 py-2 transition hover:from-indigo-600 hover:to-indigo-700">
     <i class="bi bi-plus-lg mr-1"></i> เพิ่มแพ็คเกจ
   </button>
+</div>
+
+{{-- Stats banner — explains that "5 bundles repeating" = 5 templates × N events --}}
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+  <div class="rounded-xl bg-white border border-gray-100 p-4">
+    <div class="text-xs text-gray-500 mb-1"><i class="bi bi-collection mr-1"></i>แพ็กเกจทั้งหมด</div>
+    <div class="text-2xl font-bold text-gray-900">{{ number_format($stats['total'] ?? 0) }}</div>
+  </div>
+  <div class="rounded-xl bg-white border border-gray-100 p-4">
+    <div class="text-xs text-gray-500 mb-1"><i class="bi bi-calendar-event mr-1 text-indigo-500"></i>กระจายอยู่ในอีเวนต์</div>
+    <div class="text-2xl font-bold text-indigo-600">{{ number_format($stats['events'] ?? 0) }} อีเวนต์</div>
+  </div>
+  <div class="rounded-xl bg-white border border-gray-100 p-4">
+    <div class="text-xs text-gray-500 mb-1"><i class="bi bi-globe mr-1 text-emerald-500"></i>แพ็กเกจกลาง (ทุกอีเวนต์)</div>
+    <div class="text-2xl font-bold text-emerald-600">{{ number_format($stats['global'] ?? 0) }}</div>
+  </div>
+  <div class="rounded-xl bg-white border border-gray-100 p-4">
+    <div class="text-xs text-gray-500 mb-1"><i class="bi bi-star-fill mr-1 text-amber-500"></i>ปักหมุด "ขายดีที่สุด"</div>
+    <div class="text-2xl font-bold text-amber-600">{{ number_format($stats['featured'] ?? 0) }}</div>
+  </div>
+</div>
+
+{{-- Notice: explain the per-event nature so admin doesn't think
+     duplicate names = bug. Each event gets its own template-driven
+     bundle set, so the same names ("3 รูป", "6 รูป", ...) recur per
+     event — but they're distinct rows with different prices possible. --}}
+<div class="mb-5 p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 leading-relaxed">
+  <i class="bi bi-info-circle mr-1"></i>
+  <strong>ทำไมเห็น "3 รูป", "6 รูป", ฯลฯ ซ้ำกัน?</strong> —
+  ระบบสร้างแพ็กเกจ {{ $stats['total'] > 0 && $stats['events'] > 0 ? round($stats['total'] / max($stats['events'], 1)) : 5 }} ใบให้แต่ละอีเวนต์โดยอัตโนมัติเมื่อสร้างอีเวนต์ใหม่
+  (Standard template = 3/6/10/20 รูป + เหมารูปตัวเอง) ดังนั้นชื่อจะซ้ำกัน
+  แต่ <strong>row นั้นแตกต่างกันโดย <code>event_id</code></strong> และราคาตั้งต่างกันได้ตามอีเวนต์ —
+  ใช้ filter ด้านล่างเพื่อดูแพ็กเกจของอีเวนต์ใดอีเวนต์หนึ่ง
 </div>
 
 {{-- Filters --}}
@@ -68,35 +107,103 @@
     <table class="w-full text-sm">
       <thead class="bg-indigo-500/[0.03]">
         <tr>
-          <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider pl-5">ชื่อแพ็คเกจ</th>
-          <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">จำนวนรูป</th>
+          <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider pl-5">อีเวนต์</th>
+          <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">แพ็กเกจ</th>
+          <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">ประเภท</th>
+          <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">จำนวน</th>
           <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">ราคา</th>
-          <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">อีเวนต์</th>
           <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">สถานะ</th>
           <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">จัดการ</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-100">
+        @php
+          // Track when the event_id changes between rows so we can render
+          // a visible separator → admin sees clear "section breaks" between
+          // each event's bundle group instead of one undifferentiated list.
+          $previousEventId = null;
+        @endphp
         @forelse($packages as $pkg)
+        @php
+          // Bundle-type styling map. Drives both the "ประเภท" column chip
+          // colour and the leading icon in the package name cell.
+          $typeStyle = match($pkg->bundle_type ?? 'count') {
+              'face_match' => ['bg' => 'bg-pink-500/10',    'text' => 'text-pink-600',    'icon' => 'bi-person-bounding-box', 'label' => 'Face Match'],
+              'event_all'  => ['bg' => 'bg-purple-500/10',  'text' => 'text-purple-600',  'icon' => 'bi-collection',          'label' => 'เหมาทั้งงาน'],
+              default      => ['bg' => 'bg-indigo-500/10',  'text' => 'text-indigo-600',  'icon' => 'bi-stack',               'label' => 'จำนวนรูป'],
+          };
+          $eventChanged = $previousEventId !== ($pkg->event_id ?? null);
+          $previousEventId = $pkg->event_id ?? null;
+        @endphp
+        @if($eventChanged && !$loop->first)
+          {{-- Visual separator between event groups so the admin's eye
+               registers "new event starting here" before scanning rows. --}}
+          <tr class="border-t-4 border-gray-200"></tr>
+        @endif
         <tr class="hover:bg-gray-50/50 transition align-middle">
+          {{-- Event column — most prominent now. Colored chip with the
+               event name (or "ทั่วไป" badge for global / event_id=null). --}}
           <td class="pl-5 px-4 py-3">
-            <div class="flex items-center gap-2">
-              <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-indigo-500/[0.08]">
-                <i class="bi bi-box-seam text-indigo-500"></i>
+            @if($pkg->event_id && $pkg->event)
+              <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-semibold border border-indigo-200">
+                <i class="bi bi-calendar-event"></i>
+                <span class="max-w-[160px] truncate">{{ $pkg->event->name }}</span>
               </div>
-              <div>
-                <div class="font-medium">{{ $pkg->name }}</div>
-                @if($pkg->description)
-                  <div class="text-xs text-gray-400 truncate max-w-[200px]">{{ $pkg->description }}</div>
+              <div class="text-[10px] text-gray-400 mt-0.5">ID: {{ $pkg->event_id }}</div>
+            @else
+              <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200">
+                <i class="bi bi-globe"></i> ทั่วไป (ทุกอีเวนต์)
+              </div>
+            @endif
+          </td>
+
+          {{-- Package name + featured indicator --}}
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-2">
+              <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 {{ $typeStyle['bg'] }}">
+                <i class="bi {{ $typeStyle['icon'] }} {{ $typeStyle['text'] }}"></i>
+              </div>
+              <div class="min-w-0">
+                <div class="font-medium flex items-center gap-1.5">
+                  {{ $pkg->name }}
+                  @if($pkg->is_featured ?? false)
+                    <i class="bi bi-star-fill text-amber-500" title="ขายดีที่สุด"></i>
+                  @endif
+                </div>
+                @if($pkg->badge ?? false)
+                  <div class="text-[10px] text-gray-500 mt-0.5">{{ $pkg->badge }}</div>
+                @endif
+                @if($pkg->bundle_subtitle ?? false)
+                  <div class="text-xs text-gray-400 truncate max-w-[200px]">{{ $pkg->bundle_subtitle }}</div>
                 @endif
               </div>
             </div>
           </td>
+
+          {{-- Bundle type chip --}}
           <td class="px-4 py-3">
-            <code class="bg-indigo-500/[0.08] text-indigo-500 px-2 py-1 rounded-md text-xs">{{ number_format($pkg->photo_count) }} รูป</code>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium {{ $typeStyle['bg'] }} {{ $typeStyle['text'] }}">
+              {{ $typeStyle['label'] }}
+            </span>
           </td>
-          <td class="px-4 py-3 font-medium">{{ number_format($pkg->price, 2) }} ฿</td>
-          <td class="px-4 py-3 text-gray-500 text-sm">{{ $pkg->event->name ?? 'ทั่วไป' }}</td>
+
+          {{-- Photo count (face_match has no fixed count) --}}
+          <td class="px-4 py-3">
+            @if($pkg->bundle_type === 'face_match')
+              <code class="bg-pink-500/[0.08] text-pink-600 px-2 py-1 rounded-md text-xs">ผันแปร</code>
+            @else
+              <code class="bg-indigo-500/[0.08] text-indigo-500 px-2 py-1 rounded-md text-xs">{{ number_format($pkg->photo_count ?? 0) }} รูป</code>
+            @endif
+          </td>
+
+          {{-- Price (with original_price strikethrough if discounted) --}}
+          <td class="px-4 py-3 font-medium">
+            @if($pkg->original_price && $pkg->original_price > $pkg->price)
+              <div class="text-xs text-gray-400 line-through">{{ number_format($pkg->original_price, 0) }} ฿</div>
+            @endif
+            <div>{{ number_format($pkg->price, 2) }} ฿</div>
+          </td>
+
           <td class="px-4 py-3">
             @if($pkg->is_active)
               <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-500">ใช้งาน</span>
@@ -123,7 +230,7 @@
         </tr>
         @empty
         <tr>
-          <td colspan="6" class="text-center py-12">
+          <td colspan="7" class="text-center py-12">
             <i class="bi bi-box-seam text-4xl text-gray-300"></i>
             <p class="text-gray-500 mt-2 text-sm">ยังไม่มีแพ็คเกจ</p>
             <button type="button" class="mt-3 text-sm px-4 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-500 transition hover:bg-indigo-500/[0.15]" onclick="openAddModal()">

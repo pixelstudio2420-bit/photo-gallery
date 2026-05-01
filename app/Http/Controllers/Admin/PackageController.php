@@ -10,7 +10,15 @@ class PackageController extends Controller
 {
     public function index(Request $request)
     {
-        $query = PricingPackage::query()->orderBy('photo_count');
+        // Order by event first then sort_order so packages from the same
+        // event sit next to each other in the list — eliminates the
+        // "5 names repeating across the table" appearance the buyer
+        // reported when each event has a default 5-bundle template.
+        $query = PricingPackage::query()
+            ->with('event:id,name')
+            ->orderBy('event_id')
+            ->orderBy('sort_order')
+            ->orderBy('photo_count');
 
         if ($request->filled('event_id')) {
             $query->where('event_id', $request->event_id);
@@ -19,10 +27,19 @@ class PackageController extends Controller
             $query->where('is_active', $request->status === 'active');
         }
 
-        $packages = $query->paginate(25);
+        $packages = $query->paginate(50);
         $events = Event::orderBy('name')->get(['id', 'name']);
 
-        return view('admin.packages.index', compact('packages', 'events'));
+        // Stats banner — gives the admin context that 15 rows is "5
+        // bundles × 3 events", not actual duplicate data.
+        $stats = [
+            'total'    => PricingPackage::count(),
+            'events'   => PricingPackage::distinct()->count('event_id'),
+            'global'   => PricingPackage::whereNull('event_id')->count(),
+            'featured' => PricingPackage::where('is_featured', true)->count(),
+        ];
+
+        return view('admin.packages.index', compact('packages', 'events', 'stats'));
     }
 
     public function store(Request $request)
