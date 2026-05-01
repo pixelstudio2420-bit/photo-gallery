@@ -17,6 +17,34 @@
     ])->find($sm['event_id']);
   }
 
+  // Load full photographer profile for type='photographer' landings so
+  // we can render avatar / bio / specialties / equipment / social
+  // links in a dedicated profile-card section below the hero.
+  $isPhotographerLanding = $page->type === 'photographer';
+  $sourcePhotographer = null;
+  if ($isPhotographerLanding && !empty($sm['photographer_id'])) {
+    $sourcePhotographer = \App\Models\PhotographerProfile::with('province:id,name_th,name_en')
+        ->where('user_id', $sm['photographer_id'])
+        ->first();
+  }
+@endphp
+
+@php
+  // Resolve avatar URL once for the photographer section.
+  $photographerAvatarUrl = null;
+  if ($sourcePhotographer && $sourcePhotographer->avatar) {
+      $av = $sourcePhotographer->avatar;
+      if (preg_match('#^(?:https?:)?//#i', $av)) {
+          $photographerAvatarUrl = $av;
+      } else {
+          try {
+              $photographerAvatarUrl = (string) app(\App\Services\Media\R2MediaService::class)->url($av);
+          } catch (\Throwable) {
+              $photographerAvatarUrl = '/storage/' . ltrim($av, '/');
+          }
+      }
+  }
+
   $sectionLabel = match($page->type) {
     'location'      => 'อีเวนต์ตามพื้นที่',
     'category'      => 'ประเภทช่างภาพ',
@@ -70,11 +98,22 @@
 
   {{-- Background photo (event landings ALWAYS use cover image; others
        use admin-set hero_image when available). 50% black gradient
-       overlay so headlines stay legible no matter how busy the photo. --}}
-  @php $heroBg = $page->hero_image ?? optional($sourceEvent)->cover_image; @endphp
+       overlay so headlines stay legible no matter how busy the photo.
+       Resolve R2/S3 object keys through the media service so we don't
+       emit /system/avatars/... URLs that 404 against the local disk. --}}
+  @php
+    $heroBg = $page->hero_image ?? optional($sourceEvent)->cover_image;
+    if ($heroBg && !preg_match('#^(?:https?:)?//#i', $heroBg)) {
+        try {
+            $heroBg = (string) app(\App\Services\Media\R2MediaService::class)->url($heroBg);
+        } catch (\Throwable) {
+            $heroBg = '/storage/' . ltrim($heroBg, '/');
+        }
+    }
+  @endphp
   @if($heroBg)
     <div class="absolute inset-0 bg-cover bg-center scale-110 blur-[2px]"
-         style="background-image: url('{{ asset($heroBg) }}');"></div>
+         style="background-image: url('{{ $heroBg }}');"></div>
     <div class="absolute inset-0 bg-gradient-to-br from-black/70 via-black/40 to-black/70"></div>
   @endif
 
@@ -208,6 +247,131 @@
 </section>
 
 {{-- ╔══════════════════════════════════════════════════════════════════╗
+     ║  PHOTOGRAPHER PROFILE CARD — only for type='photographer'        ║
+     ║  Shows avatar + headline + specialties + social links + stats    ║
+     ╚══════════════════════════════════════════════════════════════════╝ --}}
+@if($isPhotographerLanding && $sourcePhotographer)
+  <section class="bg-white dark:bg-slate-950 -mt-12 md:-mt-16 relative z-10">
+    <div class="max-w-5xl mx-auto px-4">
+      <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-white/[0.06] p-6 md:p-8">
+        <div class="grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-5 md:gap-7 items-center">
+
+          {{-- Avatar --}}
+          <div class="flex justify-center md:justify-start">
+            @if($photographerAvatarUrl)
+              <img src="{{ $photographerAvatarUrl }}"
+                   alt="{{ $sourcePhotographer->display_name }}"
+                   class="w-28 h-28 md:w-36 md:h-36 rounded-full object-cover ring-4 ring-{{ $accent }}-200 dark:ring-{{ $accent }}-500/30 shadow-xl">
+            @else
+              <div class="w-28 h-28 md:w-36 md:h-36 rounded-full bg-gradient-to-br {{ $theme['from'] }} {{ $theme['to'] }} flex items-center justify-center text-white text-4xl font-bold ring-4 ring-{{ $accent }}-200 dark:ring-{{ $accent }}-500/30 shadow-xl">
+                {{ mb_substr($sourcePhotographer->display_name ?? '?', 0, 1) }}
+              </div>
+            @endif
+          </div>
+
+          {{-- Bio + headline --}}
+          <div class="text-center md:text-left">
+            <h2 class="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-1">
+              {{ $sourcePhotographer->display_name }}
+              @if($sourcePhotographer->accepts_bookings)
+                <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 rounded-full align-middle ml-1">
+                  <i class="bi bi-check-circle-fill"></i> รับงาน
+                </span>
+              @endif
+            </h2>
+            @if($sourcePhotographer->headline)
+              <div class="text-sm md:text-base text-{{ $accent }}-600 dark:text-{{ $accent }}-400 font-semibold mb-2">
+                {{ $sourcePhotographer->headline }}
+              </div>
+            @endif
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 justify-center md:justify-start text-xs md:text-sm text-slate-500 dark:text-slate-400 mb-2">
+              @if($sourcePhotographer->province)
+                <span class="inline-flex items-center gap-1"><i class="bi bi-geo-alt-fill text-{{ $accent }}-500"></i>{{ $sourcePhotographer->province->name_th }}</span>
+              @endif
+              @if($sourcePhotographer->years_experience > 0)
+                <span class="inline-flex items-center gap-1"><i class="bi bi-clock-history text-{{ $accent }}-500"></i>ประสบการณ์ {{ $sourcePhotographer->years_experience }} ปี</span>
+              @endif
+              @if($sourcePhotographer->response_time_hours)
+                <span class="inline-flex items-center gap-1"><i class="bi bi-lightning-charge-fill text-{{ $accent }}-500"></i>ตอบใน {{ $sourcePhotographer->response_time_hours }} ชม.</span>
+              @endif
+            </div>
+            @if($sourcePhotographer->bio)
+              <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mt-2 line-clamp-3 md:line-clamp-none">
+                {{ $sourcePhotographer->bio }}
+              </p>
+            @endif
+          </div>
+
+          {{-- Social links column --}}
+          <div class="flex md:flex-col items-center justify-center gap-2 flex-wrap">
+            @if($sourcePhotographer->instagram_handle)
+              <a href="https://instagram.com/{{ $sourcePhotographer->instagram_handle }}" target="_blank" rel="noopener nofollow"
+                 class="w-11 h-11 rounded-xl bg-pink-100 hover:bg-pink-200 dark:bg-pink-500/15 dark:hover:bg-pink-500/25 text-pink-600 flex items-center justify-center transition" title="Instagram">
+                <i class="bi bi-instagram"></i>
+              </a>
+            @endif
+            @if($sourcePhotographer->facebook_url)
+              <a href="{{ $sourcePhotographer->facebook_url }}" target="_blank" rel="noopener nofollow"
+                 class="w-11 h-11 rounded-xl bg-blue-100 hover:bg-blue-200 dark:bg-blue-500/15 dark:hover:bg-blue-500/25 text-blue-600 flex items-center justify-center transition" title="Facebook">
+                <i class="bi bi-facebook"></i>
+              </a>
+            @endif
+            @if($sourcePhotographer->website_url)
+              <a href="{{ $sourcePhotographer->website_url }}" target="_blank" rel="noopener nofollow"
+                 class="w-11 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center transition" title="Website">
+                <i class="bi bi-globe"></i>
+              </a>
+            @endif
+            @if($sourcePhotographer->portfolio_url)
+              <a href="{{ $sourcePhotographer->portfolio_url }}" target="_blank" rel="noopener nofollow"
+                 class="w-11 h-11 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-amber-500/15 dark:hover:bg-amber-500/25 text-amber-600 flex items-center justify-center transition" title="Portfolio">
+                <i class="bi bi-collection"></i>
+              </a>
+            @endif
+          </div>
+        </div>
+
+        {{-- Specialties + Languages + Equipment chips --}}
+        @php
+          $specialties = is_array($sourcePhotographer->specialties) ? $sourcePhotographer->specialties : [];
+          $languages   = is_array($sourcePhotographer->languages)   ? $sourcePhotographer->languages   : [];
+          $equipment   = is_array($sourcePhotographer->equipment)   ? $sourcePhotographer->equipment   : [];
+          $langLabels = ['th' => 'ไทย', 'en' => 'English', 'zh' => '中文', 'ja' => '日本語', 'ko' => '한국어'];
+        @endphp
+        @if(count($specialties) > 0 || count($languages) > 0 || count($equipment) > 0)
+          <div class="mt-6 pt-5 border-t border-slate-100 dark:border-white/[0.06] space-y-3">
+            @if(count($specialties) > 0)
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-[11px] uppercase tracking-wider text-slate-400 font-bold mr-1"><i class="bi bi-tags-fill"></i> ความเชี่ยวชาญ:</span>
+                @foreach($specialties as $s)
+                  <span class="text-xs px-2.5 py-1 rounded-full bg-{{ $accent }}-100 dark:bg-{{ $accent }}-500/15 text-{{ $accent }}-700 dark:text-{{ $accent }}-300 font-semibold">{{ $s }}</span>
+                @endforeach
+              </div>
+            @endif
+            @if(count($languages) > 0)
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-[11px] uppercase tracking-wider text-slate-400 font-bold mr-1"><i class="bi bi-translate"></i> ภาษา:</span>
+                @foreach($languages as $l)
+                  <span class="text-xs px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-semibold">{{ $langLabels[$l] ?? strtoupper($l) }}</span>
+                @endforeach
+              </div>
+            @endif
+            @if(count($equipment) > 0)
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-[11px] uppercase tracking-wider text-slate-400 font-bold mr-1"><i class="bi bi-camera-fill"></i> อุปกรณ์:</span>
+                @foreach($equipment as $e)
+                  <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium">{{ $e }}</span>
+                @endforeach
+              </div>
+            @endif
+          </div>
+        @endif
+      </div>
+    </div>
+  </section>
+@endif
+
+{{-- ╔══════════════════════════════════════════════════════════════════╗
      ║  BODY — readable narrative                                       ║
      ╚══════════════════════════════════════════════════════════════════╝ --}}
 @if($page->body_html)
@@ -265,7 +429,21 @@
         <div class="lp-masonry">
           @foreach($relatedItems as $photo)
             @php
-              $thumb = $photo->thumbnail_path ? asset($photo->thumbnail_path) : null;
+              // Resolve R2 keys (event_photos.thumbnail_path) into real
+              // URLs. Same fix as the hero — `asset()` would emit a path
+              // that doesn't exist on the local disk for R2-hosted files.
+              $thumb = null;
+              if ($photo->thumbnail_path) {
+                  if (preg_match('#^(?:https?:)?//#i', $photo->thumbnail_path)) {
+                      $thumb = $photo->thumbnail_path;
+                  } else {
+                      try {
+                          $thumb = (string) app(\App\Services\Media\R2MediaService::class)->url($photo->thumbnail_path);
+                      } catch (\Throwable) {
+                          $thumb = '/storage/' . ltrim($photo->thumbnail_path, '/');
+                      }
+                  }
+              }
               $aspect = ($photo->width && $photo->height) ? ($photo->height / $photo->width) * 100 : 75;
             @endphp
             <a href="{{ $sourceEvent ? url('/events/' . ($sourceEvent->slug ?: $sourceEvent->id)) : '#' }}"
@@ -291,9 +469,25 @@
           @foreach($relatedItems as $item)
             <a href="{{ url('/events/' . ($item->slug ?: $item->id)) }}"
                class="group block bg-white dark:bg-slate-800 rounded-2xl overflow-hidden border border-slate-200 dark:border-white/[0.06] hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+              @php
+                // Resolve event cover_image to a real URL — see the
+                // hero comment above for context on the asset()/R2 mismatch.
+                $coverUrl = null;
+                if ($item->cover_image) {
+                    if (preg_match('#^(?:https?:)?//#i', $item->cover_image)) {
+                        $coverUrl = $item->cover_image;
+                    } else {
+                        try {
+                            $coverUrl = (string) app(\App\Services\Media\R2MediaService::class)->url($item->cover_image);
+                        } catch (\Throwable) {
+                            $coverUrl = '/storage/' . ltrim($item->cover_image, '/');
+                        }
+                    }
+                }
+              @endphp
               <div class="aspect-[4/3] bg-slate-100 dark:bg-slate-700 overflow-hidden relative">
-                @if($item->cover_image)
-                  <img src="{{ asset($item->cover_image) }}"
+                @if($coverUrl)
+                  <img src="{{ $coverUrl }}"
                        alt="{{ $item->name }}"
                        loading="lazy"
                        class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700">

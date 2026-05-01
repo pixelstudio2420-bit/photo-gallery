@@ -33,6 +33,35 @@ use Illuminate\Support\Str;
  */
 class PSeoService
 {
+    /**
+     * Resolve an R2/S3 object key to a publicly-fetchable URL.
+     *
+     * Avatars and event cover images are stored as bare keys (e.g.
+     * "system/avatars/user_3/uuid.png"). Dropping that into a <link
+     * href> or background-image URL causes a 404 because the file
+     * lives on R2, not the local public disk. R2MediaService knows
+     * the public R2 hostname and produces a usable URL.
+     *
+     * Falls through to a /storage/{key} prefix if R2 isn't configured,
+     * which works on local dev with `php artisan storage:link`.
+     * Already-absolute URLs pass through unchanged.
+     */
+    private function resolveMediaUrl(?string $key): ?string
+    {
+        if (!$key) return null;
+        if (preg_match('#^(?:https?:)?//#i', $key)) return $key;
+
+        try {
+            $url = (string) app(\App\Services\Media\R2MediaService::class)->url($key);
+            if ($url && preg_match('#^(?:https?:)?//#i', $url)) {
+                return $url;
+            }
+        } catch (\Throwable) {
+            // Fall through.
+        }
+        return '/storage/' . ltrim($key, '/');
+    }
+
     /* ═══════════════════════════════════════════════════════════════
      * Public API — bulk generation entry points
      * ═══════════════════════════════════════════════════════════════ */
@@ -286,15 +315,24 @@ class PSeoService
                 'year'         => now()->year,
             ];
 
+            // Lookup province_id for the photographer (kept on
+            // photographer_profiles, not surfaced via the LEFT JOIN
+            // above — fetch separately to keep the main query simple).
+            $provId = DB::table('photographer_profiles')
+                ->where('user_id', $row->user_id)
+                ->value('province_id');
+
             $page = $this->upsertPage($template, $slug, $vars, [
                 'photographer_id' => $row->user_id,
                 'data_count'      => (int) $row->event_count,
-                'province_id'     => null, // set below if known
+                'province_id'     => $provId,
             ]);
 
             // Auto-set hero_image to avatar (only on first generate).
+            // Resolve through R2MediaService so the rendered <img src>
+            // is a real URL, not a bare R2 object key that 404s.
             if ($page->wasRecentlyCreated && !empty($row->avatar)) {
-                $page->update(['hero_image' => $row->avatar]);
+                $page->update(['hero_image' => $this->resolveMediaUrl($row->avatar)]);
             }
 
             $stats[$page->wasRecentlyCreated ? 'created' : 'updated']++;
@@ -363,10 +401,12 @@ class PSeoService
             ]);
 
             // Auto-set hero_image to the event's cover (only on first
-            // generate, never overwrite admin's choice).
+            // generate, never overwrite admin's choice). Resolve the
+            // R2 key into a publicly-fetchable URL so the front-end
+            // can render it directly without a 404.
             if ($page->wasRecentlyCreated || empty($page->hero_image)) {
                 if ($event->cover_image) {
-                    $page->update(['hero_image' => $event->cover_image]);
+                    $page->update(['hero_image' => $this->resolveMediaUrl($event->cover_image)]);
                 }
             }
 
