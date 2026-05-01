@@ -171,13 +171,39 @@
       <p class="text-sm text-slate-600 dark:text-slate-400 mb-6">มืออาชีพที่ลูกค้าเลือกใช้ซ้ำมากที่สุด</p>
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         @foreach($photographers as $p)
+        @php
+          // The avatar column stores an R2/S3 object key
+          // ("system/avatars/user_3/uuid.png"), not a URL. Render it
+          // through R2MediaService::url() so the <img src> resolves
+          // to the R2 public hostname, not a 404 against this app.
+          $avatarUrl = null;
+          if (!empty($p->avatar)) {
+              if (preg_match('#^(?:https?:)?//#i', $p->avatar)) {
+                  $avatarUrl = $p->avatar;
+              } else {
+                  try {
+                      $resolved = (string) app(\App\Services\Media\R2MediaService::class)->url($p->avatar);
+                      $avatarUrl = preg_match('#^(?:https?:)?//#i', $resolved)
+                          ? $resolved
+                          : '/storage/' . ltrim($p->avatar, '/');
+                  } catch (\Throwable) {
+                      $avatarUrl = '/storage/' . ltrim($p->avatar, '/');
+                  }
+              }
+          }
+        @endphp
         <a href="{{ route('photographers.show', $p->user_id) }}"
-           class="group rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 p-4 text-center hover:-translate-y-1 transition">
-          <div class="w-16 h-16 mx-auto rounded-full bg-slate-100 dark:bg-slate-800 mb-2 overflow-hidden flex items-center justify-center">
-            @if(!empty($p->avatar))
-              <img src="{{ $p->avatar }}" alt="{{ $p->display_name }}" loading="lazy" class="w-full h-full object-cover">
+           class="group rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 p-4 text-center hover:-translate-y-1 hover:shadow-lg transition">
+          <div class="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-500/20 dark:to-violet-500/20 mb-2 overflow-hidden flex items-center justify-center ring-2 ring-white dark:ring-slate-800 shadow-md">
+            @if($avatarUrl)
+              <img src="{{ $avatarUrl }}" alt="{{ $p->display_name }}" loading="lazy" class="w-full h-full object-cover">
             @else
-              <i class="bi bi-person-fill text-2xl text-slate-400"></i>
+              {{-- Fallback: first letter of name in a coloured circle so
+                   the section never shows a blank icon when avatar
+                   isn't set yet. --}}
+              <span class="text-xl font-extrabold text-indigo-600">
+                {{ mb_strtoupper(mb_substr($p->display_name ?? $p->photographer_code ?? '?', 0, 1, 'UTF-8'), 'UTF-8') }}
+              </span>
             @endif
           </div>
           <h3 class="font-bold text-sm text-slate-900 dark:text-white mb-0.5 line-clamp-1">{{ $p->display_name ?? $p->photographer_code }}</h3>
