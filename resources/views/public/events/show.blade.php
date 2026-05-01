@@ -62,16 +62,19 @@
 @keyframes cartPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.4); } 50% { box-shadow: 0 0 0 8px rgba(99,102,241,0); } }
 
 /* Gallery grid — mobile defaults to 2 columns so each thumbnail is large
-   enough for the buyer to recognize themselves at a glance. Anything more
-   than 2 columns at 360-414px viewports made faces too small to scan. */
+   enough for the buyer to recognize themselves at a glance. The
+   photographer-set col-N override is honoured on phones (the buyer can
+   bump density up via the dropdown) so the default just gives them a
+   readable starting point, not a hard cap. */
 .g-gallery { display: grid; gap: 8px; width: 100%; padding: 12px; grid-template-columns: repeat(2, 1fr); }
 @media (min-width: 576px) { .g-gallery { grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 16px; } }
 @media (min-width: 992px) { .g-gallery { grid-template-columns: repeat(5, 1fr); gap: 8px; } }
 @media (min-width: 1400px) { .g-gallery { grid-template-columns: repeat(6, 1fr); gap: 10px; } }
 @media (max-width: 575.98px) {
-  /* On phones, never go higher than 2 columns regardless of the
-     photographer's preferred desktop density — readability beats density. */
-  .g-gallery.col-3, .g-gallery.col-4, .g-gallery.col-5, .g-gallery.col-6, .g-gallery.col-8 { grid-template-columns: repeat(2, 1fr) !important; }
+  /* Cap density on the LARGE end so a desktop-set col-6 / col-8 doesn't
+     produce 50px-wide thumbnails on phones. col-3 and col-4 are honoured
+     because the user explicitly picked them via the mobile dropdown. */
+  .g-gallery.col-5, .g-gallery.col-6, .g-gallery.col-8 { grid-template-columns: repeat(4, 1fr) !important; }
 }
 @media (min-width: 576px) and (max-width: 991.98px) {
   .g-gallery.col-6, .g-gallery.col-8 { grid-template-columns: repeat(4, 1fr) !important; }
@@ -1069,7 +1072,7 @@
         <div x-data="{ open: false }" class="relative md:hidden">
           <button @click="open = !open" class="inline-flex items-center gap-1.5 bg-sky-500/15 text-sky-400 pl-1.5 pr-3 py-1 rounded-full text-xs font-semibold border border-sky-500/25 cursor-pointer transition-all duration-200 hover:bg-sky-500 hover:text-white hover:border-sky-500 hover:shadow-lg hover:shadow-sky-500/30 active:scale-95">
             <span class="w-6 h-6 rounded-full bg-sky-500/20 inline-flex items-center justify-center text-[11px]"><i class="bi bi-grid-3x3-gap"></i></span>
-            <span id="col-label-mobile">5</span>
+            <span id="col-label-mobile">2</span>
           </button>
           <div x-show="open" @click.away="open = false" x-cloak x-transition
                class="absolute right-0 z-10 mt-2 bg-slate-800 shadow-xl shadow-black/30 rounded-2xl py-1.5 min-w-[150px] border border-white/10">
@@ -1334,7 +1337,10 @@ let allPhotos  = [];
 let selected   = new Set();
 let currentLbIdx = 0;
 let activePackage = null;
-let currentCols  = 5;
+// Initial column density: phones default to 2 (readability over volume),
+// tablets and desktops default to 5 (typical photographer preference).
+// The buyer can change it any time via the col-btn / col-opt selectors.
+let currentCols  = window.matchMedia('(max-width: 575.98px)').matches ? 2 : 5;
 
 // ============================================
 // Init
@@ -1536,6 +1542,20 @@ function renderGallery(photos) {
   const heroNum = document.getElementById('hero-photo-num');
   if (heroNum) heroNum.textContent = photos.length;
   applyColumns(currentCols);
+  // Sync the mobile dropdown label to the actual current column count
+  // (the static markup hardcodes "2" but currentCols may differ on
+  // tablets/desktops depending on viewport at boot).
+  const colLabelMobile = document.getElementById('col-label-mobile');
+  if (colLabelMobile) colLabelMobile.textContent = currentCols;
+  // Highlight the matching desktop col-btn so the selected density
+  // visually matches the active grid.
+  document.querySelectorAll('.col-btn').forEach(b => {
+    if (parseInt(b.dataset.col) === currentCols) {
+      b.classList.add('toolbar-col-active');
+    } else {
+      b.classList.remove('toolbar-col-active');
+    }
+  });
 }
 
 function applyColumns(n) {
