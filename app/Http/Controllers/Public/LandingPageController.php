@@ -78,13 +78,21 @@ class LandingPageController extends Controller
         };
     }
 
+    /**
+     * NOTE: `display_name` lives on `photographer_profiles`, not on
+     * `auth_users` (the table the `photographer()` relation points to).
+     * Eager-load via `photographerProfile` to avoid an
+     *   "column display_name does not exist" 42703 error
+     * which previously bubbled up as a 500 on every category/combo
+     * landing page.
+     */
     private function fetchEventsByProvince(?int $provinceId)
     {
         if (!$provinceId) return collect();
         return \App\Models\Event::where('province_id', $provinceId)
             ->where('status', 'active')
             ->where('visibility', 'public')
-            ->with(['category:id,name,slug', 'photographer:id,display_name'])
+            ->with(['category:id,name,slug', 'photographerProfile:user_id,display_name'])
             ->orderByDesc('shoot_date')
             ->limit(24)
             ->get();
@@ -96,7 +104,7 @@ class LandingPageController extends Controller
         return \App\Models\Event::where('category_id', $categoryId)
             ->where('status', 'active')
             ->where('visibility', 'public')
-            ->with(['photographer:id,display_name'])
+            ->with(['photographerProfile:user_id,display_name'])
             ->orderByDesc('shoot_date')
             ->limit(24)
             ->get();
@@ -109,7 +117,7 @@ class LandingPageController extends Controller
             ->where('province_id', $provinceId)
             ->where('status', 'active')
             ->where('visibility', 'public')
-            ->with(['photographer:id,display_name'])
+            ->with(['photographerProfile:user_id,display_name'])
             ->orderByDesc('shoot_date')
             ->limit(24)
             ->get();
@@ -130,7 +138,7 @@ class LandingPageController extends Controller
     {
         return \App\Models\Event::where('status', 'active')
             ->where('visibility', 'public')
-            ->with(['category:id,name', 'photographer:id,display_name'])
+            ->with(['category:id,name', 'photographerProfile:user_id,display_name'])
             ->orderByDesc('shoot_date')
             ->limit(48)
             ->get();

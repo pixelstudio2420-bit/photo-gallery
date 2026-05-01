@@ -194,8 +194,8 @@
                   <span>{{ \Carbon\Carbon::parse($item->shoot_date)->format('d/m/Y') }}</span>
                 </span>
               @endif
-              @if(isset($item->photographer) && $item->photographer)
-                <span class="ml-auto text-slate-400 truncate">{{ $item->photographer->display_name }}</span>
+              @if($item->photographerProfile?->display_name)
+                <span class="ml-auto text-slate-400 truncate">{{ $item->photographerProfile->display_name }}</span>
               @endif
             </div>
           </div>
