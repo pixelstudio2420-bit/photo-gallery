@@ -947,6 +947,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Packages
         Route::prefix('packages')->name('packages.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\PackageController::class, 'index'])->name('index');
+            // Audit log — append-only forensic trail of every pricing
+            // change. Read-only by design (no mutation actions exposed).
+            Route::get('/audit', [\App\Http\Controllers\Admin\PricingAuditController::class, 'index'])->name('audit');
             Route::post('/', [\App\Http\Controllers\Admin\PackageController::class, 'store'])->name('store');
             Route::put('/{id}', [\App\Http\Controllers\Admin\PackageController::class, 'update'])->name('update');
             Route::delete('/{id}', [\App\Http\Controllers\Admin\PackageController::class, 'destroy'])->name('destroy');
@@ -1731,13 +1734,18 @@ Route::prefix('photographer')->name('photographer.')->group(function () {
         // Photographers manage their own bundle pricing here; the public
         // event page reads the same rows. Auto-seeded on event create via
         // EventBundleSeederObserver.
+        // Bundle CRUD — read endpoints are unrestricted; mutating
+        // endpoints are rate-limited (30 changes per hour per
+        // photographer) to neuter price-flip fraud and accidental
+        // bulk-edit storms. The cap is generous enough that no
+        // legitimate workflow hits it.
         Route::get('events/{event}/packages',                    [\App\Http\Controllers\Photographer\EventPackageController::class, 'index'])->name('events.packages.index');
-        Route::post('events/{event}/packages',                   [\App\Http\Controllers\Photographer\EventPackageController::class, 'store'])->name('events.packages.store');
-        Route::put('events/{event}/packages/{package}',          [\App\Http\Controllers\Photographer\EventPackageController::class, 'update'])->name('events.packages.update');
-        Route::delete('events/{event}/packages/{package}',       [\App\Http\Controllers\Photographer\EventPackageController::class, 'destroy'])->name('events.packages.destroy');
-        Route::post('events/{event}/packages/template',          [\App\Http\Controllers\Photographer\EventPackageController::class, 'applyTemplate'])->name('events.packages.template');
-        Route::post('events/{event}/packages/recalculate',       [\App\Http\Controllers\Photographer\EventPackageController::class, 'recalculate'])->name('events.packages.recalculate');
-        Route::post('events/{event}/packages/{package}/feature', [\App\Http\Controllers\Photographer\EventPackageController::class, 'toggleFeatured'])->name('events.packages.feature');
+        Route::post('events/{event}/packages',                   [\App\Http\Controllers\Photographer\EventPackageController::class, 'store'])->name('events.packages.store')->middleware('rate.limit:30,60');
+        Route::put('events/{event}/packages/{package}',          [\App\Http\Controllers\Photographer\EventPackageController::class, 'update'])->name('events.packages.update')->middleware('rate.limit:30,60');
+        Route::delete('events/{event}/packages/{package}',       [\App\Http\Controllers\Photographer\EventPackageController::class, 'destroy'])->name('events.packages.destroy')->middleware('rate.limit:30,60');
+        Route::post('events/{event}/packages/template',          [\App\Http\Controllers\Photographer\EventPackageController::class, 'applyTemplate'])->name('events.packages.template')->middleware('rate.limit:10,60');
+        Route::post('events/{event}/packages/recalculate',       [\App\Http\Controllers\Photographer\EventPackageController::class, 'recalculate'])->name('events.packages.recalculate')->middleware('rate.limit:10,60');
+        Route::post('events/{event}/packages/{package}/feature', [\App\Http\Controllers\Photographer\EventPackageController::class, 'toggleFeatured'])->name('events.packages.feature')->middleware('rate.limit:30,60');
 
         // Portfolio archival (manual) — wipes originals but keeps previews + cover
         Route::post('events/{event}/archive-to-portfolio', [\App\Http\Controllers\Photographer\EventController::class, 'archiveToPortfolio'])->name('events.archive-portfolio');

@@ -13,10 +13,16 @@
       <a href="#" class="text-indigo-500 hover:underline">photographer/events/&lt;event&gt;/packages</a>
     </p>
   </div>
-  <button type="button" onclick="openAddModal()"
-    class="bg-gradient-to-br from-indigo-500 to-indigo-600 text-white rounded-lg font-medium text-sm px-5 py-2 transition hover:from-indigo-600 hover:to-indigo-700">
-    <i class="bi bi-plus-lg mr-1"></i> เพิ่มแพ็คเกจ
-  </button>
+  <div class="flex items-center gap-2">
+    <a href="{{ route('admin.packages.audit') }}"
+       class="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg font-medium text-sm px-4 py-2 transition inline-flex items-center gap-1">
+      <i class="bi bi-shield-check text-indigo-500"></i> Audit Log
+    </a>
+    <button type="button" onclick="openAddModal()"
+      class="bg-gradient-to-br from-indigo-500 to-indigo-600 text-white rounded-lg font-medium text-sm px-5 py-2 transition hover:from-indigo-600 hover:to-indigo-700">
+      <i class="bi bi-plus-lg mr-1"></i> เพิ่มแพ็คเกจ
+    </button>
+  </div>
 </div>
 
 {{-- Stats banner — explains that "5 bundles repeating" = 5 templates × N events --}}

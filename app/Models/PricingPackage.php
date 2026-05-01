@@ -118,10 +118,60 @@ class PricingPackage extends Model
         return round(((float) $this->original_price - (float) $this->price) / (float) $this->original_price * 100, 0);
     }
 
+    /* ───────── Audit metadata (set transiently before save) ───────── */
+
+    /**
+     * Free-text reason recorded into pricing_package_logs.reason on the
+     * next save(). Set by controllers like:
+     *   $pkg->auditReason = 'admin bulk recalc';
+     *   $pkg->save();
+     * Cleared after each save so it doesn't leak across model lifecycles.
+     */
+    public ?string $auditReason = null;
+
+    /**
+     * Override the actor-role guess in PricingPackageAuditObserver
+     * (defaults to inferring from auth guards). Useful for system /
+     * cron writes that want explicit "system" tagging.
+     */
+    public ?string $auditRole = null;
+
+    /* ───────── Anti-tamper: orders pending on this bundle ───────── */
+
+    /**
+     * True when an unpaid Order references this package_id and would be
+     * affected by a price change. Used by the photographer UI to lock
+     * the edit + delete actions and warn the photographer that they
+     * need to wait for the pending sale to resolve.
+     *
+     * "Affected" means status in {pending, awaiting_slip} — orders
+     * already paid have their prices snapshotted into Order.total +
+     * OrderItem.price and can't drift. Cancelled / refunded are also
+     * safe to ignore since their financial path is closed.
+     */
+    public function hasPendingOrders(): bool
+    {
+        return \App\Models\Order::where('package_id', $this->id)
+            ->whereIn('status', ['pending', 'awaiting_slip'])
+            ->exists();
+    }
+
+    public function pendingOrderCount(): int
+    {
+        return \App\Models\Order::where('package_id', $this->id)
+            ->whereIn('status', ['pending', 'awaiting_slip'])
+            ->count();
+    }
+
     /* ───────── Relations ───────── */
 
     public function event()
     {
         return $this->belongsTo(\App\Models\Event::class);
+    }
+
+    public function logs()
+    {
+        return $this->hasMany(PricingPackageLog::class, 'package_id');
     }
 }

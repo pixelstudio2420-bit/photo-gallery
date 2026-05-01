@@ -162,6 +162,15 @@ class AppServiceProvider extends ServiceProvider
             // unchanged saves are skipped via wasChanged() guards.
             \App\Models\Event::observe(\App\Observers\EventPriceChangeObserver::class);
         }
+
+        // Append-only audit log on every PricingPackage mutation. Captures
+        // create/update/delete with the actor's user_id + IP + a full
+        // before/after JSON snapshot so disputes & anti-fraud queries
+        // have a single source of truth. Required by the bundle-pricing
+        // anti-tamper system (2026-05-01).
+        if (class_exists(\App\Models\PricingPackage::class)) {
+            \App\Models\PricingPackage::observe(\App\Observers\PricingPackageAuditObserver::class);
+        }
     }
 
     /**

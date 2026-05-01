@@ -116,6 +116,20 @@ class EventPackageController extends Controller
         $this->authorizeOwnership($event);
         $this->authorizePackage($event, $package);
 
+        // Anti-tamper: photographer can't change a bundle while there
+        // are unpaid orders referencing it. Buyers expect the price
+        // they saw at checkout to hold; allowing edits mid-transaction
+        // creates a dispute vector AND a fraud vector (flip price,
+        // sell, flip back). Order/OrderItem already snapshot prices
+        // so paid orders are safe — but the warning saves us from
+        // legitimate-looking confusion in the pending window.
+        if ($package->hasPendingOrders()) {
+            return back()->with('error',
+                'ไม่สามารถแก้ไขได้ขณะมีออเดอร์ค้างชำระ ' . $package->pendingOrderCount() .
+                ' รายการ — กรุณารอให้ลูกค้าจ่ายเงินหรือยกเลิกก่อน'
+            );
+        }
+
         $validated = $request->validate([
             'name'            => 'required|string|max:100',
             'photo_count'     => 'nullable|integer|min:1|max:10000',
@@ -134,6 +148,11 @@ class EventPackageController extends Controller
         $validated['is_featured'] = $request->boolean('is_featured');
         $validated['is_active']   = $request->boolean('is_active', true);
 
+        // Tag the audit-log row that the observer will write so the
+        // /admin/packages/audit page can show "Pat updated bundle X
+        // (manual edit on event page)" rather than a bare row diff.
+        $package->auditReason = 'photographer manual edit via packages page';
+        $package->auditRole   = 'photographer';
         $package->update($validated);
 
         return back()->with('success', 'อัปเดตแพ็กเกจสำเร็จ');
@@ -146,6 +165,21 @@ class EventPackageController extends Controller
         $this->authorizeOwnership($event);
         $this->authorizePackage($event, $package);
 
+        // Same anti-tamper rule on delete: a pending order's
+        // OrderItem row references this package_id, and even though
+        // the price snapshot survives the row delete (FK is
+        // nullOnDelete on the audit log; orders are unaffected),
+        // letting a photographer delete the row mid-checkout makes
+        // for a confusing "what did I just buy" UX for the customer.
+        if ($package->hasPendingOrders()) {
+            return back()->with('error',
+                'ไม่สามารถลบได้ขณะมีออเดอร์ค้างชำระ ' . $package->pendingOrderCount() .
+                ' รายการ — กรุณารอให้ลูกค้าจ่ายเงินหรือยกเลิกก่อน'
+            );
+        }
+
+        $package->auditReason = 'photographer manual delete via packages page';
+        $package->auditRole   = 'photographer';
         $package->delete();
 
         return back()->with('success', 'ลบแพ็กเกจสำเร็จ');

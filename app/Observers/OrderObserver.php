@@ -70,6 +70,44 @@ class OrderObserver
                 }
             }
 
+            // ── Anti-tamper: total integrity check on paid transition ──
+            // Verify that order.total == subtotal - discount + sum(items).
+            // OrderIntegrityObserver already prevents direct mutation of
+            // the total column post-paid, but it can't catch the case
+            // where a malicious actor (or buggy code) put a wrong number
+            // in *during* creation. By recomputing from OrderItems on
+            // the paid transition we get a second-line check that
+            // surfaces discrepancies into the log + admin alerts.
+            //
+            // We don't HALT the transition — payment was already taken
+            // and customers shouldn't get stuck. We log the discrepancy
+            // loudly so admin can investigate and refund if needed.
+            if ($order->status === 'paid'
+                && in_array($order->order_type ?? 'photo_package', [Order::TYPE_PHOTO_PACKAGE, null], true)) {
+                try {
+                    $itemsTotal = (float) $order->items()->sum('price');
+                    $discount   = (float) ($order->discount_amount ?? 0);
+                    $expected   = max(0, $itemsTotal - $discount);
+                    $actual     = (float) $order->total;
+                    $delta      = abs($expected - $actual);
+
+                    // Allow ฿0.01 fuzz for rounding (decimal:2 columns).
+                    if ($delta > 0.01) {
+                        Log::warning('OrderObserver.total_mismatch_on_paid', [
+                            'order_id'    => $order->id,
+                            'items_sum'   => $itemsTotal,
+                            'discount'    => $discount,
+                            'expected'    => $expected,
+                            'actual_total'=> $actual,
+                            'delta'       => $delta,
+                            'photographer'=> $order->event_id ? optional(\App\Models\Event::find($order->event_id))->photographer_id : null,
+                        ]);
+                    }
+                } catch (\Throwable $e) {
+                    Log::info('OrderObserver.total_check_skipped: ' . $e->getMessage());
+                }
+            }
+
             // Reverse photographer payouts on refund / cancellation.
             // Without this, the platform refunds the buyer but the
             // photographer still gets paid by the disbursement cron —
