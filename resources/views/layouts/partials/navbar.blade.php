@@ -514,34 +514,43 @@
           narrowest phones (≤320px); the icons keep flex-shrink-0 so
           they never collapse.
         --}}
-        <div class="mt-3 px-3 border-t border-white/10 pt-3">
+        {{--
+          Mobile theme + photographer-dashboard buttons.
+
+          Stacked vertically (space-y-2) — each row gets the full
+          container width so neither label has to truncate at any
+          viewport from 320px up. Previous 2-col grid was clipping
+          "แดชบอร์ดช่างภาพ" to "แดชบอร์ดช่าง..." on phones ≤375px.
+
+          Visual contrast bumped up too: bg-white/10 + border-white/15
+          reads cleanly against the bg-slate-900/85 navbar (the old
+          /5 was too faint and the button looked half-rendered).
+
+          Theme label uses Tailwind dark:hidden/dark:inline so the
+          text reacts to the .dark class darkmode.js sets on <html>.
+          JS still owns the bi-moon ↔ bi-sun icon swap (icon.className
+          gets rewritten in /js/darkmode.js — the `shrink-0` would be
+          wiped, so we don't bother adding it).
+        --}}
+        <div class="mt-3 px-3 border-t border-white/10 pt-3 space-y-2">
+          {{-- Theme toggle — auto-binds to /js/darkmode.js via .theme-toggle --}}
+          <button type="button"
+                  class="theme-toggle w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white hover:text-white bg-white/10 hover:bg-white/15 border border-white/15 transition"
+                  title="สลับโหมดกลางวัน/กลางคืน">
+            <i class="bi bi-moon-fill"></i>
+            <span class="whitespace-nowrap">
+              <span class="dark:hidden">สลับเป็นโหมดกลางคืน</span>
+              <span class="hidden dark:inline">สลับเป็นโหมดกลางวัน</span>
+            </span>
+          </button>
+
+          {{-- Photographer dashboard shortcut (approved only) --}}
           @if($_mobileApprovedPhotog)
-            <div class="grid grid-cols-2 gap-2">
-              <button type="button"
-                      class="theme-toggle w-full inline-flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-[13px] font-medium text-white/85 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition min-w-0"
-                      title="สลับโหมดกลางวัน/กลางคืน">
-                <i class="bi bi-moon-fill shrink-0"></i>
-                <span class="truncate">
-                  <span class="dark:hidden">โหมดกลางคืน</span>
-                  <span class="hidden dark:inline">โหมดกลางวัน</span>
-                </span>
-              </button>
-              <a href="{{ route('photographer.dashboard') }}"
-                 class="w-full inline-flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-[13px] font-semibold text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 shadow shadow-indigo-500/25 transition min-w-0">
-                <i class="bi bi-speedometer2 shrink-0"></i>
-                <span class="truncate">แดชบอร์ดช่างภาพ</span>
-              </a>
-            </div>
-          @else
-            <button type="button"
-                    class="theme-toggle w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-white/85 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition"
-                    title="สลับโหมดกลางวัน/กลางคืน">
-              <i class="bi bi-moon-fill shrink-0"></i>
-              <span>
-                <span class="dark:hidden">สลับเป็นโหมดกลางคืน</span>
-                <span class="hidden dark:inline">สลับเป็นโหมดกลางวัน</span>
-              </span>
-            </button>
+            <a href="{{ route('photographer.dashboard') }}"
+               class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 shadow-md shadow-indigo-500/30 transition">
+              <i class="bi bi-speedometer2"></i>
+              <span class="whitespace-nowrap">แดชบอร์ดช่างภาพ</span>
+            </a>
           @endif
         </div>
 
