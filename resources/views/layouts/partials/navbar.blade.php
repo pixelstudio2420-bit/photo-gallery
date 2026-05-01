@@ -657,11 +657,40 @@
               </li>
             </ul>
           @else
-            <div class="flex items-center gap-3 px-3 mt-2">
-              <a class="text-white/70 hover:text-white text-sm transition" href="{{ route('auth.register') }}">{{ __('nav.register') }}</a>
-              <a class="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white font-semibold px-6 py-2 rounded-full text-sm inline-flex items-center gap-1"
-                href="{{ route('auth.login') }}">
-                <i class="bi bi-person mr-1"></i>{{ __('nav.login') }}
+            {{--
+              Guest CTA pair — Register (secondary) | Login (primary).
+
+              Replaces the previous "plain text link + pill button"
+              combo that left "สมัคร" looking like an afterthought
+              next to a clearly-styled login pill. Now both buttons
+              share the same proportions (50/50 grid, py-3, rounded-xl)
+              while keeping a clear visual hierarchy:
+
+                • Login = primary indigo→purple gradient with shadow.
+                  Matches the photographer-dashboard button style
+                  immediately above when present, so the menu reads
+                  as one cohesive system.
+                • Register = secondary bg-white/10 with subtle border.
+                  Matches the segmented theme switcher container, so
+                  it sits comfortably below it.
+
+              Icons (bi-person-plus / bi-box-arrow-in-right) reinforce
+              the action — important on mobile where Thai labels can
+              be ambiguous if read in a hurry.
+            --}}
+            <div class="grid grid-cols-2 gap-2 mt-2">
+              {{-- Register (secondary) --}}
+              <a href="{{ route('auth.register') }}"
+                 class="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold text-white bg-white/10 hover:bg-white/15 border border-white/15 transition">
+                <i class="bi bi-person-plus"></i>
+                <span class="whitespace-nowrap">{{ __('nav.register') }}</span>
+              </a>
+
+              {{-- Login (primary CTA) --}}
+              <a href="{{ route('auth.login') }}"
+                 class="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 shadow-md shadow-indigo-500/30 transition">
+                <i class="bi bi-box-arrow-in-right"></i>
+                <span class="whitespace-nowrap">{{ __('nav.login') }}</span>
               </a>
             </div>
           @endauth
