@@ -267,12 +267,24 @@ class EventController extends Controller
         $packages = \DB::table('pricing_packages')
             ->where('is_active', 1)
             ->where(fn($q) => $q->whereNull('event_id')->orWhere('event_id', $event->id))
+            ->orderBy('sort_order')
             ->orderBy('photo_count')
             ->get();
 
-        // Derive cheapest per-photo price from packages
-        $basePricePerPhoto = $packages->count() > 0
-            ? $packages->map(fn($p) => $p->price / $p->photo_count)->min()
+        // Derive cheapest per-photo price from packages.
+        //
+        // NOTE: only count-bundles have a fixed photo_count to divide by —
+        // face_match bundles store photo_count=NULL (count is per-buyer
+        // dynamic) and event_all uses photo_count for display only. Skip
+        // both when computing the headline "starting at ฿X/photo" stat,
+        // otherwise we'd hit DivisionByZeroError on the face_match row.
+        $countBundles = $packages->filter(
+            fn ($p) => ($p->bundle_type ?? 'count') === 'count'
+                && (int) ($p->photo_count ?? 0) > 0
+                && (float) ($p->price ?? 0) > 0
+        );
+        $basePricePerPhoto = $countBundles->count() > 0
+            ? $countBundles->map(fn ($p) => (float) $p->price / (int) $p->photo_count)->min()
             : 0;
 
         return view('public.events.show', compact('event', 'photos', 'prices', 'packages', 'basePricePerPhoto'));
