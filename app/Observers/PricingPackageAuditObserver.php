@@ -74,32 +74,51 @@ class PricingPackageAuditObserver
      * is still under verification. The try/catch can be tightened to
      * `warning` later, once the path is proven reliable.
      */
+    /**
+     * Persist one audit row.
+     *
+     * Defensive try/catch: losing an audit row is bad, but losing the
+     * underlying business mutation because the audit write blew up is
+     * worse. Failures are escalated to Log::error (visible in
+     * CloudWatch) so they don't hide silently.
+     */
     private function log(PricingPackage $package, string $action, ?array $old, ?array $new): void
     {
-        // DEBUG MODE: re-throw failures so they surface during the
-        // 2026-05-01 verification window. The previous swallow-into-Log
-        // approach hid an exception that wasn't visible from tinker
-        // (Laravel Cloud sends Log::error to CloudWatch, not the local
-        // file system). Once the audit pipeline is verified end-to-end
-        // we'll restore the safe try/catch fallback.
-        $reason   = $package->auditReason ?? null;
-        $roleHint = $package->auditRole ?? $this->guessRole();
+        try {
+            $reason   = $package->auditReason ?? null;
+            $roleHint = $package->auditRole ?? $this->guessRole();
 
-        $oldClean = $old !== null ? $this->safeJsonEncode($old) : null;
-        $newClean = $new !== null ? $this->safeJsonEncode($new) : null;
+            // Sanitize old/new through a json round-trip so any
+            // Carbon/object instances flatten to primitive types the
+            // JSON column cast can serialize without throwing.
+            $oldClean = $old !== null ? $this->safeJsonEncode($old) : null;
+            $newClean = $new !== null ? $this->safeJsonEncode($new) : null;
 
-        PricingPackageLog::create([
-            'package_id'      => $package->id,
-            'event_id'        => $package->event_id,
-            'action'          => $action,
-            'old_values'      => $oldClean,
-            'new_values'      => $newClean,
-            'changed_by'      => Auth::id(),
-            'changed_by_role' => $roleHint,
-            'reason'          => $reason,
-            'ip_address'      => $this->ip(),
-            'created_at'      => now(),
-        ]);
+            PricingPackageLog::create([
+                'package_id'      => $package->id,
+                'event_id'        => $package->event_id,
+                'action'          => $action,
+                'old_values'      => $oldClean,
+                'new_values'      => $newClean,
+                'changed_by'      => Auth::id(),
+                'changed_by_role' => $roleHint,
+                'reason'          => $reason,
+                'ip_address'      => $this->ip(),
+                'created_at'      => now(),
+            ]);
+        } catch (\Throwable $e) {
+            // Use ERROR (not warning) so failures surface in CloudWatch
+            // even after the rollout — anti-fraud audit is too important
+            // to ever silently fail.
+            Log::error('PricingPackageAuditObserver: log write failed', [
+                'package_id' => $package->id ?? null,
+                'action'     => $action,
+                'error'      => $e->getMessage(),
+                'class'      => get_class($e),
+                'file'       => basename($e->getFile()),
+                'line'       => $e->getLine(),
+            ]);
+        }
     }
 
     /**
@@ -129,12 +148,49 @@ class PricingPackageAuditObserver
      * Best-effort role inference. Authoritative cases (admin / photographer
      * controller) override this by setting $package->auditRole on the
      * model instance before save().
+     *
+     * Resolves against the auth guards actually defined in config/auth.php
+     * (web + admin in this system; some installs may add 'photographer'
+     * later). Calling Auth::guard() with an undefined name throws
+     * InvalidArgumentException, so we check config before each lookup
+     * AND wrap in try-catch as belt-and-braces.
      */
     private function guessRole(): string
     {
-        if (Auth::guard('admin')->check())        return 'admin';
-        if (Auth::guard('photographer')->check()) return 'photographer';
-        if (Auth::check())                        return 'photographer'; // default web guard
+        $guards = (array) config('auth.guards', []);
+
+        // Admin guard — only present if config explicitly defines it.
+        if (isset($guards['admin'])) {
+            try {
+                if (Auth::guard('admin')->check()) return 'admin';
+            } catch (\Throwable) {
+                // guard misconfigured — fall through
+            }
+        }
+
+        // Photographer guard — most installs DON'T define this; the
+        // default 'web' guard handles photographer auth. Only check
+        // when explicitly configured.
+        if (isset($guards['photographer'])) {
+            try {
+                if (Auth::guard('photographer')->check()) return 'photographer';
+            } catch (\Throwable) {
+                // ignore
+            }
+        }
+
+        // Default web guard — handles both customers and photographers
+        // (photographers ARE users with a PhotographerProfile attached).
+        // We tag them as 'photographer' if the row has a profile, else
+        // 'user' for plain customers.
+        if (Auth::check()) {
+            $user = Auth::user();
+            if ($user && method_exists($user, 'photographerProfile') && $user->photographerProfile) {
+                return 'photographer';
+            }
+            return 'user';
+        }
+
         return 'system';
     }
 
