@@ -532,12 +532,30 @@
           gets rewritten in /js/darkmode.js — the `shrink-0` would be
           wiped, so we don't bother adding it).
         --}}
+        {{--
+          Each <i> gets wrapped in a sized badge <span> so the icon
+          renders as a clearly-defined element next to the label
+          instead of a faint glyph that competes with the Thai text.
+
+          Why the wrapper is necessary: /js/darkmode.js does
+            icon.className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-fill'
+          which OVERWRITES the className entirely. Anything we add
+          (text-lg, shrink-0, scale-110, etc.) gets wiped on every
+          theme apply. The wrapper <span> isn't an <i>, so JS
+          ignores it — we can size + style it freely.
+
+          Inside the wrapper we set leading-none so the icon glyph
+          centers vertically without bootstrap-icons font's default
+          1.5em line-height pushing it off-axis.
+        --}}
         <div class="mt-3 px-3 border-t border-white/10 pt-3 space-y-2">
           {{-- Theme toggle — auto-binds to /js/darkmode.js via .theme-toggle --}}
           <button type="button"
-                  class="theme-toggle w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white hover:text-white bg-white/10 hover:bg-white/15 border border-white/15 transition"
+                  class="theme-toggle w-full inline-flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl text-sm font-medium text-white bg-white/10 hover:bg-white/15 border border-white/15 transition"
                   title="สลับโหมดกลางวัน/กลางคืน">
-            <i class="bi bi-moon-fill"></i>
+            <span class="inline-flex w-8 h-8 rounded-lg bg-white/15 items-center justify-center shrink-0 leading-none text-base">
+              <i class="bi bi-moon-fill"></i>
+            </span>
             <span class="whitespace-nowrap">
               <span class="dark:hidden">สลับเป็นโหมดกลางคืน</span>
               <span class="hidden dark:inline">สลับเป็นโหมดกลางวัน</span>
@@ -547,8 +565,10 @@
           {{-- Photographer dashboard shortcut (approved only) --}}
           @if($_mobileApprovedPhotog)
             <a href="{{ route('photographer.dashboard') }}"
-               class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 shadow-md shadow-indigo-500/30 transition">
-              <i class="bi bi-speedometer2"></i>
+               class="w-full inline-flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 shadow-md shadow-indigo-500/30 transition">
+              <span class="inline-flex w-8 h-8 rounded-lg bg-white/20 items-center justify-center shrink-0 leading-none text-base">
+                <i class="bi bi-speedometer2"></i>
+              </span>
               <span class="whitespace-nowrap">แดชบอร์ดช่างภาพ</span>
             </a>
           @endif
