@@ -65,7 +65,7 @@ return new class extends Migration
                 'tagline'               => 'เริ่มต้นฟรีตลอดชีพ — สร้างผลงานก่อนตัดสินใจซื้อ',
                 'price_thb'             => 0,
                 'price_annual_thb'      => 0,
-                'storage_gb'            => 5,
+                'storage_bytes'         => 5 * 1073741824,        // 5 GB
                 'max_concurrent_events' => 1,
                 'commission_pct'        => 30,
                 'max_photos_per_event'  => 200,
@@ -99,7 +99,7 @@ return new class extends Migration
                 'tagline'               => 'เริ่มต้นรับงานจริง — เปิดตัวเป็นช่างภาพมืออาชีพ',
                 'price_thb'             => 299,
                 'price_annual_thb'      => 2990,    // ≈ 16.7% off
-                'storage_gb'            => 25,
+                'storage_bytes'         => 25 * 1073741824,       // 25 GB
                 'max_concurrent_events' => 3,
                 'commission_pct'        => 5,
                 'max_photos_per_event'  => 1000,
@@ -139,7 +139,7 @@ return new class extends Migration
                 'tagline'               => 'สำหรับช่างภาพมืออาชีพ — ขายดีที่สุดในเว็บ',
                 'price_thb'             => 890,
                 'price_annual_thb'      => 8900,
-                'storage_gb'            => 100,
+                'storage_bytes'         => 100 * 1073741824,      // 100 GB
                 'max_concurrent_events' => 10,
                 'commission_pct'        => 0,
                 'max_photos_per_event'  => 5000,
@@ -180,7 +180,7 @@ return new class extends Migration
                 'tagline'               => 'สำหรับสตูดิโอเล็ก-กลาง — รับงานพร้อมกันไม่จำกัด',
                 'price_thb'             => 2490,
                 'price_annual_thb'      => 24900,
-                'storage_gb'            => 500,
+                'storage_bytes'         => 500 * 1073741824,      // 500 GB
                 'max_concurrent_events' => null,        // unlimited
                 'commission_pct'        => 0,
                 'max_photos_per_event'  => 20000,
@@ -226,7 +226,7 @@ return new class extends Migration
                 'tagline'               => 'สำหรับองค์กร / สตูดิโอใหญ่ — ระบบครบ + การสนับสนุนระดับ enterprise',
                 'price_thb'             => 9990,
                 'price_annual_thb'      => 99900,
-                'storage_gb'            => 2048,
+                'storage_bytes'         => 2048 * 1073741824,     // 2 TB
                 'max_concurrent_events' => null,
                 'commission_pct'        => 0,
                 'max_photos_per_event'  => 100000,

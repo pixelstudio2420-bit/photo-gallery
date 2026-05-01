@@ -31,6 +31,12 @@ class PlanRefreshSeeder extends Seeder
 {
     public function run(): void
     {
+        // The actual DB column is `storage_bytes` (bigint) — `storage_gb`
+        // is just a Model accessor (storage_bytes / 1024^3). Earlier
+        // versions of this seeder wrote to `storage_gb` directly which
+        // Postgres rejected with SQLSTATE 42703 "undefined column".
+        $gb = 1024 * 1024 * 1024;
+
         $plans = [
             // [code, price_thb, price_annual_thb, storage_gb, max_concurrent_events, commission_pct, monthly_ai_credits, sort_order, is_public, tagline]
             ['free',     0,    0,     5,    1,    30, 50,     1, 1, 'เริ่มต้นฟรีตลอดชีพ — สร้างผลงานก่อนตัดสินใจซื้อ'],
@@ -40,13 +46,13 @@ class PlanRefreshSeeder extends Seeder
             ['studio',   9990, 99900, 2048, null, 0,  200000, 5, 1, 'สำหรับองค์กร / สตูดิโอใหญ่ — ระบบครบ + การสนับสนุนระดับ enterprise'],
         ];
 
-        foreach ($plans as [$code, $monthly, $annual, $storage, $maxEvents, $commission, $aiCredits, $sortOrder, $isPublic, $tagline]) {
+        foreach ($plans as [$code, $monthly, $annual, $storageGb, $maxEvents, $commission, $aiCredits, $sortOrder, $isPublic, $tagline]) {
             $affected = DB::table('subscription_plans')
                 ->where('code', $code)
                 ->update([
                     'price_thb'             => $monthly,
                     'price_annual_thb'      => $annual,
-                    'storage_gb'            => $storage,
+                    'storage_bytes'         => $storageGb * $gb,
                     'max_concurrent_events' => $maxEvents,
                     'commission_pct'        => $commission,
                     'monthly_ai_credits'    => $aiCredits,
@@ -62,7 +68,7 @@ class PlanRefreshSeeder extends Seeder
                 $code,
                 $monthly,
                 $annual,
-                $storage,
+                $storageGb,
                 $maxEvents === null ? '∞' : $maxEvents,
                 $aiCredits,
                 $commission,
