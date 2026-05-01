@@ -402,9 +402,20 @@
         </div>
 
         {{-- Category filter chips --}}
+        @php
+            // "All" chip — link back to the profile root WITHOUT the
+            // ?category query param. We can't always use route(...show.slug)
+            // here: when the photographer has no slug (early-stage profile)
+            // UrlGenerator throws "Missing parameter [slug]" and torches
+            // the whole page. Fall back to the legacy numeric URL when
+            // the slug isn't set.
+            $allChipUrl = !empty($profile->slug)
+                ? route('photographers.show.slug', ['slug' => $profile->slug])
+                : route('photographers.show', ['id' => $profile->user_id]);
+        @endphp
         @if($categories->count() > 0)
             <div class="flex flex-wrap gap-2 mb-6">
-                <a href="{{ route('photographers.show.slug', $profile->slug ?? '') }}"
+                <a href="{{ $allChipUrl }}"
                    class="px-3 py-1.5 rounded-full text-sm font-semibold transition
                           {{ !request('category') ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' }}">
                     ทั้งหมด
