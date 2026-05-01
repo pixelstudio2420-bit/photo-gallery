@@ -47,10 +47,36 @@ class PhotographerController extends Controller
             $kw = '%' . $request->search . '%';
             $query->where(function ($w) use ($kw) {
                 $w->where('pp.display_name', 'ilike', $kw)
-                  ->orWhere('u.first_name', 'ilike', $kw)
-                  ->orWhere('u.last_name',  'ilike', $kw)
-                  ->orWhere('pp.bio',       'ilike', $kw);
+                  ->orWhere('pp.headline',   'ilike', $kw)
+                  ->orWhere('u.first_name',  'ilike', $kw)
+                  ->orWhere('u.last_name',   'ilike', $kw)
+                  ->orWhere('pp.bio',        'ilike', $kw);
             });
+        }
+
+        // Specialty filter — single tag against the JSON array column.
+        // Postgres-only: ? operator tests if the text exists as any
+        // top-level array element. Falls back to a LIKE match on the
+        // serialized form for drivers that don't speak JSONB.
+        if ($request->filled('specialty')) {
+            $tag = $request->specialty;
+            try {
+                $query->whereRaw("pp.specialties::jsonb ? ?", [$tag]);
+            } catch (\Throwable) {
+                $query->where('pp.specialties', 'ilike', '%"' . $tag . '"%');
+            }
+        }
+
+        // "Accepts bookings" toggle — show only photographers who
+        // currently flag accepts_bookings=true.
+        if ($request->boolean('accepting')) {
+            $query->where('pp.accepts_bookings', true);
+        }
+
+        // Minimum experience filter (years). Useful for "I want
+        // someone with 5+ years experience for my wedding".
+        if ($request->filled('min_years')) {
+            $query->where('pp.years_experience', '>=', (int) $request->min_years);
         }
 
         // Pull the province row inline so the card can show the
@@ -69,13 +95,20 @@ class PhotographerController extends Controller
             'pp.province_id',
             'pp.headline',
             'pp.accepts_bookings',
+            'pp.created_at',
             'u.first_name',
             'u.last_name',
             'tp.name_th as province_name',
             DB::raw('COALESCE(ec.events_count, 0) as events_count')
-        )
-            ->orderByDesc('events_count')
-            ->orderByDesc('pp.id');
+        );
+
+        // Sort options. URL ?sort=popular|newest|experience.
+        $sort = $request->input('sort', 'popular');
+        match ($sort) {
+            'newest'     => $query->orderByDesc('pp.created_at'),
+            'experience' => $query->orderByDesc('pp.years_experience')->orderByDesc('events_count'),
+            default      => $query->orderByDesc('events_count')->orderByDesc('pp.id'), // popular
+        };
 
         $rows = $query->paginate(24)->withQueryString();
 
@@ -95,6 +128,30 @@ class PhotographerController extends Controller
             return \App\Models\ThaiProvince::orderBy('name_th')->get();
         });
 
+        // Top-N specialty tags across all approved photographers — drives
+        // the filter chip row above the search results. Cached for an hour
+        // since photographers rarely change specialties day-to-day.
+        $topSpecialties = Cache::remember('public.photographer.top_specialties', 3600, function () {
+            $rows = DB::table('photographer_profiles')
+                ->where('status', 'approved')
+                ->whereNotNull('specialties')
+                ->pluck('specialties');
+            $counts = [];
+            foreach ($rows as $raw) {
+                $list = is_array($raw) ? $raw : (json_decode($raw, true) ?: []);
+                foreach ($list as $s) {
+                    $s = trim((string) $s);
+                    if ($s === '') continue;
+                    $counts[$s] = ($counts[$s] ?? 0) + 1;
+                }
+            }
+            arsort($counts);
+            return array_slice(array_keys($counts), 0, 8); // top 8 tags
+        });
+
+        // Total matching count — for the "พบ N ช่างภาพ" header pill.
+        $totalCount = $rows->total();
+
         try {
             app(\App\Services\SeoService::class)
                 ->title('ช่างภาพมืออาชีพ')
@@ -105,7 +162,7 @@ class PhotographerController extends Controller
                 ]);
         } catch (\Throwable) {}
 
-        return view('public.photographers.index', compact('rows', 'provinces'));
+        return view('public.photographers.index', compact('rows', 'provinces', 'topSpecialties', 'totalCount'));
     }
 
     public function show(Request $request, $idOrSlug)
