@@ -32,6 +32,27 @@
     $displayName    = $profile->display_name ?: trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
     $tierBadgeColor = $isPro ? '#f59e0b' : ($isSeller ? '#0ea5e9' : '#64748b');
     $tierBadgeLabel = $isPro ? 'PRO' : ($isSeller ? 'SELLER' : 'CREATOR');
+
+    /**
+     * Resolve the avatar to a full URL. Direct `Storage::disk('r2')->url()`
+     * can throw when the R2 driver hits config issues, an unsupported key
+     * shape, or a presign failure — and a thrown exception inside @section
+     * crashes the whole render with a 500 even though the rest of the
+     * page is fine. Wrap it so any failure degrades to the initials
+     * fallback instead of taking down the page.
+     */
+    $avatarUrl = null;
+    if (!empty($profile->avatar)) {
+        try {
+            $avatarUrl = app(\App\Services\Media\R2MediaService::class)->url($profile->avatar);
+            if (!$avatarUrl) {
+                // R2MediaService logs + returns '' on failure → treat as none.
+                $avatarUrl = null;
+            }
+        } catch (\Throwable) {
+            $avatarUrl = null;
+        }
+    }
 @endphp
 
 {{-- ════════════════════════════════════════════════════════════════
@@ -68,8 +89,8 @@
                 <div class="absolute -inset-2 rounded-full blur-md opacity-70"
                      style="background:linear-gradient(135deg,#6366f1,#a855f7);"></div>
                 <div class="relative w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-white/30 shadow-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-4xl font-extrabold flex items-center justify-center">
-                    @if($profile->avatar)
-                        <img src="{{ \Illuminate\Support\Facades\Storage::disk(config('media.disk', 'r2'))->url($profile->avatar) }}"
+                    @if($avatarUrl)
+                        <img src="{{ $avatarUrl }}"
                              alt="" class="w-full h-full object-cover">
                     @else
                         {{ mb_strtoupper(mb_substr($displayName, 0, 1, 'UTF-8'), 'UTF-8') }}
