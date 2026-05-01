@@ -52,6 +52,15 @@
             </a>
           </li>
           <li>
+            {{-- Photographer search/discovery — links to the public
+                 /photographers index so customers can browse and filter
+                 by province/specialty/experience before booking. --}}
+            <a class="px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('photographers.*') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
+              href="{{ route('photographers.index') }}">
+              <i class="bi bi-camera-fill mr-1"></i>ช่างภาพ
+            </a>
+          </li>
+          <li>
             <a class="px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('blog.*') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
               href="{{ route('blog.index') }}">
               <i class="bi bi-newspaper mr-1"></i>{{ __('nav.blog') }}
@@ -412,6 +421,15 @@
             <a class="block px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('events.*') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
               href="{{ route('events.index') }}">
               <i class="bi bi-grid-3x3-gap mr-1"></i>{{ __('nav.events') }}
+            </a>
+          </li>
+          <li>
+            {{-- Mobile mirror of the desktop "ช่างภาพ" link — same
+                 /photographers index, with active-state highlight when
+                 the user is viewing a photographer page. --}}
+            <a class="block px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('photographers.*') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
+              href="{{ route('photographers.index') }}">
+              <i class="bi bi-camera-fill mr-1"></i>ช่างภาพ
             </a>
           </li>
           <li>
