@@ -64,22 +64,35 @@ class PricingPackageAuditObserver
     }
 
     /**
-     * Persist one audit row. All errors are caught and logged at
-     * warning level — the write must NEVER prevent the underlying
-     * mutation from completing.
+     * Persist one audit row.
+     *
+     * The write is wrapped in a defensive try-block — losing an audit
+     * write must never block a legitimate business action. But during
+     * the rollout (May 2026) we surface failures into the standard
+     * Laravel log channel at ERROR level (not warning) so they appear
+     * in Cloud's log stream and we don't lose them while the system
+     * is still under verification. The try/catch can be tightened to
+     * `warning` later, once the path is proven reliable.
      */
     private function log(PricingPackage $package, string $action, ?array $old, ?array $new): void
     {
         try {
-            $reason = $package->auditReason ?? null;
+            $reason   = $package->auditReason ?? null;
             $roleHint = $package->auditRole ?? $this->guessRole();
+
+            // Sanitize old/new values for the JSON cast. Eloquent's
+            // getOriginal()/getChanges() can include Carbon instances
+            // (cast attributes) or unserializable types in rare cases;
+            // run them through json_encode → json_decode to flatten.
+            $oldClean = $old !== null ? $this->safeJsonEncode($old) : null;
+            $newClean = $new !== null ? $this->safeJsonEncode($new) : null;
 
             PricingPackageLog::create([
                 'package_id'      => $package->id,
                 'event_id'        => $package->event_id,
                 'action'          => $action,
-                'old_values'      => $old,
-                'new_values'      => $new,
+                'old_values'      => $oldClean,
+                'new_values'      => $newClean,
                 'changed_by'      => Auth::id(),
                 'changed_by_role' => $roleHint,
                 'reason'          => $reason,
@@ -87,12 +100,40 @@ class PricingPackageAuditObserver
                 'created_at'      => now(),
             ]);
         } catch (\Throwable $e) {
-            Log::warning('PricingPackageAuditObserver: log write failed', [
-                'package_id' => $package->id,
+            // Use error (not warning) during initial rollout so failures
+            // can't hide in the noise on Cloud's log stream.
+            Log::error('PricingPackageAuditObserver: log write failed', [
+                'package_id' => $package->id ?? null,
                 'action'     => $action,
                 'error'      => $e->getMessage(),
+                'class'      => get_class($e),
+                'file'       => basename($e->getFile()),
+                'line'       => $e->getLine(),
             ]);
         }
+    }
+
+    /**
+     * Round-trip an array through json_encode/json_decode so any
+     * Carbon / object instances become plain string/array primitives.
+     * Without this, the JSON cast on the log column can throw at
+     * INSERT time when it encounters an instance it doesn't know
+     * how to serialize.
+     */
+    private function safeJsonEncode(array $values): array
+    {
+        $json = json_encode($values, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            // json_encode failed (probably circular ref or non-UTF8).
+            // Fall back to per-key string coercion so we still write
+            // SOMETHING useful.
+            $out = [];
+            foreach ($values as $k => $v) {
+                $out[$k] = is_scalar($v) || $v === null ? $v : (string) (is_object($v) ? get_class($v) : gettype($v));
+            }
+            return $out;
+        }
+        return json_decode($json, true) ?: [];
     }
 
     /**
