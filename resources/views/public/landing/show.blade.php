@@ -288,25 +288,24 @@
         @endforeach
       </div>
 
-      {{-- Schema.org FAQPage — Google rewards with rich SERP. --}}
-      <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          @foreach($faqs as $i => $faq)
-            {
-              "@type": "Question",
-              "name": @json($faq['q']),
-              "acceptedAnswer": {
-                "@type": "Answer",
-                "text": @json($faq['a'])
-              }
-            }@if(!$loop->last),@endif
-          @endforeach
-        ]
-      }
-      </script>
+      {{-- Schema.org FAQPage — built in PHP then json_encode'd to avoid
+           Blade interpreting `@context` / `@type` keys as directives,
+           which compiles into a broken view template. --}}
+      @php
+        $faqSchema = [
+          '@context' => 'https://schema.org',
+          '@type'    => 'FAQPage',
+          'mainEntity' => array_map(fn($f) => [
+            '@type' => 'Question',
+            'name'  => $f['q'],
+            'acceptedAnswer' => [
+              '@type' => 'Answer',
+              'text'  => $f['a'],
+            ],
+          ], $faqs),
+        ];
+      @endphp
+      <script type="application/ld+json">{!! json_encode($faqSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) !!}</script>
     </section>
   @endif
 @endif
