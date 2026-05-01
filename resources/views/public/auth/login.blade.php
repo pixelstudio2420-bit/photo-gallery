@@ -73,39 +73,63 @@
   .btn-login:hover{ transform:translateY(-1px); box-shadow:0 14px 30px -6px rgba(99,102,241,.7); }
 
   /* ── LINE primary CTA — emphasised so customers gravitate here.
-        Bigger padding, brand green, soft pulsing glow + arrow nudge
-        on hover. Designed to look like THE button on the page. ── */
+        Brand green, soft pulsing glow + arrow nudge on hover.
+        Wrapper holds the floating "แนะนำ" badge so we can keep
+        overflow:visible there without losing border-radius clipping
+        on the button itself. ── */
+  .btn-line-wrap{
+    position:relative;        /* anchor for the floating badge */
+    /* NO overflow:hidden — the badge sits OUTSIDE the button on
+       purpose; clipping it is what made the badge "missing" before. */
+  }
   .btn-line-primary{
     width:100%;
-    display:flex; align-items:center; justify-content:center; gap:.75rem;
-    padding:1.05rem 1.25rem;
+    display:flex; align-items:center; gap:.75rem;
+    padding:1.05rem 1.1rem;
     background:linear-gradient(135deg,#06C755 0%,#00B043 100%);
     color:#fff; font-weight:800; font-size:1.05rem;
     border-radius:14px; border:none; text-decoration:none;
     box-shadow:0 14px 28px -8px rgba(6,199,85,.55), 0 0 0 0 rgba(6,199,85,.45);
     transition:transform .15s, box-shadow .2s;
-    position:relative; overflow:hidden;
+    position:relative;
     animation:linePulse 2.6s ease-in-out infinite;
+    /* NEVER overflow-hidden here — badge would get clipped. */
   }
   .btn-line-primary:hover{
     transform:translateY(-2px);
     box-shadow:0 22px 40px -10px rgba(6,199,85,.7), 0 0 0 6px rgba(6,199,85,.18);
     animation:none; /* stop pulsing once hovered — feels less anxious */
   }
+  /* Icon + arrow must NOT shrink; only the text span flexes. */
   .btn-line-primary .line-icon{
     width:34px; height:34px; border-radius:9px;
     background:rgba(255,255,255,.18);
     display:inline-flex; align-items:center; justify-content:center;
     font-size:1.4rem; line-height:1;
+    flex-shrink:0;
   }
-  .btn-line-primary .line-arrow{ margin-left:auto; opacity:.85; transition:transform .2s, opacity .2s; }
+  .btn-line-primary .line-text{
+    flex:1 1 auto; min-width:0; text-align:left;
+  }
+  .btn-line-primary .line-text .line-sub{
+    display:block; font-size:.72rem; font-weight:600; opacity:.92;
+    margin-top:.05rem;
+  }
+  .btn-line-primary .line-arrow{ flex-shrink:0; opacity:.85; transition:transform .2s, opacity .2s; }
   .btn-line-primary:hover .line-arrow{ transform:translateX(4px); opacity:1; }
-  .btn-line-primary .line-rec{
-    position:absolute; top:-10px; right:14px;
+
+  /* Recommended badge — anchored to the WRAPPER (overflow:visible)
+     so it never gets clipped no matter what the button does.
+     z-index ensures it floats above the pulsing glow ring. */
+  .btn-line-wrap .line-rec{
+    position:absolute; top:-9px; right:14px; z-index:2;
     background:#fbbf24; color:#78350f; font-weight:800;
     font-size:.65rem; letter-spacing:.04em; text-transform:uppercase;
-    padding:.2rem .55rem; border-radius:999px; box-shadow:0 4px 10px rgba(0,0,0,.18);
+    padding:.2rem .55rem; border-radius:999px;
+    box-shadow:0 4px 10px rgba(0,0,0,.18);
+    pointer-events:none;
   }
+
   .btn-line-primary.is-loading{ opacity:.85; pointer-events:none; animation:none; }
   .btn-line-primary.is-loading::after{
     content:''; width:16px; height:16px; margin-left:8px;
@@ -117,6 +141,15 @@
     50%    { box-shadow:0 14px 28px -8px rgba(6,199,85,.55), 0 0 0 10px rgba(6,199,85,0); }
   }
   @keyframes sbspin{ to{ transform:rotate(360deg); } }
+
+  /* Mobile (≤ 360px): keep the button readable on narrow screens —
+     drop the icon-square padding a little, allow the subtitle to wrap
+     to a 2nd line, hide the right-arrow if space is genuinely tight. */
+  @media (max-width: 380px){
+    .btn-line-primary{ padding:.95rem .9rem; font-size:1rem; }
+    .btn-line-primary .line-icon{ width:30px; height:30px; font-size:1.2rem; }
+    .btn-line-primary .line-text .line-sub{ font-size:.68rem; }
+  }
 
   /* Why-LINE benefit chips — small, green-tinted, sits below the
      primary button to justify the click without being too loud. */
@@ -213,19 +246,27 @@
              ════════════════════════════════════════════════════════════ --}}
         @if($lineEnabled)
           <div class="lanim d1">
-            <a href="{{ $lineUrl }}"
-               class="btn-line-primary"
-               aria-label="เข้าสู่ระบบด้วย LINE"
-               data-provider="line"
-               onclick="this.classList.add('is-loading');">
-              <span class="line-rec">แนะนำ</span>
-              <span class="line-icon"><i class="bi bi-line"></i></span>
-              <span class="text-left leading-tight">
-                <span class="block">เข้าสู่ระบบด้วย LINE</span>
-                <span class="block text-[.72rem] font-medium opacity-90">คลิกเดียว · ไม่ต้องใส่รหัส</span>
-              </span>
-              <i class="bi bi-arrow-right line-arrow"></i>
-            </a>
+            {{-- Wrapper has position:relative + overflow:visible so the
+                 floating "แนะนำ" badge stays painted even when the
+                 button itself gets new transforms / shadows. Keeping
+                 the badge here (NOT inside <a>) is what fixed the
+                 "ปุ่มแสดงไม่ครบ ถูกบัง" report — overflow:hidden
+                 on the button was clipping the badge's top half. --}}
+            <div class="btn-line-wrap">
+              <span class="line-rec" aria-hidden="true">แนะนำ</span>
+              <a href="{{ $lineUrl }}"
+                 class="btn-line-primary"
+                 aria-label="เข้าสู่ระบบด้วย LINE"
+                 data-provider="line"
+                 onclick="this.classList.add('is-loading');">
+                <span class="line-icon"><i class="bi bi-line"></i></span>
+                <span class="line-text leading-tight">
+                  <span class="block">เข้าสู่ระบบด้วย LINE</span>
+                  <span class="line-sub">คลิกเดียว · ไม่ต้องใส่รหัส</span>
+                </span>
+                <i class="bi bi-arrow-right line-arrow"></i>
+              </a>
+            </div>
 
             {{-- Why-LINE benefits — short, punchy, all green-tinted
                  to reinforce the brand association. Acts as the
