@@ -403,7 +403,7 @@ class BundleService
             // face_match: nothing to update (price = 0 placeholder; live
             // computation in calculateFaceBundle() always uses the
             // current per_photo).
-            if ($bundle->bundle_type === self::TYPE_FACE_MATCH) {
+            if ($bundle->bundle_type === PricingPackage::TYPE_FACE_MATCH) {
                 $skipped++;
                 continue;
             }
