@@ -63,6 +63,7 @@ class PSeoService
             SeoPageTemplate::TYPE_COMBO         => $this->generateComboPages($template),
             SeoPageTemplate::TYPE_PHOTOGRAPHER  => $this->generatePhotographerPages($template),
             SeoPageTemplate::TYPE_EVENT_ARCHIVE => $this->generateEventArchive($template),
+            SeoPageTemplate::TYPE_EVENT         => $this->generateEventPages($template),
             default                              => ['created' => 0, 'updated' => 0, 'skipped' => 0],
         };
     }
@@ -256,6 +257,79 @@ class PSeoService
                 'photographer_id' => $row->user_id,
                 'data_count'      => (int) $row->event_count,
             ]);
+
+            $stats[$page->wasRecentlyCreated ? 'created' : 'updated']++;
+        }
+
+        return $stats;
+    }
+
+    /**
+     * Per-event landing pages — one SEO-rich landing per active event.
+     *
+     * URL: /event-{slug}
+     * Distinct from /events/{slug} (the existing detail page) — these
+     * are dedicated marketing landings with custom title/meta/schema
+     * that drive search traffic, then funnel buyers to the actual
+     * event page via a CTA. Hero uses the event's cover_image.
+     *
+     * Skipped when:
+     *   • event has no cover_image (thin without a hero photo)
+     *   • event has < min_data_points photos uploaded
+     */
+    public function generateEventPages(SeoPageTemplate $template): array
+    {
+        $stats = ['created' => 0, 'updated' => 0, 'skipped' => 0];
+
+        $events = \App\Models\Event::query()
+            ->where('status', 'active')
+            ->where('visibility', 'public')
+            ->withCount('photos')
+            ->with([
+                'category:id,name,slug',
+                'photographerProfile:user_id,display_name',
+                'province:id,name_th,name_en',
+            ])
+            ->get();
+
+        foreach ($events as $event) {
+            // Thin-content guard — event needs at least N photos uploaded
+            // to justify a landing page; otherwise the page would have
+            // no gallery content and Google's helpful-content update
+            // would deindex / penalize.
+            $photoCount = (int) ($event->photos_count ?? 0);
+            if ($photoCount < $template->min_data_points) {
+                $stats['skipped']++;
+                continue;
+            }
+
+            $slug = 'event-' . $this->slugify($event->slug ?: ($event->name . '-' . $event->id));
+            $vars = [
+                'event_name'   => $event->name,
+                'event_date'   => $event->shoot_date ? \Carbon\Carbon::parse($event->shoot_date)->format('d/m/Y') : '',
+                'category'     => $this->extractThai(optional($event->category)->name ?? ''),
+                'location'     => optional($event->province)->name_th ?? ($event->location ?? ''),
+                'photographer' => optional($event->photographerProfile)->display_name ?? '',
+                'photo_count'  => $photoCount,
+                'description'  => \Illuminate\Support\Str::limit(strip_tags($event->description ?? ''), 200),
+                'brand'        => config('app.name', 'Loadroop'),
+                'year'         => now()->year,
+            ];
+
+            $page = $this->upsertPage($template, $slug, $vars, [
+                'event_id'    => $event->id,
+                'category_id' => $event->category_id,
+                'province_id' => $event->province_id,
+                'data_count'  => $photoCount,
+            ]);
+
+            // Auto-set hero_image to the event's cover (only on first
+            // generate, never overwrite admin's choice).
+            if ($page->wasRecentlyCreated || empty($page->hero_image)) {
+                if ($event->cover_image) {
+                    $page->update(['hero_image' => $event->cover_image]);
+                }
+            }
 
             $stats[$page->wasRecentlyCreated ? 'created' : 'updated']++;
         }

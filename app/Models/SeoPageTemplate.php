@@ -26,6 +26,7 @@ class SeoPageTemplate extends Model
     public const TYPE_COMBO          = 'combo';
     public const TYPE_PHOTOGRAPHER   = 'photographer';
     public const TYPE_EVENT_ARCHIVE  = 'event_archive';
+    public const TYPE_EVENT          = 'event';
     public const TYPE_CUSTOM         = 'custom';
 
     protected $fillable = [
@@ -55,6 +56,7 @@ class SeoPageTemplate extends Model
             self::TYPE_COMBO          => 'หน้าตามประเภท × พื้นที่ (Combo)',
             self::TYPE_PHOTOGRAPHER   => 'หน้าโปรไฟล์ช่างภาพ',
             self::TYPE_EVENT_ARCHIVE  => 'หน้ารวมอีเวนต์',
+            self::TYPE_EVENT          => 'หน้าต่ออีเวนต์ (ละเอียด)',
             self::TYPE_CUSTOM         => 'หน้าที่สร้างเอง',
         ];
     }

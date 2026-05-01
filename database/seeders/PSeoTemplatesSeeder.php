@@ -75,6 +75,18 @@ class PSeoTemplatesSeeder extends Seeder
                 'schema_type'              => 'CollectionPage',
                 'linking_config'           => json_encode(['include_related' => true, 'max_links' => 12]),
             ],
+            [
+                'type'                     => 'event',
+                'name'                     => 'หน้าต่ออีเวนต์ (per-event landing)',
+                'is_auto_enabled'          => true,
+                'min_data_points'          => 5, // need at least 5 photos to justify a landing
+                'title_pattern'            => '{event_name} {event_date} — รูปงานคุณภาพ {photo_count} รูป | {brand}',
+                'meta_description_pattern' => 'ดูรูป{event_name} ถ่ายโดย{photographer} {photo_count} รูปคุณภาพสูง — ค้นหาตัวเองด้วย AI Face Search ได้ทันที',
+                'h1_pattern'               => '{event_name}',
+                'body_template'            => "ภาพถ่ายจาก{event_name} — {photo_count} รูปคุณภาพสูง ครอบคลุมตลอดงาน\n\n{description}\n\nค้นหารูปของคุณได้ง่ายๆ ด้วย AI Face Search — อัปโหลดรูปเซลฟี่ครั้งเดียว ระบบจะหารูปทั้งหมดของคุณให้",
+                'schema_type'              => 'Event',
+                'linking_config'           => json_encode(['include_related' => true, 'max_links' => 8]),
+            ],
         ];
 
         foreach ($templates as $tpl) {

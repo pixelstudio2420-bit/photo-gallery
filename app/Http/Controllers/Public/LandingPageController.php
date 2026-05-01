@@ -72,10 +72,28 @@ class LandingPageController extends Controller
                 $meta['category_id'] ?? null,
                 $meta['province_id'] ?? null
             ),
-            'photographer' => $this->fetchPhotographerEvents($meta['photographer_id'] ?? null),
+            'photographer'  => $this->fetchPhotographerEvents($meta['photographer_id'] ?? null),
             'event_archive' => $this->fetchAllRecentEvents(),
-            default => collect(),
+            'event'         => $this->fetchEventPhotos($meta['event_id'] ?? null),
+            default         => collect(),
         };
+    }
+
+    /**
+     * For per-event landing pages: load up to 24 photos from the event
+     * itself (instead of related events). The blade template detects
+     * type='event' and renders these as a masonry photo grid with a
+     * link to the full /events/{slug} page.
+     */
+    private function fetchEventPhotos(?int $eventId)
+    {
+        if (!$eventId) return collect();
+        return \App\Models\EventPhoto::where('event_id', $eventId)
+            ->where('status', '!=', 'deleted')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->limit(24)
+            ->get(['id', 'event_id', 'thumbnail_path', 'watermarked_path', 'caption', 'width', 'height']);
     }
 
     /**
