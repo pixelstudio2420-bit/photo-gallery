@@ -224,25 +224,77 @@ class SeoService
      */
     public function eventSchema(array $event): self
     {
-        $schema = [
+        // Accept both Schema.org spelling (`startDate`/`endDate`) and
+        // the legacy keys the public EventController has been passing
+        // (`date`/`end_date`). Stringify Carbon / DateTime instances
+        // so JSON-LD never gets a raw object.
+        $start = $event['startDate'] ?? $event['date']     ?? '';
+        $end   = $event['endDate']   ?? $event['end_date'] ?? '';
+        $start = $start instanceof \DateTimeInterface ? $start->format(\DateTimeInterface::ATOM) : (string) $start;
+        $end   = $end   instanceof \DateTimeInterface ? $end->format(\DateTimeInterface::ATOM)   : (string) $end;
+
+        // Place: prefer the dedicated `venue` (the building) and fall
+        // back to free-text `location` (the area). When both are
+        // present we still use venue as the Place.name — Google
+        // matches both via the embedded PostalAddress below.
+        $venue   = (string) ($event['venue']    ?? '');
+        $address = (string) ($event['location'] ?? '');
+        $place = [
+            '@type' => 'Place',
+            'name'  => $venue !== '' ? $venue : $address,
+        ];
+        if ($address !== '') {
+            $place['address'] = [
+                '@type'           => 'PostalAddress',
+                'addressLocality' => $address,
+                'addressCountry'  => 'TH',
+            ];
+        }
+
+        $schema = array_filter([
             '@context'    => 'https://schema.org',
             '@type'       => 'Event',
             'name'        => $event['name']        ?? '',
             'description' => $event['description'] ?? '',
-            'startDate'   => $event['startDate']   ?? '',
-            'endDate'     => $event['endDate']      ?? ($event['startDate'] ?? ''),
-            'image'       => $event['image']        ?? '',
-            'url'         => $event['url']          ?? '',
-            'location'    => [
-                '@type' => 'Place',
-                'name'  => $event['location'] ?? '',
-            ],
-        ];
+            'startDate'   => $start,
+            'endDate'     => $end ?: null,
+            'image'       => $event['image']       ?? '',
+            'url'         => $event['url']         ?? '',
+            'location'    => $place,
+            // Status / mode — required for Google's Event rich result.
+            // Hard-coded to scheduled + offline since the platform is
+            // for in-person photo events; if/when virtual ones arrive
+            // we'll branch on event_type.
+            'eventStatus'         => 'https://schema.org/EventScheduled',
+            'eventAttendanceMode' => 'https://schema.org/OfflineEventAttendanceMode',
+            'maximumAttendeeCapacity' => !empty($event['expected_attendees'])
+                ? (int) $event['expected_attendees']
+                : null,
+            'keywords' => !empty($event['tags']) && is_array($event['tags'])
+                ? implode(', ', array_slice($event['tags'], 0, 8))
+                : null,
+        ], fn ($v) => $v !== null && $v !== '');
 
-        if (!empty($event['price'])) {
+        // Organizer — explicit organizer column wins; otherwise omit
+        // the field rather than invent one (avoids putting "Loadroop"
+        // as the organizer of every wedding, which would be a lie).
+        $organizerName = (string) ($event['organizer'] ?? '');
+        if ($organizerName !== '') {
+            $organizer = ['@type' => 'Organization', 'name' => $organizerName];
+            if (!empty($event['contact_phone']))  $organizer['telephone'] = $event['contact_phone'];
+            if (!empty($event['contact_email']))  $organizer['email']     = $event['contact_email'];
+            if (!empty($event['website_url']))    $organizer['url']       = $event['website_url'];
+            if (!empty($event['facebook_url']))   $organizer['sameAs']    = [$event['facebook_url']];
+            $schema['organizer'] = $organizer;
+        }
+
+        // Offer — accept either `price` (new spelling) or the legacy
+        // `price_per_photo` key to keep older callers compatible.
+        $price = $event['price'] ?? $event['price_per_photo'] ?? null;
+        if ($price !== null && (float) $price > 0) {
             $schema['offers'] = [
                 '@type'         => 'Offer',
-                'price'         => $event['price'],
+                'price'         => (string) $price,
                 'priceCurrency' => $event['currency']     ?? 'THB',
                 'availability'  => $event['availability'] ?? 'https://schema.org/InStock',
                 'url'           => $event['url']          ?? '',

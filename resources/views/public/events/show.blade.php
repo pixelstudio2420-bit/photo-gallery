@@ -682,10 +682,34 @@
         {{ $event->shoot_date->translatedFormat('j F Y') }}
       </span>
       @endif
+      {{-- Time chip — only render when at least start_time is set.
+           Format: "06:00 – 18:00" or just "06:00" if no end_time. --}}
+      @if($event->start_time)
+      <span style="display:inline-flex;align-items:center;gap:0.4rem;color:rgba(255,255,255,0.55);font-size:0.78rem;background:rgba(255,255,255,0.06);padding:0.3rem 0.75rem;border-radius:999px;border:1px solid rgba(255,255,255,0.06);">
+        <i class="bi bi-clock" style="color:#a5b4fc;"></i>
+        {{ \Illuminate\Support\Str::of($event->start_time)->limit(5, '') }}@if($event->end_time) – {{ \Illuminate\Support\Str::of($event->end_time)->limit(5, '') }} น.@else น.@endif
+      </span>
+      @endif
+      {{-- Venue name when available — separate from `location` so the
+           SERP shows BOTH the building and the city. --}}
+      @if($event->venue_name)
+      <span style="display:inline-flex;align-items:center;gap:0.4rem;color:rgba(255,255,255,0.55);font-size:0.78rem;background:rgba(255,255,255,0.06);padding:0.3rem 0.75rem;border-radius:999px;border:1px solid rgba(255,255,255,0.06);">
+        <i class="bi bi-building" style="color:#a5b4fc;"></i>
+        {{ $event->venue_name }}
+      </span>
+      @endif
       @if($event->location)
       <span style="display:inline-flex;align-items:center;gap:0.4rem;color:rgba(255,255,255,0.55);font-size:0.78rem;background:rgba(255,255,255,0.06);padding:0.3rem 0.75rem;border-radius:999px;border:1px solid rgba(255,255,255,0.06);">
         <i class="bi bi-geo-alt-fill" style="color:#a5b4fc;"></i>
         {{ $event->location }}
+      </span>
+      @endif
+      {{-- Attendees badge — gives the page a credibility cue
+           ("คนร่วมงาน 200+ คน") without crowding the chip row. --}}
+      @if($event->expected_attendees)
+      <span style="display:inline-flex;align-items:center;gap:0.4rem;color:rgba(255,255,255,0.55);font-size:0.78rem;background:rgba(255,255,255,0.06);padding:0.3rem 0.75rem;border-radius:999px;border:1px solid rgba(255,255,255,0.06);">
+        <i class="bi bi-people-fill" style="color:#a5b4fc;"></i>
+        {{ number_format($event->expected_attendees) }}+ คน
       </span>
       @endif
       @if($pgName)
@@ -1044,6 +1068,133 @@
     </button>
   </div>
 </div>
+@endif
+
+{{-- ════════════════════════════════════════════════════════════════
+     Event details card — surfaces the enriched fields photographers
+     fill in on the create/edit form. Shown ONLY when at least one
+     enrichment field is populated, so legacy events without these
+     details don't render an empty card with section headings and
+     no values.
+
+     Layout matches the dark hero above (slate-900 with white text)
+     so the page reads as one continuous block before the gallery
+     toolbar takes over the visual language.
+     ════════════════════════════════════════════════════════════════ --}}
+@php
+    $hasHighlights = is_array($event->highlights) && count($event->highlights) > 0;
+    $hasContact    = $event->contact_phone || $event->contact_email
+                     || $event->website_url || $event->facebook_url;
+    $hasLogistics  = $event->dress_code || $event->parking_info
+                     || $event->organizer || $event->event_type;
+    $showInfoCard  = $hasHighlights || $hasContact || $hasLogistics;
+
+    $eventTypeLabel = null;
+    if ($event->event_type) {
+        $eventTypeLabel = \App\Models\Event::eventTypeOptions()[$event->event_type]
+            ?? $event->event_type;
+    }
+@endphp
+@if($showInfoCard)
+<section class="bg-slate-950 border-b border-white/5" aria-label="ข้อมูลอีเวนต์">
+  <div class="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+
+      {{-- ▌ Highlights — bullet list of selling points ▌ --}}
+      @if($hasHighlights)
+      <div class="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4 md:p-5">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-300 mb-3 flex items-center gap-2">
+          <i class="bi bi-stars"></i> จุดเด่นของงาน
+        </h3>
+        <ul class="space-y-2">
+          @foreach(array_slice($event->highlights, 0, 6) as $highlight)
+            <li class="flex items-start gap-2 text-sm text-white/85">
+              <i class="bi bi-check-circle-fill text-emerald-400 shrink-0 mt-0.5"></i>
+              <span>{{ $highlight }}</span>
+            </li>
+          @endforeach
+        </ul>
+      </div>
+      @endif
+
+      {{-- ▌ Logistics — organizer · type · dress · parking ▌ --}}
+      @if($hasLogistics)
+      <div class="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4 md:p-5">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-300 mb-3 flex items-center gap-2">
+          <i class="bi bi-info-circle"></i> ข้อมูลงาน
+        </h3>
+        <dl class="space-y-2.5 text-sm">
+          @if($eventTypeLabel)
+            <div class="flex items-start gap-2">
+              <dt class="text-white/45 shrink-0 w-24"><i class="bi bi-tag mr-1"></i>ประเภท</dt>
+              <dd class="text-white/85 font-medium">{{ $eventTypeLabel }}</dd>
+            </div>
+          @endif
+          @if($event->organizer)
+            <div class="flex items-start gap-2">
+              <dt class="text-white/45 shrink-0 w-24"><i class="bi bi-megaphone mr-1"></i>ผู้จัดงาน</dt>
+              <dd class="text-white/85">{{ $event->organizer }}</dd>
+            </div>
+          @endif
+          @if($event->dress_code)
+            <div class="flex items-start gap-2">
+              <dt class="text-white/45 shrink-0 w-24"><i class="bi bi-person-vcard mr-1"></i>การแต่งกาย</dt>
+              <dd class="text-white/85">{{ $event->dress_code }}</dd>
+            </div>
+          @endif
+          @if($event->parking_info)
+            <div class="flex items-start gap-2">
+              <dt class="text-white/45 shrink-0 w-24"><i class="bi bi-p-circle mr-1"></i>ที่จอดรถ</dt>
+              <dd class="text-white/85">{{ $event->parking_info }}</dd>
+            </div>
+          @endif
+        </dl>
+      </div>
+      @endif
+
+      {{-- ▌ Contact — phone · email · website · facebook ▌ --}}
+      @if($hasContact)
+      <div class="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4 md:p-5">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-300 mb-3 flex items-center gap-2">
+          <i class="bi bi-telephone"></i> ติดต่อ / ลิงก์
+        </h3>
+        <div class="space-y-2 text-sm">
+          @if($event->contact_phone)
+            <a href="tel:{{ preg_replace('/[^\d+]/', '', $event->contact_phone) }}"
+               class="flex items-center gap-2 text-white/85 hover:text-indigo-300 transition">
+              <i class="bi bi-telephone-fill text-indigo-400"></i>
+              <span>{{ $event->contact_phone }}</span>
+            </a>
+          @endif
+          @if($event->contact_email)
+            <a href="mailto:{{ $event->contact_email }}"
+               class="flex items-center gap-2 text-white/85 hover:text-indigo-300 transition truncate">
+              <i class="bi bi-envelope-fill text-indigo-400 shrink-0"></i>
+              <span class="truncate">{{ $event->contact_email }}</span>
+            </a>
+          @endif
+          @if($event->website_url)
+            <a href="{{ $event->website_url }}" target="_blank" rel="noopener nofollow"
+               class="flex items-center gap-2 text-white/85 hover:text-indigo-300 transition truncate">
+              <i class="bi bi-globe text-indigo-400 shrink-0"></i>
+              <span class="truncate">เว็บไซต์งาน</span>
+              <i class="bi bi-box-arrow-up-right text-xs opacity-60"></i>
+            </a>
+          @endif
+          @if($event->facebook_url)
+            <a href="{{ $event->facebook_url }}" target="_blank" rel="noopener nofollow"
+               class="flex items-center gap-2 text-white/85 hover:text-indigo-300 transition truncate">
+              <i class="bi bi-facebook text-indigo-400 shrink-0"></i>
+              <span class="truncate">Facebook</span>
+              <i class="bi bi-box-arrow-up-right text-xs opacity-60"></i>
+            </a>
+          @endif
+        </div>
+      </div>
+      @endif
+    </div>
+  </div>
+</section>
 @endif
 
 {{-- ============ Gallery Toolbar (sticky) ============ --}}

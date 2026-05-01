@@ -137,6 +137,9 @@
           </p>
         </div>
 
+        {{-- ── Extra event info (collapsible — SEO + customer UX) ── --}}
+        @include('photographer.events._extra_info_card', ['event' => null])
+
         {{-- ── AI features (Face Search) ──────────────────────── --}}
         @include('photographer.events._face_search_card', [
             'checked' => old('face_search_enabled', '1') === '1',

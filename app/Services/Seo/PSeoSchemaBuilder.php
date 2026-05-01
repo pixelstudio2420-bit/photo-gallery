@@ -55,21 +55,61 @@ class PSeoSchemaBuilder
     {
         $listElements = [];
         foreach ($items as $i => $event) {
+            // Compose ISO 8601 startDate / endDate exactly like
+            // Event::startDateIso() — but we hit this path with both
+            // Eloquent models AND raw stdClass rows from DB::table(),
+            // so we duplicate the formatting inline rather than
+            // require the model. Safe even when start_time is null.
+            $shoot = $event->shoot_date ?? null;
+            $isoStart = null;
+            $isoEnd   = null;
+            if ($shoot) {
+                $date  = $shoot instanceof \DateTimeInterface
+                    ? $shoot->format('Y-m-d')
+                    : \Carbon\Carbon::parse($shoot)->toDateString();
+                $start = !empty($event->start_time)
+                    ? substr((string) $event->start_time, 0, 8)
+                    : '00:00:00';
+                $isoStart = "{$date}T{$start}+07:00";
+                if (!empty($event->end_time)) {
+                    $isoEnd = "{$date}T" . substr((string) $event->end_time, 0, 8) . "+07:00";
+                }
+            }
+
+            // Place: prefer venue_name; fall back to free-text location.
+            $place = [
+                '@type' => 'Place',
+                'name'  => $event->venue_name ?: ($event->location ?? '—'),
+            ];
+            if (!empty($event->location)) {
+                $place['address'] = [
+                    '@type'           => 'PostalAddress',
+                    'addressLocality' => (string) $event->location,
+                    'addressCountry'  => 'TH',
+                ];
+            }
+
             $listElements[] = [
                 '@type'    => 'ListItem',
                 'position' => $i + 1,
-                'item'     => [
+                'item'     => array_filter([
                     '@type'       => 'Event',
                     'name'        => $event->name,
-                    'startDate'   => optional($event->shoot_date)->toIso8601String(),
+                    'startDate'   => $isoStart ?: optional($shoot)->toIso8601String(),
+                    'endDate'     => $isoEnd,
                     'eventStatus' => 'https://schema.org/EventScheduled',
+                    'eventAttendanceMode' => 'https://schema.org/OfflineEventAttendanceMode',
                     'url'         => url('/events/' . ($event->slug ?: $event->id)),
-                    'location'    => [
-                        '@type' => 'Place',
-                        'name'  => $event->location ?? '—',
-                    ],
+                    'location'    => $place,
                     'image'       => $event->cover_image ? url($event->cover_image) : null,
-                ],
+                    'organizer'   => !empty($event->organizer) ? [
+                        '@type' => 'Organization',
+                        'name'  => $event->organizer,
+                    ] : null,
+                    'maximumAttendeeCapacity' => !empty($event->expected_attendees)
+                        ? (int) $event->expected_attendees
+                        : null,
+                ]),
             ];
         }
 

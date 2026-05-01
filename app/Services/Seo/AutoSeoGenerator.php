@@ -168,10 +168,21 @@ class AutoSeoGenerator
         $key = is_object($param) ? $param->getKey() : (string) $param;
 
         return Cache::remember("seo_auto:event:{$key}", 600, function () use ($key) {
+            // Pull every column the Schema.org Event payload could
+            // populate — start/end times, venue, organizer, attendees,
+            // contact, links — so the generator below can emit the
+            // richest JSON-LD without re-querying.
             $event = DB::table('event_events')
                 ->where('slug', $key)
                 ->orWhere('id', is_numeric($key) ? (int) $key : 0)
-                ->first(['id', 'name', 'slug', 'shoot_date', 'location', 'cover_image', 'photographer_id']);
+                ->first([
+                    'id', 'name', 'slug', 'shoot_date', 'location', 'cover_image',
+                    'photographer_id',
+                    'start_time', 'end_time',
+                    'venue_name', 'organizer', 'event_type', 'expected_attendees',
+                    'highlights', 'tags',
+                    'contact_phone', 'contact_email', 'website_url', 'facebook_url',
+                ]);
             if (!$event) return [];
 
             // Photographer name lookup — fallback to photographer_code.
@@ -186,6 +197,23 @@ class AutoSeoGenerator
                 ->whereNull('deleted_at')
                 ->count();
 
+            // Build ISO 8601 dates here once. Mirrors Event::startDateIso()
+            // exactly (same +07:00 tag, same default 00:00:00) — kept
+            // inline because we're reading from DB::table not Eloquent.
+            $isoStart = null;
+            $isoEnd   = null;
+            if ($event->shoot_date) {
+                $date  = \Carbon\Carbon::parse($event->shoot_date)->toDateString();
+                $start = $event->start_time ? substr((string) $event->start_time, 0, 8) : '00:00:00';
+                $isoStart = "{$date}T{$start}+07:00";
+                if ($event->end_time) {
+                    $isoEnd = "{$date}T" . substr((string) $event->end_time, 0, 8) . "+07:00";
+                }
+            }
+
+            $highlights = is_string($event->highlights) ? json_decode($event->highlights, true) : ($event->highlights ?? null);
+            $tags       = is_string($event->tags)       ? json_decode($event->tags, true)       : ($event->tags ?? null);
+
             return [
                 'event_name'   => (string) $event->name,
                 'event_date'   => $event->shoot_date ? \Carbon\Carbon::parse($event->shoot_date)->translatedFormat('j M Y') : '',
@@ -194,6 +222,23 @@ class AutoSeoGenerator
                 'photographer' => $photog?->display_name ?: ($photog?->photographer_code ?? ''),
                 '_event_id'    => $event->id,
                 '_cover'       => $event->cover_image,
+                // Enriched fields (2026-05-01) — used by the
+                // structured-data builder below + ev-specific keyword
+                // augmentation. Empty strings/arrays when missing
+                // so :placeholder substitution in seo_templates.php
+                // never leaks raw `:venue_name` to the user.
+                'venue_name'         => (string) ($event->venue_name ?? ''),
+                'organizer'          => (string) ($event->organizer ?? ''),
+                'event_type'         => (string) ($event->event_type ?? ''),
+                'expected_attendees' => (int) ($event->expected_attendees ?? 0),
+                'event_tags'         => is_array($tags) ? implode(', ', array_slice($tags, 0, 8)) : '',
+                '_iso_start'         => $isoStart,
+                '_iso_end'           => $isoEnd,
+                '_highlights'        => is_array($highlights) ? array_values(array_slice($highlights, 0, 4)) : [],
+                '_contact_phone'     => (string) ($event->contact_phone ?? ''),
+                '_contact_email'     => (string) ($event->contact_email ?? ''),
+                '_website_url'       => (string) ($event->website_url ?? ''),
+                '_facebook_url'      => (string) ($event->facebook_url ?? ''),
             ];
         });
     }
@@ -311,22 +356,41 @@ class AutoSeoGenerator
 
         return match ($routeName) {
 
-            'events.show' => empty($ctx['_event_id']) ? [] : [[
+            'events.show' => empty($ctx['_event_id']) ? [] : [array_filter([
                 '@context'    => 'https://schema.org',
                 '@type'       => 'Event',
-                'name'        => $ctx['event_name']   ?? '',
-                'description' => $ctx['photographer'] ? "ถ่ายโดย {$ctx['photographer']}" : '',
-                'startDate'   => $ctx['event_date']   ?? '',
-                'location'    => empty($ctx['location']) ? null : [
-                    '@type' => 'Place',
-                    'name'  => $ctx['location'],
-                ],
+                'name'        => $ctx['event_name'] ?? '',
+                'description' => $this->eventDescription($ctx),
+                // Always prefer the ISO 8601 timestamp — Google's Event
+                // rich result requires it. Falls back to the human-readable
+                // string only when the row predates the time columns.
+                'startDate'   => $ctx['_iso_start'] ?: ($ctx['event_date'] ?? ''),
+                'endDate'     => $ctx['_iso_end']   ?: null,
+                'eventStatus' => 'https://schema.org/EventScheduled',
+                'eventAttendanceMode' => 'https://schema.org/OfflineEventAttendanceMode',
+                // Place schema — combine venue (the building) + location
+                // (the area) so the SERP shows both in the rich card.
+                'location'    => $this->eventPlace($ctx),
                 'image'       => $ctx['_cover'] ?? null,
+                'maximumAttendeeCapacity' => ($ctx['expected_attendees'] ?? 0) > 0
+                    ? (int) $ctx['expected_attendees']
+                    : null,
+                'keywords'    => $ctx['event_tags'] ?: null,
+                // Organizer — uses the explicit `organizer` column when
+                // set, otherwise falls back to the photographer name (a
+                // freelance photographer often IS the organizer when the
+                // event is their own portfolio shoot).
                 'organizer'   => [
-                    '@type' => 'Organization',
-                    'name'  => $brand,
+                    '@type'    => 'Organization',
+                    'name'     => $ctx['organizer'] ?: ($ctx['photographer'] ?: $brand),
+                    'telephone'=> $ctx['_contact_phone'] ?: null,
+                    'email'    => $ctx['_contact_email'] ?: null,
+                    'url'      => $ctx['_website_url']   ?: null,
+                    'sameAs'   => $ctx['_facebook_url']
+                        ? [$ctx['_facebook_url']]
+                        : null,
                 ],
-            ]],
+            ])],
 
             'photographers.show' => empty($ctx['photographer_name']) ? [] : [[
                 '@context' => 'https://schema.org',
@@ -385,5 +449,64 @@ class AutoSeoGenerator
 
             default => [],
         };
+    }
+
+    /* ─────────────── Event JSON-LD helpers (2026-05-01) ───────────────
+     * Pulled out of buildStructuredData so the events.show match arm
+     * stays readable. Each helper returns the exact shape Schema.org
+     * expects for the corresponding subfield, with empty/null values
+     * stripped — array_filter() at the call site removes any null
+     * keys before the payload is encoded.
+     * ──────────────────────────────────────────────────────────────── */
+
+    /**
+     * Compose Event.description.
+     * Priority order:
+     *   1. First 1-2 highlights joined with " · " — most marketable.
+     *   2. "ถ่ายโดย {photographer}" — universal fallback.
+     *   3. Empty string when neither is available.
+     */
+    private function eventDescription(array $ctx): string
+    {
+        $highlights = $ctx['_highlights'] ?? [];
+        if (is_array($highlights) && count($highlights) > 0) {
+            $head = implode(' · ', array_slice($highlights, 0, 2));
+            if ($ctx['photographer'] ?? '') {
+                return "{$head} · ถ่ายโดย {$ctx['photographer']}";
+            }
+            return $head;
+        }
+        return ($ctx['photographer'] ?? '') ? "ถ่ายโดย {$ctx['photographer']}" : '';
+    }
+
+    /**
+     * Compose Event.location as Schema.org Place. Returns null when
+     * we have neither venue nor address — Google rejects Event rich
+     * results without a location, so dropping the key entirely is
+     * safer than emitting an empty Place stub.
+     */
+    private function eventPlace(array $ctx): ?array
+    {
+        $venue   = $ctx['venue_name'] ?? '';
+        $address = $ctx['location']   ?? '';
+        if ($venue === '' && $address === '') return null;
+
+        $place = [
+            '@type' => 'Place',
+            'name'  => $venue !== '' ? $venue : $address,
+        ];
+        if ($address !== '') {
+            // Use PostalAddress for the addressLocality so Google
+            // treats the city as a real location anchor (vs. a
+            // free-text name field). addressCountry is hardcoded to
+            // TH — the platform is Thailand-only and Google penalises
+            // generic countries on local rich results.
+            $place['address'] = [
+                '@type'           => 'PostalAddress',
+                'addressLocality' => $address,
+                'addressCountry'  => 'TH',
+            ];
+        }
+        return $place;
     }
 }

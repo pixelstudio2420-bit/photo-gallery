@@ -18,6 +18,18 @@ class Event extends Model
         'originals_purged_at','is_portfolio',
         // Face-search toggle (PDPA — admin can disable per event)
         'face_search_enabled',
+        // Time window
+        'start_time','end_time',
+        // Venue / organizer / categorization
+        'venue_name','organizer','event_type','expected_attendees',
+        // Marketing JSON arrays
+        'highlights','tags',
+        // Contact
+        'contact_phone','contact_email',
+        // Links
+        'website_url','facebook_url',
+        // Logistics
+        'dress_code','parking_info',
     ];
     protected $hidden = ['event_password'];
 
@@ -83,7 +95,62 @@ class Event extends Model
         'originals_purged_at'   => 'datetime',
         'is_portfolio'          => 'boolean',
         'face_search_enabled'   => 'boolean',
+        // Enriched fields (2026-05-01)
+        'expected_attendees'    => 'integer',
+        'highlights'            => 'array',
+        'tags'                  => 'array',
+        // start_time / end_time intentionally NOT cast — Postgres
+        // returns "HH:MM:SS" strings which Blade `{{ }}` renders
+        // fine; casting to datetime would invent a date and break
+        // schema.org Event.startDate ISO output we build later.
     ];
+
+    /**
+     * Compose Schema.org Event.startDate / endDate (ISO 8601) from
+     * the date + time columns. Returns null if shoot_date is missing.
+     * Used by both AutoSeoGenerator and PSeoSchemaBuilder so the two
+     * can never drift on date formatting.
+     */
+    public function startDateIso(): ?string
+    {
+        if (!$this->shoot_date) return null;
+        $date = $this->shoot_date->toDateString(); // YYYY-MM-DD
+        $time = $this->start_time ? substr((string) $this->start_time, 0, 8) : '00:00:00';
+        // Tag with +07:00 (Asia/Bangkok) — Google's Event rich result
+        // requires a timezone offset to show the local time correctly.
+        return "{$date}T{$time}+07:00";
+    }
+
+    public function endDateIso(): ?string
+    {
+        if (!$this->shoot_date || !$this->end_time) return null;
+        $date = $this->shoot_date->toDateString();
+        $time = substr((string) $this->end_time, 0, 8);
+        return "{$date}T{$time}+07:00";
+    }
+
+    /**
+     * Canonical event-type list used by the create/edit datalist and
+     * surfaced as Schema.org Event.@type indirectly (via name/keywords).
+     * Adding a value here automatically lights up admin autocomplete +
+     * pSEO event_archive landings without further code changes.
+     */
+    public static function eventTypeOptions(): array
+    {
+        return [
+            'wedding'    => 'งานแต่งงาน',
+            'graduation' => 'รับปริญญา',
+            'running'    => 'งานวิ่ง / มาราธอน',
+            'concert'    => 'คอนเสิร์ต',
+            'corporate'  => 'งานบริษัท / สัมมนา',
+            'prewedding' => 'Pre-wedding',
+            'portrait'   => 'พอร์ตเทรต',
+            'festival'   => 'เทศกาล / งานวัฒนธรรม',
+            'birthday'   => 'วันเกิด / ปาร์ตี้',
+            'sport'      => 'งานกีฬาอื่นๆ',
+            'other'      => 'อื่นๆ',
+        ];
+    }
 
     /**
      * Cascade-delete every file an event owns the moment the row goes away.

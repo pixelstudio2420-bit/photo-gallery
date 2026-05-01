@@ -381,6 +381,23 @@ class PSeoService
             }
 
             $slug = 'event-' . $this->slugify($event->slug ?: ($event->name . '-' . $event->id));
+
+            // Highlights — short selling points that often beat
+            // description for SERP click-through. Drop into a
+            // " · "-joined string the template can use as :highlights
+            // anywhere it likes (typically meta description tail).
+            $highlights = is_array($event->highlights)
+                ? array_slice($event->highlights, 0, 3)
+                : [];
+            $highlightsLine = implode(' · ', $highlights);
+
+            // Tag line — feeds the :keywords placeholder so the meta
+            // keywords tag (and our internal full-text index) gets
+            // free signal from photographer-curated tags.
+            $tagsLine = is_array($event->tags)
+                ? implode(', ', array_slice($event->tags, 0, 8))
+                : '';
+
             $vars = [
                 'event_name'   => $event->name,
                 'event_date'   => $event->shoot_date ? \Carbon\Carbon::parse($event->shoot_date)->format('d/m/Y') : '',
@@ -391,6 +408,16 @@ class PSeoService
                 'description'  => \Illuminate\Support\Str::limit(strip_tags($event->description ?? ''), 200),
                 'brand'        => config('app.name', 'Loadroop'),
                 'year'         => now()->year,
+                // Enriched fields (2026-05-01) — available to admin-
+                // editable templates as :placeholder tokens.
+                'venue'        => (string) ($event->venue_name ?? ''),
+                'organizer'    => (string) ($event->organizer ?? ''),
+                'event_type'   => (string) ($event->event_type ?? ''),
+                'attendees'    => (int) ($event->expected_attendees ?? 0),
+                'highlights'   => $highlightsLine,
+                'tags'         => $tagsLine,
+                'start_time'   => $event->start_time ? substr((string) $event->start_time, 0, 5) : '',
+                'end_time'     => $event->end_time   ? substr((string) $event->end_time, 0, 5)   : '',
             ];
 
             $page = $this->upsertPage($template, $slug, $vars, [

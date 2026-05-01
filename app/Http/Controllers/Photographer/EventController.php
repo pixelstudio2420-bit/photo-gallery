@@ -180,7 +180,7 @@ class EventController extends Controller
         $minPrice  = max(100.0, (float) AppSetting::get('min_event_price', 100));
         $allowFree = (bool) AppSetting::get('allow_free_events', true);
 
-        $validated = $request->validate([
+        $validated = $request->validate(array_merge([
             'name'            => 'required|string|max:255',
             'description'     => 'nullable|string',
             'location'        => 'nullable|string|max:255',
@@ -198,7 +198,7 @@ class EventController extends Controller
             // switch on the photographer's own form so they can
             // opt out per-event without an admin round-trip.
             'face_search_enabled' => 'nullable|boolean',
-        ], [
+        ], $this->enrichmentValidationRules()), [
             'price_per_photo.min' => "ราคาต่อภาพต้องไม่ต่ำกว่า {$minPrice} บาท",
         ]);
 
@@ -249,7 +249,7 @@ class EventController extends Controller
             }
         }
 
-        $event = Event::create([
+        $event = Event::create(array_merge([
             'photographer_id'   => Auth::id(),
             'category_id'       => $validated['category_id'] ?? null,
             'name'              => $validated['name'],
@@ -270,7 +270,7 @@ class EventController extends Controller
             // untick the form checkbox to disable the customer-side
             // face-search button + API for this specific event.
             'face_search_enabled' => $request->boolean('face_search_enabled', true),
-        ]);
+        ], $this->extractEnrichmentPayload($request, $validated)));
 
         if ($coverFile) {
             try {
@@ -323,7 +323,7 @@ class EventController extends Controller
         $minPrice  = max(100.0, (float) AppSetting::get('min_event_price', 100));
         $allowFree = (bool) AppSetting::get('allow_free_events', true);
 
-        $validated = $request->validate([
+        $validated = $request->validate(array_merge([
             'name'            => 'required|string|max:255',
             'description'     => 'nullable|string',
             'location'        => 'nullable|string|max:255',
@@ -341,7 +341,7 @@ class EventController extends Controller
             // switch on the photographer's own form so they can
             // opt out per-event without an admin round-trip.
             'face_search_enabled' => 'nullable|boolean',
-        ], [
+        ], $this->enrichmentValidationRules()), [
             'price_per_photo.min' => "ราคาต่อภาพต้องไม่ต่ำกว่า {$minPrice} บาท",
         ]);
 
@@ -413,7 +413,7 @@ class EventController extends Controller
             }
         }
 
-        $event->update([
+        $event->update(array_merge([
             'category_id'       => $validated['category_id'] ?? null,
             'name'              => $validated['name'],
             'description'       => $validated['description'] ?? null,
@@ -433,7 +433,7 @@ class EventController extends Controller
             'face_search_enabled' => $request->has('face_search_enabled')
                 ? $request->boolean('face_search_enabled')
                 : $event->face_search_enabled,
-        ]);
+        ], $this->extractEnrichmentPayload($request, $validated)));
 
         $redirect = redirect()->route('photographer.events.index')->with('success', 'อัพเดทสำเร็จ');
         if (!empty($tierDecision['nudge'])) {
@@ -718,5 +718,97 @@ class EventController extends Controller
         if ((int) $event->photographer_id !== (int) Auth::id()) {
             abort(403, 'คุณไม่มีสิทธิ์จัดการอีเวนต์นี้');
         }
+    }
+
+    /* ─────────────────── Enriched fields (2026-05-01) ───────────────────
+     * The Extra-Info card on the create/edit forms posts a dozen
+     * optional fields driving Schema.org Event JSON-LD + the public
+     * event page sections. Centralising the rules + the array→DB
+     * shaping here keeps store() / update() readable and ensures the
+     * two never diverge.
+     * ─────────────────────────────────────────────────────────────── */
+
+    /**
+     * Validation rules for the enrichment fields. Returned as a plain
+     * array so callers `array_merge` it into their main rule set.
+     *
+     * Two text fields (highlights_text / tags_text) are accepted as
+     * raw form input — the array shape stored in DB is computed by
+     * extractEnrichmentPayload() since arrays from textarea/csv don't
+     * fit cleanly into a single validation rule.
+     */
+    private function enrichmentValidationRules(): array
+    {
+        return [
+            'start_time'         => 'nullable|date_format:H:i',
+            'end_time'           => 'nullable|date_format:H:i|after_or_equal:start_time',
+            'venue_name'         => 'nullable|string|max:200',
+            'organizer'          => 'nullable|string|max:200',
+            'event_type'         => 'nullable|string|max:50|in:'
+                . implode(',', array_keys(\App\Models\Event::eventTypeOptions())),
+            'expected_attendees' => 'nullable|integer|min:0|max:1000000',
+            'highlights_text'    => 'nullable|string|max:2000',
+            'tags_text'          => 'nullable|string|max:1000',
+            'contact_phone'      => 'nullable|string|max:30',
+            'contact_email'      => 'nullable|email|max:150',
+            'website_url'        => 'nullable|url|max:500',
+            'facebook_url'       => 'nullable|url|max:500',
+            'dress_code'         => 'nullable|string|max:200',
+            'parking_info'       => 'nullable|string|max:500',
+        ];
+    }
+
+    /**
+     * Shape the enriched fields into the array passed to
+     * Event::create/$event->update.
+     *
+     *   - text fields → trimmed strings (or null when blank)
+     *   - highlights_text → array of non-empty trimmed lines
+     *   - tags_text → array of non-empty trimmed comma-separated
+     *     values, lowercased + de-duplicated for consistent storage
+     *
+     * Both array fields are returned as PHP arrays — the model casts
+     * them to JSON on the way to Postgres.
+     */
+    private function extractEnrichmentPayload(Request $request, array $validated): array
+    {
+        $clean = function (?string $v): ?string {
+            $v = trim((string) $v);
+            return $v === '' ? null : $v;
+        };
+
+        // Highlights — split textarea on newlines, drop blanks.
+        $highlightsRaw = (string) ($validated['highlights_text'] ?? '');
+        $highlights = collect(preg_split('/\r?\n/', $highlightsRaw))
+            ->map(fn ($s) => trim((string) $s))
+            ->filter(fn ($s) => $s !== '')
+            ->values()
+            ->all();
+
+        // Tags — split CSV, normalize lower-case, dedupe, drop blanks.
+        $tagsRaw = (string) ($validated['tags_text'] ?? '');
+        $tags = collect(explode(',', $tagsRaw))
+            ->map(fn ($s) => mb_strtolower(trim((string) $s)))
+            ->filter(fn ($s) => $s !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        return [
+            'start_time'         => $clean($validated['start_time'] ?? null),
+            'end_time'           => $clean($validated['end_time'] ?? null),
+            'venue_name'         => $clean($validated['venue_name'] ?? null),
+            'organizer'          => $clean($validated['organizer'] ?? null),
+            'event_type'         => $clean($validated['event_type'] ?? null),
+            'expected_attendees' => $validated['expected_attendees'] ?? null,
+            'highlights'         => empty($highlights) ? null : $highlights,
+            'tags'               => empty($tags) ? null : $tags,
+            'contact_phone'      => $clean($validated['contact_phone'] ?? null),
+            'contact_email'      => $clean($validated['contact_email'] ?? null),
+            'website_url'        => $clean($validated['website_url'] ?? null),
+            'facebook_url'       => $clean($validated['facebook_url'] ?? null),
+            'dress_code'         => $clean($validated['dress_code'] ?? null),
+            'parking_info'       => $clean($validated['parking_info'] ?? null),
+        ];
     }
 }

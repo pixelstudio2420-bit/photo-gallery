@@ -251,11 +251,31 @@ class EventController extends Controller
         ->eventSchema([
             'name' => $event->name,
             'description' => $event->description ?? '',
-            'date' => $event->shoot_date ?? $event->created_at,
-            'location' => $event->location ?? '',
-            'image' => $event->cover_image ? asset('storage/' . $event->cover_image) : '',
-            'url' => route('events.show', $event->slug ?: $event->id),
+            // ISO 8601 with Asia/Bangkok offset — Google's Event rich
+            // result requires a tz-tagged start; the Event model
+            // builds it from shoot_date + start_time (or 00:00:00 when
+            // no time was filled in). Falls back to the legacy
+            // shoot_date / created_at chain when the model returns null.
+            'date'        => $event->startDateIso() ?? ($event->shoot_date ?? $event->created_at),
+            'end_date'    => $event->endDateIso(),
+            'location'    => $event->location ?? '',
+            'venue'       => $event->venue_name ?? '',
+            'image'       => $event->cover_image ? asset('storage/' . $event->cover_image) : '',
+            'url'         => route('events.show', $event->slug ?: $event->id),
             'price_per_photo' => $event->price_per_photo ?? 0,
+            // Enriched fields (2026-05-01) — feed straight into the
+            // SchemaService Event payload so eventStatus, organizer,
+            // attendees, and contact links land in JSON-LD without
+            // every controller having to build them by hand.
+            'organizer'         => $event->organizer ?? '',
+            'event_type'        => $event->event_type ?? '',
+            'expected_attendees'=> (int) ($event->expected_attendees ?? 0),
+            'highlights'        => is_array($event->highlights) ? $event->highlights : [],
+            'tags'              => is_array($event->tags) ? $event->tags : [],
+            'contact_phone'     => $event->contact_phone ?? '',
+            'contact_email'     => $event->contact_email ?? '',
+            'website_url'       => $event->website_url ?? '',
+            'facebook_url'      => $event->facebook_url ?? '',
         ])
         ->setBreadcrumbs([
             ['name' => 'หน้าแรก', 'url' => url('/')],
