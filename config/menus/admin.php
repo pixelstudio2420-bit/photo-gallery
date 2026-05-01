@@ -163,6 +163,10 @@ return [
                 'children' => [
                     ['id' => 'pricing', 'label' => 'ตั้งราคารูปภาพ', 'icon' => 'bi-cash-coin', 'route' => 'admin.pricing.index', 'permission' => 'pricing'],
                     ['id' => 'packages', 'label' => 'แพ็คเกจ', 'icon' => 'bi-box', 'route' => 'admin.packages.index', 'permission' => 'pricing'],
+                    // Anti-fraud audit log — every CRUD on pricing_packages
+                    // is recorded with actor + IP + diff. Read-only by
+                    // design (controller exposes no mutating actions).
+                    ['id' => 'packages_audit', 'label' => 'Pricing Audit Log', 'icon' => 'bi-shield-check', 'route' => 'admin.packages.audit', 'permission' => 'pricing'],
                 ],
             ],
             [
