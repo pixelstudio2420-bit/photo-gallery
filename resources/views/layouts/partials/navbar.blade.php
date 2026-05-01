@@ -464,6 +464,50 @@
         </div>
         @endif
 
+        {{-- ──────────────────────────────────────────────────────
+             Mobile theme toggle + photographer-quick-jump strip.
+
+             A `.theme-toggle` button is auto-bound to toggleTheme()
+             by /js/darkmode.js (querySelectorAll('.theme-toggle')
+             on DOMContentLoaded), and the same JS swaps the
+             bi-moon-fill / bi-sun-fill icon based on the current
+             theme. So we render a single button here — no JS
+             plumbing needed.
+
+             The photographer-dashboard quick-link only renders
+             when the user is signed in AND has an APPROVED
+             photographer profile (matches the desktop dropdown's
+             gate at line 319). Pending or non-photographers
+             don't see it — it would 403 anyway.
+             ────────────────────────────────────────────────────── --}}
+        @php
+          // Reuse the same flags the desktop dropdown computes so
+          // mobile + desktop never disagree about who's a photographer.
+          // Defined here too because the desktop block (which sets
+          // these on line 266) lives outside the mobile <div>.
+          $_mobileIsPhotographer  = auth()->check() && auth()->user()->photographerProfile !== null;
+          $_mobileApprovedPhotog  = $_mobileIsPhotographer && auth()->user()->photographerProfile->status === 'approved';
+        @endphp
+
+        <div class="mt-3 px-3 border-t border-white/10 pt-3 flex items-center gap-2 flex-wrap">
+          {{-- Theme toggle — picks up auto-binding from darkmode.js --}}
+          <button type="button"
+                  class="theme-toggle inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white/80 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition"
+                  title="สลับโหมดกลางวัน/กลางคืน">
+            <i class="bi bi-moon-fill"></i>
+            <span>โหมดกลางคืน</span>
+          </button>
+
+          {{-- Photographer dashboard shortcut (approved only) --}}
+          @if($_mobileApprovedPhotog)
+            <a href="{{ route('photographer.dashboard') }}"
+               class="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 shadow shadow-indigo-500/25 transition">
+              <i class="bi bi-speedometer2"></i>
+              <span>แดชบอร์ดช่างภาพ</span>
+            </a>
+          @endif
+        </div>
+
         <div class="border-t border-white/10 mt-3 pt-3">
           @auth
             <div class="flex items-center gap-2 px-3 py-2">
@@ -474,6 +518,23 @@
               <span class="text-white text-sm font-medium">{{ Auth::user()->first_name }} {{ Auth::user()->last_name }}</span>
             </div>
             <ul class="space-y-1 mt-2">
+              {{-- Inline photographer links — surface the most-used
+                   photographer screens straight in the mobile menu so
+                   approved photographers don't have to bounce through
+                   the dashboard to reach Events / Earnings. --}}
+              @if($_mobileApprovedPhotog)
+                <li>
+                  <a class="block px-3 py-2 text-white/70 hover:text-white text-sm transition" href="{{ route('photographer.events.index') }}">
+                    <i class="bi bi-calendar-event mr-2"></i>จัดการอีเวนต์
+                  </a>
+                </li>
+                <li>
+                  <a class="block px-3 py-2 text-white/70 hover:text-white text-sm transition" href="{{ route('photographer.earnings') }}">
+                    <i class="bi bi-wallet2 mr-2"></i>รายได้ของฉัน
+                  </a>
+                </li>
+                <li class="border-t border-white/10 my-1"></li>
+              @endif
               <li>
                 <a class="block px-3 py-2 text-white/70 hover:text-white text-sm transition" href="{{ route('profile') }}">
                   <i class="bi bi-grid mr-2"></i>{{ __('nav.my_account') }}
