@@ -103,15 +103,34 @@ class ThaiProvincesSeeder extends Seeder
             ['name_th' => 'นราธิวาส',          'name_en' => 'Narathiwat',          'group' => 'southern'],
         ];
 
-        foreach ($provinces as $p) {
+        // The thai_provinces.id column is NOT auto-incrementing on this
+        // schema — we have to assign IDs explicitly. Use 1-77 in array
+        // order which matches the canonical Department of Provincial
+        // Administration codes for the provinces we list. After the
+        // seeder finishes, an explicit setval() resets the Postgres
+        // sequence so future inserts (if any new provinces ever get
+        // added) start from 78+ rather than colliding with seeded IDs.
+        foreach ($provinces as $i => $p) {
             DB::table('thai_provinces')->updateOrInsert(
                 ['name_en' => $p['name_en']],
                 [
+                    'id'              => $i + 1,
                     'name_th'         => $p['name_th'],
                     'name_en'         => $p['name_en'],
                     'geography_group' => $p['group'],
                 ]
             );
+        }
+
+        // Bump the auto-increment sequence to MAX(id) so any future
+        // INSERT without an explicit id picks up from 78. Postgres-only
+        // — the table doesn't ship to MySQL on this app, but wrap in
+        // try/catch in case someone ports it.
+        try {
+            DB::statement("SELECT setval(pg_get_serial_sequence('thai_provinces', 'id'), (SELECT COALESCE(MAX(id), 1) FROM thai_provinces))");
+        } catch (\Throwable) {
+            // Sequence reset is a nice-to-have; if it fails (non-Postgres
+            // driver, missing perm) the seeder data is still correct.
         }
 
         $this->command?->info('Seeded ' . count($provinces) . ' Thai provinces');
