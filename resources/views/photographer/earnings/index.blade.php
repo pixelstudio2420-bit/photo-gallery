@@ -204,6 +204,178 @@
   </div>
 </div>
 
+{{-- ════════════════════════════════════════════════════════════════
+     Payout schedule card — answers the #1 photographer question:
+     "เงินจะเข้าวันไหน?"
+
+     Pulls from EarningsController::buildPayoutInfo() which reads the
+     admin AppSettings via PayoutEngine::loadConfig() — single source
+     of truth, so changing the schedule in /admin/payouts/settings
+     reflects here on the next page load.
+
+     Three states:
+       1. enabled + has PromptPay  → green card with next date + progress
+       2. enabled + no PromptPay   → amber card nudging the user to add it
+       3. disabled (manual mode)   → neutral card explaining how to withdraw
+     ════════════════════════════════════════════════════════════════ --}}
+@php
+  $pi = $payoutInfo ?? null;
+
+  // Color palette per state. Pre-computed so the markup below stays
+  // readable — Tailwind classes pasted inline conditionally would
+  // make the JSX-style logic dominate the visual structure.
+  if (!$pi || !$pi['enabled']) {
+      // Manual / disabled — neutral slate card
+      $palette = [
+          'gradient'  => 'from-slate-100 to-slate-50',
+          'border'    => 'border-slate-200',
+          'icon_bg'   => 'bg-slate-200',
+          'icon_text' => 'text-slate-600',
+          'pill_bg'   => 'bg-slate-200/70',
+          'pill_text' => 'text-slate-700',
+          'label'     => 'จ่ายแบบ manual',
+      ];
+  } elseif (!$pi['has_promptpay']) {
+      // Action needed — amber
+      $palette = [
+          'gradient'  => 'from-amber-50 to-orange-50',
+          'border'    => 'border-amber-200',
+          'icon_bg'   => 'bg-amber-100',
+          'icon_text' => 'text-amber-700',
+          'pill_bg'   => 'bg-amber-100',
+          'pill_text' => 'text-amber-800',
+          'label'     => 'รอเพิ่ม PromptPay',
+      ];
+  } else {
+      // Auto-payout active — green
+      $palette = [
+          'gradient'  => 'from-emerald-50 to-teal-50',
+          'border'    => 'border-emerald-200',
+          'icon_bg'   => 'bg-emerald-100',
+          'icon_text' => 'text-emerald-700',
+          'pill_bg'   => 'bg-emerald-100',
+          'pill_text' => 'text-emerald-800',
+          'label'     => 'จ่ายอัตโนมัติเปิดอยู่',
+      ];
+  }
+
+  // Localised "วันถัดไป" — Thai short format: "จันทร์ 5 พ.ค. 2026"
+  $nextLabel = null;
+  $daysAway  = null;
+  if ($pi && $pi['next_run']) {
+      $nextLabel = $pi['next_run']->locale('th')->isoFormat('dddd D MMM YYYY');
+      $daysAway  = (int) now('Asia/Bangkok')->startOfDay()->diffInDays($pi['next_run'], false);
+  }
+@endphp
+
+<div class="rounded-2xl border {{ $palette['border'] }} bg-gradient-to-br {{ $palette['gradient'] }} p-4 md:p-5 mb-5 shadow-sm">
+  <div class="flex flex-col md:flex-row md:items-stretch gap-4 md:gap-5">
+
+    {{-- ▌Left column: schedule + status pill ▌ --}}
+    <div class="flex items-start gap-3 md:flex-1 min-w-0">
+      <div class="shrink-0 w-12 h-12 rounded-xl {{ $palette['icon_bg'] }} {{ $palette['icon_text'] }} flex items-center justify-center text-xl">
+        <i class="bi bi-calendar-check-fill"></i>
+      </div>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2 flex-wrap mb-1">
+          <h3 class="font-bold text-slate-900 text-base md:text-lg leading-tight">
+            ตารางการจ่ายเงิน
+          </h3>
+          <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider {{ $palette['pill_bg'] }} {{ $palette['pill_text'] }} px-2 py-0.5 rounded-full">
+            <i class="bi bi-circle-fill text-[7px]"></i>{{ $palette['label'] }}
+          </span>
+        </div>
+        @if($pi)
+          <p class="text-sm text-slate-700 mb-1">
+            <span class="font-semibold">{{ $pi['schedule_label'] }}</span>
+            @if($pi['threshold_thb'] > 0)
+              <span class="text-slate-500 mx-1">·</span>
+              <span class="text-slate-600">เริ่มจ่ายเมื่อยอดสะสม ≥ <span class="font-semibold text-slate-800">฿{{ number_format($pi['threshold_thb']) }}</span></span>
+            @endif
+          </p>
+          <p class="text-xs text-slate-500 leading-relaxed">
+            @if($pi['enabled'] && $pi['next_run'])
+              รอบถัดไป:
+              <span class="font-semibold text-slate-800">{{ $nextLabel }}</span>
+              @if($daysAway === 0)
+                <span class="text-emerald-700 font-semibold">(วันนี้)</span>
+              @elseif($daysAway === 1)
+                <span class="text-emerald-700 font-semibold">(พรุ่งนี้)</span>
+              @elseif($daysAway > 0)
+                <span class="text-slate-500">(อีก {{ $daysAway }} วัน)</span>
+              @endif
+            @elseif($pi['enabled'] && !$pi['next_run'])
+              ระบบจะดำเนินการเมื่อแอดมินรันรอบจ่าย
+            @else
+              ระบบจ่ายเงินอัตโนมัติปิดอยู่ — ใช้ปุ่ม "ขอถอนเงิน" ในการแจ้งทีมงาน
+            @endif
+          </p>
+          @if($pi['enabled'])
+            <p class="text-[11px] text-slate-500 mt-1">
+              <i class="bi bi-info-circle"></i>
+              เงื่อนไขการจ่าย:
+              @if($pi['trigger_logic'] === 'both')
+                <span class="font-medium">ถึงวันจ่าย <strong>และ</strong> ครบยอดขั้นต่ำ</span>
+              @else
+                <span class="font-medium">ถึงวันจ่าย <strong>หรือ</strong> ครบยอดขั้นต่ำ</span>
+              @endif
+              @if($pi['delay_hours'] > 0)
+                · ดีเลย์หลังลูกค้าซื้อ {{ $pi['delay_hours'] }} ชม.
+              @endif
+            </p>
+          @endif
+        @endif
+      </div>
+    </div>
+
+    {{-- ▌Right column: progress to threshold ▌ --}}
+    @if($pi && $pi['enabled'] && $pi['threshold_thb'] > 0)
+      <div class="md:w-64 md:shrink-0 md:border-l md:border-slate-200/70 md:pl-5">
+        <div class="flex items-baseline justify-between gap-2 mb-1.5">
+          <span class="text-[11px] uppercase tracking-wider font-bold text-slate-500">ยอดรอจ่ายรอบนี้</span>
+          <span class="text-xs font-semibold {{ $pi['threshold_met'] ? 'text-emerald-700' : 'text-slate-500' }}">
+            {{ $pi['threshold_pct'] }}%
+          </span>
+        </div>
+        <div class="flex items-baseline gap-1 mb-2">
+          <span class="font-bold text-2xl text-slate-900 tracking-tight">฿{{ number_format($pi['pending_amount'], 0) }}</span>
+          <span class="text-xs text-slate-400">/ ฿{{ number_format($pi['threshold_thb']) }}</span>
+        </div>
+        {{-- Progress bar — fills with emerald when threshold met,
+             slate otherwise. Animated width transition keeps the
+             visual feedback smooth on data refresh. --}}
+        <div class="h-2 rounded-full bg-slate-200/70 overflow-hidden">
+          <div class="h-full rounded-full transition-[width] duration-500
+                      {{ $pi['threshold_met'] ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : 'bg-gradient-to-r from-indigo-400 to-violet-500' }}"
+               style="width: {{ max(2, $pi['threshold_pct']) }}%;"></div>
+        </div>
+        <p class="text-[11px] text-slate-500 mt-2 leading-snug">
+          @if($pi['threshold_met'])
+            <i class="bi bi-check-circle-fill text-emerald-600"></i>
+            ครบยอดขั้นต่ำแล้ว — รอวันจ่ายตามรอบ
+          @else
+            อีก <span class="font-semibold text-slate-700">฿{{ number_format(max(0, $pi['threshold_thb'] - $pi['pending_amount']), 0) }}</span>
+            ก็จะถึงยอดขั้นต่ำ
+          @endif
+        </p>
+      </div>
+    @endif
+  </div>
+
+  {{-- ▌Footer: PromptPay status / nudge ▌ --}}
+  @if($pi && $pi['enabled'] && !$pi['has_promptpay'])
+    <div class="mt-4 pt-4 border-t border-amber-200/70 flex items-start gap-2">
+      <i class="bi bi-exclamation-triangle-fill text-amber-600 mt-0.5"></i>
+      <div class="text-sm text-amber-900 flex-1">
+        <strong>คุณยังไม่ได้กรอก PromptPay</strong> — ระบบจะไม่สามารถโอนเงินอัตโนมัติได้จนกว่าจะตั้งค่า
+        <a href="{{ route('photographer.setup-bank') }}" class="font-semibold text-amber-700 hover:text-amber-800 underline ml-1 inline-flex items-center gap-1">
+          ตั้งค่า PromptPay <i class="bi bi-arrow-right"></i>
+        </a>
+      </div>
+    </div>
+  @endif
+</div>
+
 {{-- Tab switcher (JS-free, uses URL hash) --}}
 <div class="pg-card mb-3">
   <div class="py-2 px-3 flex gap-1 flex-wrap" role="tablist">
