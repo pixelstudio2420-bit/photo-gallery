@@ -204,10 +204,24 @@
 
           {{-- Price (with original_price strikethrough if discounted) --}}
           <td class="px-4 py-3 font-medium">
-            @if($pkg->original_price && $pkg->original_price > $pkg->price)
-              <div class="text-xs text-gray-400 line-through">{{ number_format($pkg->original_price, 0) }} ฿</div>
+            @if($pkg->bundle_type === 'face_match')
+              {{-- face_match has no fixed price — it's computed live
+                   from per_photo × matched-count × discount, capped
+                   at max_price. Showing the stored 0.00 placeholder
+                   would mislead admins into thinking it's free. --}}
+              <div class="text-pink-600 font-semibold text-sm">ราคาผันแปร</div>
+              <div class="text-[10px] text-gray-500 mt-0.5">
+                ลด {{ (int) ($pkg->discount_pct ?? 50) }}%
+                @if($pkg->max_price)
+                  · cap ฿{{ number_format($pkg->max_price, 0) }}
+                @endif
+              </div>
+            @else
+              @if($pkg->original_price && $pkg->original_price > $pkg->price)
+                <div class="text-xs text-gray-400 line-through">{{ number_format($pkg->original_price, 0) }} ฿</div>
+              @endif
+              <div>{{ number_format($pkg->price, 2) }} ฿</div>
             @endif
-            <div>{{ number_format($pkg->price, 2) }} ฿</div>
           </td>
 
           <td class="px-4 py-3">

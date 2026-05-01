@@ -215,9 +215,31 @@
             @endphp
             <div class="text-center mb-3">
               @if($isFace)
-                <div class="text-[10px] text-gray-400 mb-0.5">ส่วนลดสูงสุด {{ (int) $pkg->discount_pct }}%</div>
+                {{-- face_match price is per-buyer dynamic — we can't show
+                     a fixed number until they upload a selfie and we
+                     know how many photos match their face. Show a teaser
+                     example computed from the event's per_photo so the
+                     buyer has a concrete sense of what they'll pay
+                     before clicking "ค้นหารูปของฉัน". --}}
+                @php
+                  // Example: 10 matches at 50% discount.
+                  $eventPerPhoto = (float) ($event->price_per_photo ?? 0);
+                  $exampleCount  = 10;
+                  $examplePrice  = $eventPerPhoto > 0
+                      ? min(
+                          round($exampleCount * $eventPerPhoto * (1 - (float) $pkg->discount_pct / 100)),
+                          (float) $pkg->max_price
+                        )
+                      : null;
+                @endphp
+                <div class="text-[10px] text-gray-400 mb-0.5">ลดสูงสุด {{ (int) $pkg->discount_pct }}%</div>
                 <div class="text-base md:text-lg font-bold text-pink-600 dark:text-pink-400 leading-tight">ราคาผันแปร</div>
-                <div class="text-[10px] text-gray-500 mt-0.5">สูงสุด ฿{{ number_format($pkg->max_price, 0) }}</div>
+                @if($examplePrice)
+                  <div class="text-[10px] text-gray-500 mt-1">
+                    ตัวอย่าง: 10 รูป ≈ ฿{{ number_format($examplePrice, 0) }}
+                  </div>
+                @endif
+                <div class="text-[10px] text-gray-400 mt-0.5">เพดาน ฿{{ number_format($pkg->max_price, 0) }}</div>
               @else
                 @if($pkg->original_price && $pkg->original_price > $effectivePrice)
                   <div class="text-[11px] text-gray-400 line-through">฿{{ number_format($pkg->original_price, 0) }}</div>
