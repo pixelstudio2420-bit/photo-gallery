@@ -18,15 +18,24 @@
 --}}
 
 @php
+  // Counts:
+  //   $activeCount    — used to decide whether to render the section at all.
+  //   $cardCount      — used to size the grid (face_match is rendered as a
+  //                     Hero CTA above the grid, not as a card in it, so
+  //                     we exclude it from the column-count calc).
   $activeCount = isset($packages) ? $packages->where('is_active', true)->count() : 0;
+  $cardCount   = isset($packages)
+      ? $packages->where('is_active', true)->where('bundle_type', '!=', 'face_match')->count()
+      : 0;
+
   // Static-resolution of the desktop column count keeps Tailwind v4's
   // class scanner happy (interpolated `lg:grid-cols-{{ N }}` strings get
   // skipped by the @source pass and the class never makes it to CSS).
   // We pick the densest layout the bundle count justifies, capped at 5.
   $lgColsClass = match (true) {
-      $activeCount >= 5 => 'lg:grid-cols-5',
-      $activeCount === 4 => 'lg:grid-cols-4',
-      default            => 'lg:grid-cols-3',
+      $cardCount >= 5  => 'lg:grid-cols-5',
+      $cardCount === 4 => 'lg:grid-cols-4',
+      default          => 'lg:grid-cols-3',
   };
 @endphp
 
@@ -134,7 +143,13 @@
       x-show="open"
       x-collapse
       class="grid grid-cols-2 md:grid-cols-3 {{ $lgColsClass }} gap-3 md:gap-4">
-      @foreach($packages->where('is_active', true)->sortBy('sort_order') as $pkg)
+      {{-- face_match bundles are NOT rendered here — they're surfaced as
+           a dedicated Hero CTA above (see _face_search_hero.blade.php).
+           Mixing them inline made buyers stare at "ราคาผันแปร 0฿"
+           and either ignore the bundle entirely or click expecting a
+           free thing. The Hero treatment makes the variable-price flow
+           obvious and gives the killer feature room to breathe. --}}
+      @foreach($packages->where('is_active', true)->where('bundle_type', '!=', 'face_match')->sortBy('sort_order') as $pkg)
         @php
           $isCount     = $pkg->bundle_type === 'count';
           $isFace      = $pkg->bundle_type === 'face_match';

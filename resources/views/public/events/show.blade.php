@@ -986,10 +986,19 @@
 
 @section('content-full')
 
+{{-- ============ NEW: Face Search Hero CTA ============ --}}
+{{-- Renders the face_match bundle as a hero block above the regular
+     bundle cards. The variable-price flow doesn't fit alongside fixed
+     cards (buyers see "ราคาผันแปร 0฿" and bounce), so we surface the
+     killer feature with example pricing and a single primary CTA.
+     Self-renders nothing when no face_match bundle exists for this event. --}}
+@include('public.events.partials._face_search_hero')
+
 {{-- ============ NEW: Beautiful Bundle Cards ============ --}}
 {{-- Full visual bundle showcase with psychology-driven design.
      The legacy chip strip below stays for quick re-selection but the
-     cards above are the primary sales pitch. --}}
+     cards above are the primary sales pitch. face_match is rendered
+     in the hero CTA above, so the cards loop excludes it. --}}
 @include('public.events.partials._bundle_cards')
 
 {{-- ============ NEW: Face Bundle Modal ============ --}}
