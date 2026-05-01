@@ -955,6 +955,22 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/{id}', [\App\Http\Controllers\Admin\PackageController::class, 'destroy'])->name('destroy');
         });
 
+        // ── pSEO (Programmatic SEO) — landing-page generator ────────────
+        // Templates drive bulk auto-generation; pages are individually
+        // editable + lockable. See app/Services/Seo/PSeoService.php.
+        Route::prefix('pseo')->name('pseo.')->group(function () {
+            Route::get('/',  [\App\Http\Controllers\Admin\PSeoController::class, 'index'])->name('index');
+            Route::get('/pages', [\App\Http\Controllers\Admin\PSeoController::class, 'pages'])->name('pages');
+            Route::get('/pages/{page}/edit', [\App\Http\Controllers\Admin\PSeoController::class, 'pageEdit'])->name('page-edit');
+            Route::put('/pages/{page}', [\App\Http\Controllers\Admin\PSeoController::class, 'pageUpdate'])->name('page-update');
+            Route::delete('/pages/{page}', [\App\Http\Controllers\Admin\PSeoController::class, 'pageDestroy'])->name('page-destroy');
+            Route::get('/templates/{template}/edit', [\App\Http\Controllers\Admin\PSeoController::class, 'templateEdit'])->name('template-edit');
+            Route::put('/templates/{template}', [\App\Http\Controllers\Admin\PSeoController::class, 'templateUpdate'])->name('template-update');
+            Route::post('/templates/{template}/toggle', [\App\Http\Controllers\Admin\PSeoController::class, 'templateToggle'])->name('template-toggle');
+            Route::post('/templates/{template}/regenerate', [\App\Http\Controllers\Admin\PSeoController::class, 'regenerateTemplate'])->name('regenerate-template');
+            Route::post('/regenerate-all', [\App\Http\Controllers\Admin\PSeoController::class, 'regenerateAll'])->name('regenerate-all');
+        });
+
         // Products
         Route::resource('products', \App\Http\Controllers\Admin\ProductController::class);
 
@@ -1950,3 +1966,21 @@ Route::prefix('photographer')->name('photographer.')->group(function () {
 
 // Public team-invite acceptance — auth required but not photographer-only
 Route::middleware(['auth'])->get('/team/accept/{token}', [\App\Http\Controllers\Photographer\TeamController::class, 'accept'])->name('team.accept');
+
+/*
+|--------------------------------------------------------------------------
+| pSEO landing pages
+|--------------------------------------------------------------------------
+| Catch-all that matches any single-segment URL not picked up by
+| earlier routes (e.g. /events-in-bangkok, /wedding-photographers).
+| Resolves the slug against seo_landing_pages and renders the
+| public.landing.show view if found, otherwise 404.
+|
+| Multi-segment slugs like "photographers/john-doe-42" are also handled
+| because the route uses `where('slug', '.*')` to swallow the rest of
+| the path. Place at the END of routes/web.php so it never overrides
+| a more specific route.
+*/
+Route::get('/{slug}', [\App\Http\Controllers\Public\LandingPageController::class, 'show'])
+    ->where('slug', '[a-z0-9][a-z0-9\-/]+')
+    ->name('pseo.landing');
