@@ -61,14 +61,17 @@
 .cart-pulse { animation: cartPulse 2s ease-in-out infinite; }
 @keyframes cartPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.4); } 50% { box-shadow: 0 0 0 8px rgba(99,102,241,0); } }
 
-/* Gallery grid */
-.g-gallery { display: grid; gap: 6px; width: 100%; padding: 12px; grid-template-columns: repeat(3, 1fr); }
+/* Gallery grid — mobile defaults to 2 columns so each thumbnail is large
+   enough for the buyer to recognize themselves at a glance. Anything more
+   than 2 columns at 360-414px viewports made faces too small to scan. */
+.g-gallery { display: grid; gap: 8px; width: 100%; padding: 12px; grid-template-columns: repeat(2, 1fr); }
 @media (min-width: 576px) { .g-gallery { grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 16px; } }
 @media (min-width: 992px) { .g-gallery { grid-template-columns: repeat(5, 1fr); gap: 8px; } }
 @media (min-width: 1400px) { .g-gallery { grid-template-columns: repeat(6, 1fr); gap: 10px; } }
 @media (max-width: 575.98px) {
-  .g-gallery.col-5, .g-gallery.col-6, .g-gallery.col-8 { grid-template-columns: repeat(3, 1fr) !important; }
-  .g-gallery.col-4 { grid-template-columns: repeat(2, 1fr) !important; }
+  /* On phones, never go higher than 2 columns regardless of the
+     photographer's preferred desktop density — readability beats density. */
+  .g-gallery.col-3, .g-gallery.col-4, .g-gallery.col-5, .g-gallery.col-6, .g-gallery.col-8 { grid-template-columns: repeat(2, 1fr) !important; }
 }
 @media (min-width: 576px) and (max-width: 991.98px) {
   .g-gallery.col-6, .g-gallery.col-8 { grid-template-columns: repeat(4, 1fr) !important; }

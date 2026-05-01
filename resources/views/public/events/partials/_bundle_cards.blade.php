@@ -18,9 +18,36 @@
 --}}
 
 @if(isset($packages) && $packages->where('is_active', true)->count() > 0)
-<section class="my-8" id="bundle-cards">
+<section class="my-8" id="bundle-cards" x-data="{ mobileOpen: false }">
   <div class="max-w-6xl mx-auto px-4">
-    <div class="text-center mb-6">
+
+    {{-- ── Mobile: collapsible header (tap to expand). On md+ this header
+         renders as a normal section title (no toggle). The chevron and
+         "ดู X แพ็กเกจ" hint only show on mobile, controlled by Alpine. --}}
+    <button
+      type="button"
+      @click="mobileOpen = !mobileOpen"
+      class="md:hidden w-full flex items-center justify-between gap-3 px-4 py-3 mb-3 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-500/10 dark:to-orange-500/10 border-2 border-amber-300 dark:border-amber-500/30 transition active:scale-[0.99]">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shrink-0 shadow-md">
+          <i class="bi bi-lightning-charge-fill text-white text-lg"></i>
+        </div>
+        <div class="text-left min-w-0">
+          <div class="font-bold text-base text-amber-900 dark:text-amber-200 leading-tight truncate">
+            เลือกแพ็กเกจคุ้มค่า
+          </div>
+          <div class="text-[11px] text-amber-700 dark:text-amber-400/80 mt-0.5">
+            <span x-show="!mobileOpen">{{ $packages->where('is_active', true)->count() }} แพ็กเกจ ลดสูงสุด 50%</span>
+            <span x-show="mobileOpen" x-cloak>แตะเพื่อปิด</span>
+          </div>
+        </div>
+      </div>
+      <i class="bi bi-chevron-down text-amber-700 dark:text-amber-400 text-xl transition-transform shrink-0"
+         :class="mobileOpen ? 'rotate-180' : ''"></i>
+    </button>
+
+    {{-- ── Desktop heading (md+) — always shown. --}}
+    <div class="hidden md:block text-center mb-6">
       <h2 class="text-2xl md:text-3xl font-bold mb-2">
         <i class="bi bi-lightning-charge text-amber-500"></i> เลือกแพ็กเกจคุ้มค่า
       </h2>
@@ -29,7 +56,15 @@
       </p>
     </div>
 
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-{{ min(5, $packages->where('is_active', true)->count()) }} gap-3 md:gap-4">
+    {{-- ── Cards container — collapsed by default on mobile, always
+         expanded on md+. Uses x-show + x-collapse for the slide animation
+         (Alpine plugin available globally on the site). The md:!block
+         override forces the desktop layout to ignore Alpine's x-show
+         display:none. --}}
+    <div
+      x-show="mobileOpen || window.matchMedia('(min-width: 768px)').matches"
+      x-collapse
+      class="md:!block grid grid-cols-2 md:grid-cols-3 lg:grid-cols-{{ min(5, $packages->where('is_active', true)->count()) }} gap-3 md:gap-4">
       @foreach($packages->where('is_active', true)->sortBy('sort_order') as $pkg)
         @php
           $isCount     = $pkg->bundle_type === 'count';
