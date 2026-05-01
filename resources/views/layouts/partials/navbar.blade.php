@@ -489,22 +489,59 @@
           $_mobileApprovedPhotog  = $_mobileIsPhotographer && auth()->user()->photographerProfile->status === 'approved';
         @endphp
 
-        <div class="mt-3 px-3 border-t border-white/10 pt-3 flex items-center gap-2 flex-wrap">
-          {{-- Theme toggle — picks up auto-binding from darkmode.js --}}
-          <button type="button"
-                  class="theme-toggle inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white/80 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition"
-                  title="สลับโหมดกลางวัน/กลางคืน">
-            <i class="bi bi-moon-fill"></i>
-            <span>โหมดกลางคืน</span>
-          </button>
+        {{--
+          Mobile theme + photographer-dashboard buttons.
 
-          {{-- Photographer dashboard shortcut (approved only) --}}
+          Layout strategy by viewport / role:
+            • Photographer → 2-column grid, each button takes 50%.
+              gap-2 between, equal heights, balanced look at any width
+              from 320px up.
+            • Non-photographer (or guest) → single full-width theme
+              toggle. Looks intentional and fills the row instead of a
+              lonely 140-px chip floating left.
+
+          Theme button label:
+            Two <span>s with Tailwind dark:hidden / dark:inline so the
+            text reacts to the .dark class darkmode.js sets on <html>.
+            JS still owns the icon swap (bi-moon ↔ bi-sun), so the
+            icon and label stay in sync without extra plumbing.
+
+          Inner layout (justify-center) keeps the icon+text centered
+          in each cell — uneven labels ("โหมดกลางคืน" vs "แดชบอร์ด
+          ช่างภาพ") would otherwise look ragged when left-aligned.
+
+          truncate + min-w-0 protect against labels overflowing on the
+          narrowest phones (≤320px); the icons keep flex-shrink-0 so
+          they never collapse.
+        --}}
+        <div class="mt-3 px-3 border-t border-white/10 pt-3">
           @if($_mobileApprovedPhotog)
-            <a href="{{ route('photographer.dashboard') }}"
-               class="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 shadow shadow-indigo-500/25 transition">
-              <i class="bi bi-speedometer2"></i>
-              <span>แดชบอร์ดช่างภาพ</span>
-            </a>
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button"
+                      class="theme-toggle w-full inline-flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-[13px] font-medium text-white/85 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition min-w-0"
+                      title="สลับโหมดกลางวัน/กลางคืน">
+                <i class="bi bi-moon-fill shrink-0"></i>
+                <span class="truncate">
+                  <span class="dark:hidden">โหมดกลางคืน</span>
+                  <span class="hidden dark:inline">โหมดกลางวัน</span>
+                </span>
+              </button>
+              <a href="{{ route('photographer.dashboard') }}"
+                 class="w-full inline-flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-[13px] font-semibold text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 shadow shadow-indigo-500/25 transition min-w-0">
+                <i class="bi bi-speedometer2 shrink-0"></i>
+                <span class="truncate">แดชบอร์ดช่างภาพ</span>
+              </a>
+            </div>
+          @else
+            <button type="button"
+                    class="theme-toggle w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-white/85 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition"
+                    title="สลับโหมดกลางวัน/กลางคืน">
+              <i class="bi bi-moon-fill shrink-0"></i>
+              <span>
+                <span class="dark:hidden">สลับเป็นโหมดกลางคืน</span>
+                <span class="hidden dark:inline">สลับเป็นโหมดกลางวัน</span>
+              </span>
+            </button>
           @endif
         </div>
 
