@@ -317,6 +317,11 @@ class PSeoService
      * Persist (or update) a landing-page row from a template + variable
      * bag. Respects is_locked: locked rows are NOT overwritten on
      * regenerate, only their view stats are touched.
+     *
+     * Auto-themes the page based on category-name keywords so wedding
+     * pages get pink, sport pages get blue, etc. Existing rows keep
+     * their admin-set theme (auto-theme only fills the gap on first
+     * generate).
      */
     private function upsertPage(SeoPageTemplate $template, string $slug, array $vars, array $sourceMeta): SeoLandingPage
     {
@@ -333,20 +338,53 @@ class PSeoService
         $h1    = $this->renderPattern($template->h1_pattern, $vars);
         $body  = $this->renderPattern($template->body_template, $vars);
 
-        return SeoLandingPage::updateOrCreate(
-            ['slug' => $slug],
-            [
-                'template_id'      => $template->id,
-                'type'             => $template->type,
-                'title'            => $title ?: $h1 ?: $slug,
-                'meta_description' => $desc,
-                'h1'               => $h1,
-                'body_html'        => $body,
-                'source_meta'      => $sourceMeta,
-                'is_published'     => true,
-                'regenerated_at'   => now(),
-            ]
-        );
+        $payload = [
+            'template_id'      => $template->id,
+            'type'             => $template->type,
+            'title'            => $title ?: $h1 ?: $slug,
+            'meta_description' => $desc,
+            'h1'               => $h1,
+            'body_html'        => $body,
+            'source_meta'      => $sourceMeta,
+            'is_published'     => true,
+            'regenerated_at'   => now(),
+        ];
+
+        // Auto-theme — only set on FIRST generate, never overwrite the
+        // admin's manual theme choice. Maps category/keywords → theme.
+        if (!$existing || empty($existing->theme) || $existing->theme === 'default') {
+            $payload['theme'] = $this->autoTheme($template, $vars);
+        }
+
+        return SeoLandingPage::updateOrCreate(['slug' => $slug], $payload);
+    }
+
+    /**
+     * Pick a theme based on the page type + variables. Looks at the
+     * category name first (most specific), then page type, falling
+     * back to 'photography' for the marketplace-wide default.
+     *
+     * Themes available: default / wedding / sport / concert /
+     * corporate / portrait / festival / photography.
+     */
+    private function autoTheme(SeoPageTemplate $template, array $vars): string
+    {
+        $hint = strtolower((string) (
+            $vars['category'] ?? $vars['category_full'] ?? ''
+        ));
+
+        return match (true) {
+            str_contains($hint, 'wedding') || str_contains($hint, 'แต่ง')      => 'wedding',
+            str_contains($hint, 'sport')   || str_contains($hint, 'กีฬา')      => 'sport',
+            str_contains($hint, 'concert') || str_contains($hint, 'บันเทิง')   => 'concert',
+            str_contains($hint, 'corporate') || str_contains($hint, 'องค์กร') => 'corporate',
+            str_contains($hint, 'portrait') || str_contains($hint, 'พอร์ต')    => 'portrait',
+            str_contains($hint, 'festival') || str_contains($hint, 'เทศกาล')   => 'festival',
+            str_contains($hint, 'education') || str_contains($hint, 'การศึกษา')=> 'corporate',
+            $template->type === 'photographer'                                  => 'portrait',
+            $template->type === 'event_archive'                                 => 'photography',
+            default                                                             => 'photography',
+        };
     }
 
     /**

@@ -124,9 +124,34 @@ class PSeoController extends Controller
             'body_html'        => 'nullable|string',
             'is_published'     => 'nullable|boolean',
             'is_locked'        => 'nullable|boolean',
+            // Customization fields (added 2026-05-01)
+            'theme'            => 'nullable|string|max:30',
+            'hero_image'       => 'nullable|string|max:500',
+            'og_image'         => 'nullable|string|max:500',
+            'cta_text'         => 'nullable|string|max:100',
+            'cta_url'          => 'nullable|string|max:500',
+            'show_gallery'     => 'nullable|boolean',
+            'show_related'     => 'nullable|boolean',
+            'show_stats'       => 'nullable|boolean',
+            'show_faq'         => 'nullable|boolean',
+            'extra_sections'   => 'nullable|array',
+            'extra_sections.*.type'  => 'nullable|string|max:30',
+            'extra_sections.*.title' => 'nullable|string|max:200',
+            'extra_sections.*.body'  => 'nullable|string|max:5000',
         ]);
-        $validated['is_published'] = $request->boolean('is_published');
-        $validated['is_locked']    = $request->boolean('is_locked');
+
+        // Cast booleans (checkboxes only present when checked).
+        foreach (['is_published', 'is_locked', 'show_gallery', 'show_related', 'show_stats', 'show_faq'] as $bool) {
+            $validated[$bool] = $request->boolean($bool);
+        }
+
+        // Sanitize extra_sections — drop empty entries the user didn't fill.
+        if (!empty($validated['extra_sections'])) {
+            $validated['extra_sections'] = collect($validated['extra_sections'])
+                ->filter(fn ($s) => !empty($s['title']) || !empty($s['body']))
+                ->values()
+                ->all();
+        }
 
         $page->update($validated);
 
