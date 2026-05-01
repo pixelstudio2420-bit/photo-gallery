@@ -36,31 +36,18 @@
 @push('styles')
 <style>
   /* ──────────────────────────────────────────────────────────────────
-     Earnings page hero — mobile-only proportional rebalance.
+     Earnings page — only the bits that are SPECIFIC to this page live
+     here now. Mobile layout for .pg-hero is handled globally in
+     public/css/photographer.css (every photographer page benefits).
 
-     Why a page-scoped block: the shared .pg-hero rules live in
-     public/css/photographer.css and are reused on Dashboard, Events,
-     Bookings, Analytics, Profile, etc. Tweaking them globally would
-     ripple to those pages. Confining the rules under
-     `.earnings-page-hero` keeps the change surgical to /earnings.
-
-     Goals on phones (≤ 640px):
-       1. Stack icon + text + payout chip in a clean vertical column
-          (the default flex-wrap was wrapping into uneven rows).
-       2. Shrink the icon (48 → 40) so the headline gets more width.
-       3. Tighten title size so "รายได้ของฉัน" doesn't compete with
-          the icon for breathing room.
-       4. Demote the PromptPay action from button-look to a soft
-          emerald status chip — it isn't actually clickable.
-       5. Trim hero padding so the summary cards below sit higher in
-          the first viewport (mobile users see the numbers sooner).
+     What stays here:
+       • .earnings-payout-chip — soft emerald status pill for the
+         PromptPay indicator. Not a CTA button (cursor:default), so
+         it deliberately doesn't look like .pg-btn-ghost on mobile.
+       • Mobile padding-left on the actions row, so the chip aligns
+         with the title baseline (40px icon + 12px gap = 52px) rather
+         than the icon's left edge — keeps the eye-line clean.
      ────────────────────────────────────────────────────────────────── */
-  .earnings-page-hero .pg-hero{
-    /* Tighter rhythm — saves ~12px so the cards rise into view. */
-    padding-bottom: .9rem;
-    margin-bottom: 1.1rem;
-    gap: .75rem;
-  }
 
   /* Status-chip look for the PromptPay indicator (all breakpoints). */
   .earnings-page-hero .earnings-payout-chip{
@@ -82,57 +69,13 @@
   }
 
   @media (max-width: 640px){
-    /* Stack vertically — icon+text on top, payout chip below.
-       The default rule has justify-content:space-between which on
-       narrow screens left a half-empty row; reset to flex-start so
-       the column reads naturally. */
-    .earnings-page-hero .pg-hero{
-      flex-direction: column;
-      align-items: flex-start;
-      gap: .65rem;
-      padding-bottom: .75rem;
-      margin-bottom: .9rem;
-    }
-
-    /* Smaller icon — frees ~8px of horizontal headroom for the
-       title without clipping the wallet glyph. */
-    .earnings-page-hero .pg-hero-icon{
-      width: 40px; height: 40px;
-      border-radius: 11px;
-      font-size: 1.15rem;
-    }
-
-    /* Title — shrink one notch so it never wraps onto two lines
-       awkwardly next to the small icon. */
-    .earnings-page-hero .pg-hero-title{
-      font-size: 1.25rem;
-      line-height: 1.25;
-    }
-
-    /* Eyebrow — let the spacing breathe a bit less. */
-    .earnings-page-hero .pg-hero-eyebrow{
-      font-size: .62rem;
-      letter-spacing: .14em;
-      margin-bottom: .15rem;
-    }
-
-    /* Subtitle — smaller, stays on one line where possible. */
-    .earnings-page-hero .pg-hero-subtitle{
-      font-size: .78rem;
-      margin-top: .2rem;
-    }
-
-    /* Actions — full-width row below the title block, left-aligned
-       with the title (not the icon) so the eye-line stays clean. */
+    /* Indent the action row to align with the title baseline:
+       40px icon + 12px gap (.flex.gap-3 in the partial) = 52px. */
     .earnings-page-hero .pg-hero-actions{
-      width: 100%;
-      padding-left: 52px;        /* 40px icon + 12px gap from .flex.gap-3 */
-      margin-top: .15rem;
+      padding-left: 52px;
     }
-
-    /* Chip itself — slightly smaller text + tighter padding so the
-       full PromptPay tail fits on a 360px viewport without wrapping
-       mid-number. */
+    /* Slightly tighter chip on phones so a 9-digit PromptPay tail
+       fits on a 360px viewport without wrapping mid-number. */
     .earnings-page-hero .earnings-payout-chip{
       font-size: .72rem;
       padding: .3rem .6rem;
@@ -140,9 +83,8 @@
     }
   }
 
-  /* Even narrower phones (~320–360px): drop the action indent so the
-     chip can use the whole row, and let the chip text wrap if the
-     PromptPay number forces it. */
+  /* Narrowest phones — drop the indent + allow word-break so a long
+     PromptPay tail can wrap rather than overflow the row. */
   @media (max-width: 380px){
     .earnings-page-hero .pg-hero-actions{ padding-left: 0; }
     .earnings-page-hero .earnings-payout-chip{

@@ -459,6 +459,59 @@ html.dark .pg-hero-subtitle{ color: #94a3b8; }
 
 .pg-hero-actions{ display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 
+/* ──────────────────────────────────────────────────────────────────
+   Mobile-only proportional rebalance for .pg-hero (≤ 640px).
+
+   Why it's here (not page-scoped): all 24 photographer pages share
+   this header partial. Without the mobile rules the default desktop
+   layout left:
+     • the 48px gradient icon competing with the headline for space
+     • the 1.5rem title pushing onto two lines next to the icon
+     • flex-wrap dropping the actions row into an awkward half-empty
+       lane below the title
+
+   Mobile-first override:
+     • Stack the header as a clean vertical column (icon+title block,
+       then actions block) so each gets its full row to breathe.
+     • Trim the icon to 40px / title to 1.25rem / eyebrow + subtitle
+       a notch smaller — the desktop sizes still apply via the
+       existing `@media (min-width: 640px)` rules above.
+     • Tighter padding-bottom + margin-bottom so summary cards / page
+       content rise into the first viewport instead of being pushed
+       below the fold by header chrome.
+   ────────────────────────────────────────────────────────────────── */
+@media (max-width: 640px){
+  .pg-hero{
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .65rem;
+    padding-bottom: .85rem;
+    margin-bottom: 1rem;
+  }
+  .pg-hero-icon{
+    width: 40px; height: 40px;
+    border-radius: 11px;
+    font-size: 1.15rem;
+  }
+  .pg-hero-title{
+    font-size: 1.25rem;
+    line-height: 1.25;
+  }
+  .pg-hero-eyebrow{
+    font-size: .62rem;
+    letter-spacing: .14em;
+    margin-bottom: .15rem;
+  }
+  .pg-hero-subtitle{
+    font-size: .78rem;
+    margin-top: .2rem;
+  }
+  .pg-hero-actions{
+    width: 100%;
+    margin-top: .15rem;
+  }
+}
+
 /* Glass card — semi-transparent panel that lets the page bg show through */
 .pg-glass{
     background: rgba(255,255,255,.85);
