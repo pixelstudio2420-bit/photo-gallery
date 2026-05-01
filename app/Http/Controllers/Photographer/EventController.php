@@ -172,7 +172,13 @@ class EventController extends Controller
         // Hard floor of 100 THB/photo — the admin may raise this via AppSetting but never lower it.
         $minPrice  = max(100.0, (float) AppSetting::get('min_event_price', 100));
         $allowFree = (bool) AppSetting::get('allow_free_events', true);
-        return view('photographer.events.create', compact('categories', 'minPrice', 'allowFree'));
+        // Provinces feed the cascading location picker in _extra_info_card.
+        // Cached for an hour — the list never changes day-to-day.
+        $provinces = \Illuminate\Support\Facades\Cache::remember(
+            'photographer.locations.provinces', 3600,
+            fn () => \App\Models\ThaiProvince::orderBy('name_th')->get(['id','name_th','name_en'])
+        );
+        return view('photographer.events.create', compact('categories', 'minPrice', 'allowFree', 'provinces'));
     }
 
     public function store(Request $request)
@@ -315,7 +321,28 @@ class EventController extends Controller
         $categories = EventCategory::active()->get();
         $minPrice  = max(100.0, (float) AppSetting::get('min_event_price', 100));
         $allowFree = (bool) AppSetting::get('allow_free_events', true);
-        return view('photographer.events.edit', compact('event', 'categories', 'minPrice', 'allowFree'));
+
+        // Same cascading picker data as create() — plus the prefill rows
+        // for whichever province/district the event already has saved
+        // so the dropdowns render their selected values without an
+        // initial AJAX round-trip.
+        $provinces = \Illuminate\Support\Facades\Cache::remember(
+            'photographer.locations.provinces', 3600,
+            fn () => \App\Models\ThaiProvince::orderBy('name_th')->get(['id','name_th','name_en'])
+        );
+        $districts = $event->province_id
+            ? \App\Models\ThaiDistrict::where('province_id', $event->province_id)
+                ->orderBy('name_th')->get(['id','name_th','name_en'])
+            : collect();
+        $subdistricts = $event->district_id
+            ? \App\Models\ThaiSubdistrict::where('district_id', $event->district_id)
+                ->orderBy('name_th')->get(['id','name_th','name_en','zip_code'])
+            : collect();
+
+        return view('photographer.events.edit', compact(
+            'event', 'categories', 'minPrice', 'allowFree',
+            'provinces', 'districts', 'subdistricts'
+        ));
     }
 
     public function update(Request $request, Event $event)
@@ -720,6 +747,40 @@ class EventController extends Controller
         }
     }
 
+    /* ────────────────── Cascading location picker (AJAX) ──────────────────
+     * Mirrors the admin endpoints (Admin\EventController::getDistricts /
+     * getSubdistricts) but mounted under the photographer prefix so the
+     * create/edit form's <select> can populate without needing admin
+     * privileges. The data is public reference (Thai government
+     * geographical codes) — read-only, cacheable, no PII.
+     * ────────────────────────────────────────────────────────────────── */
+
+    /** GET /photographer/api/locations/districts?province_id={id} */
+    public function getDistricts(Request $request)
+    {
+        $provinceId = (int) $request->input('province_id', 0);
+        if ($provinceId <= 0) {
+            return response()->json([]);
+        }
+        $districts = \App\Models\ThaiDistrict::where('province_id', $provinceId)
+            ->orderBy('name_th')
+            ->get(['id', 'name_th', 'name_en']);
+        return response()->json($districts);
+    }
+
+    /** GET /photographer/api/locations/subdistricts?district_id={id} */
+    public function getSubdistricts(Request $request)
+    {
+        $districtId = (int) $request->input('district_id', 0);
+        if ($districtId <= 0) {
+            return response()->json([]);
+        }
+        $subdistricts = \App\Models\ThaiSubdistrict::where('district_id', $districtId)
+            ->orderBy('name_th')
+            ->get(['id', 'name_th', 'name_en', 'zip_code']);
+        return response()->json($subdistricts);
+    }
+
     /* ─────────────────── Enriched fields (2026-05-01) ───────────────────
      * The Extra-Info card on the create/edit forms posts a dozen
      * optional fields driving Schema.org Event JSON-LD + the public
@@ -755,6 +816,13 @@ class EventController extends Controller
             'facebook_url'       => 'nullable|url|max:500',
             'dress_code'         => 'nullable|string|max:200',
             'parking_info'       => 'nullable|string|max:500',
+            // Cascading location picker — `exists` checks confirm the
+            // posted IDs match real Thai gov reference rows so we can't
+            // be tricked into storing arbitrary integers.
+            'province_id'        => 'nullable|integer|exists:thai_provinces,id',
+            'district_id'        => 'nullable|integer|exists:thai_districts,id',
+            'subdistrict_id'     => 'nullable|integer|exists:thai_subdistricts,id',
+            'location_detail'    => 'nullable|string|max:500',
         ];
     }
 
@@ -809,6 +877,13 @@ class EventController extends Controller
             'facebook_url'       => $clean($validated['facebook_url'] ?? null),
             'dress_code'         => $clean($validated['dress_code'] ?? null),
             'parking_info'       => $clean($validated['parking_info'] ?? null),
+            // Cascading picker — store nulls when the photographer
+            // didn't pick a value so the row stays valid (the columns
+            // are nullable in the schema).
+            'province_id'        => !empty($validated['province_id'])    ? (int) $validated['province_id']    : null,
+            'district_id'        => !empty($validated['district_id'])    ? (int) $validated['district_id']    : null,
+            'subdistrict_id'     => !empty($validated['subdistrict_id']) ? (int) $validated['subdistrict_id'] : null,
+            'location_detail'    => $clean($validated['location_detail'] ?? null),
         ];
     }
 }

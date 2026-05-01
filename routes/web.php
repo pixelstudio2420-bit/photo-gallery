@@ -1746,6 +1746,14 @@ Route::prefix('photographer')->name('photographer.')->group(function () {
         Route::resource('events', \App\Http\Controllers\Photographer\EventController::class);
         Route::get('events/{event}/qrcode', [\App\Http\Controllers\Photographer\EventController::class, 'qrcode'])->name('events.qrcode');
 
+        // Cascading location picker — fed by the create/edit forms when
+        // the photographer changes the province (or district) <select>.
+        // Mirrors admin.api.locations.* but auth-scoped to photographer.
+        // Public Thai government reference data, no PII; cached at the
+        // browser side for the session via fetch().
+        Route::get('api/locations/districts',    [\App\Http\Controllers\Photographer\EventController::class, 'getDistricts'])->name('api.locations.districts');
+        Route::get('api/locations/subdistricts', [\App\Http\Controllers\Photographer\EventController::class, 'getSubdistricts'])->name('api.locations.subdistricts');
+
         // ── Per-event photo bundles (volume / face-match / event-all) ────
         // Photographers manage their own bundle pricing here; the public
         // event page reads the same rows. Auto-seeded on event create via

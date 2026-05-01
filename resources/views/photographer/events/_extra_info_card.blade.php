@@ -58,10 +58,23 @@
         : (string) $tags;
 
     $eventTypeOptions = \App\Models\Event::eventTypeOptions();
+
+    // Cascading picker prefill — only the EDIT view passes in
+    // $districts / $subdistricts (rows already keyed to the saved
+    // province/district). On CREATE we fall back to an empty
+    // collection so the Alpine component just shows the province
+    // dropdown until the user picks one.
+    $provinces       = $provinces       ?? collect();
+    $prefDistricts   = $districts       ?? collect();
+    $prefSubdistricts= $subdistricts    ?? collect();
+
+    $oldProvinceId    = $oldFn('province_id',    $event?->province_id);
+    $oldDistrictId    = $oldFn('district_id',    $event?->district_id);
+    $oldSubdistrictId = $oldFn('subdistrict_id', $event?->subdistrict_id);
 @endphp
 
 <div class="md:col-span-2 mt-2">
-    <details class="group rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/40 to-white open:shadow-sm transition" {{ ($event && ($event->venue_name || $event->organizer || $event->event_type)) ? 'open' : '' }}>
+    <details class="group rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/40 to-white open:shadow-sm transition" {{ ($event && ($event->venue_name || $event->organizer || $event->event_type || $event->province_id || $event->district_id || $event->subdistrict_id)) ? 'open' : '' }}>
         <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-3 select-none">
             <div class="flex items-center gap-2">
                 <i class="bi bi-stars text-indigo-600"></i>
@@ -74,6 +87,125 @@
         </summary>
 
         <div class="px-4 pb-4 pt-1 space-y-5">
+
+            {{-- ── Group 0: Cascading location picker ───────────────────
+                 Province → District (อำเภอ/เขต) → Subdistrict (ตำบล/แขวง)
+                 backed by the Thai government reference tables. The two
+                 child dropdowns are hydrated via fetch() against the
+                 photographer.api.locations.* endpoints whenever the
+                 parent select changes.
+
+                 Why this lives in the extra-info card (collapsed by
+                 default) instead of the basic form: the existing
+                 free-text "สถานที่" field is what photographers reach
+                 for first. The structured picker is for SEO + filtering
+                 — nice to have, not required.
+                 ────────────────────────────────────────────────────── --}}
+            <div x-data="{
+                    provinceId:    @js((string) ($oldProvinceId ?? '')),
+                    districtId:    @js((string) ($oldDistrictId ?? '')),
+                    subdistrictId: @js((string) ($oldSubdistrictId ?? '')),
+                    districts:     {{ $prefDistricts->toJson() }},
+                    subdistricts:  {{ $prefSubdistricts->toJson() }},
+                    loadingD:      false,
+                    loadingS:      false,
+                    async fetchDistricts() {
+                        // Reset child selections whenever the province
+                        // flips — otherwise stale district/subdistrict
+                        // IDs from the old province would post.
+                        this.districts = []; this.subdistricts = [];
+                        this.districtId = ''; this.subdistrictId = '';
+                        if (!this.provinceId) return;
+                        this.loadingD = true;
+                        try {
+                            const url = '{{ route('photographer.api.locations.districts') }}?province_id=' + encodeURIComponent(this.provinceId);
+                            const res = await fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+                            this.districts = res.ok ? await res.json() : [];
+                        } catch (_) { this.districts = []; }
+                        finally { this.loadingD = false; }
+                    },
+                    async fetchSubdistricts() {
+                        this.subdistricts = []; this.subdistrictId = '';
+                        if (!this.districtId) return;
+                        this.loadingS = true;
+                        try {
+                            const url = '{{ route('photographer.api.locations.subdistricts') }}?district_id=' + encodeURIComponent(this.districtId);
+                            const res = await fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+                            this.subdistricts = res.ok ? await res.json() : [];
+                        } catch (_) { this.subdistricts = []; }
+                        finally { this.loadingS = false; }
+                    }
+                 }">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                    <i class="bi bi-geo-alt mr-1"></i>พื้นที่ (จังหวัด · อำเภอ · ตำบล)
+                </h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {{-- จังหวัด --}}
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">จังหวัด</label>
+                        <select x-model="provinceId" @change="fetchDistricts()"
+                                class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                            <option value="">— เลือก —</option>
+                            @foreach($provinces as $p)
+                                <option value="{{ $p->id }}">{{ $p->name_th }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    {{-- อำเภอ/เขต --}}
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">
+                            อำเภอ/เขต
+                            <span x-show="loadingD" class="text-indigo-500"><i class="bi bi-arrow-repeat animate-spin"></i></span>
+                        </label>
+                        <select x-model="districtId" @change="fetchSubdistricts()"
+                                :disabled="!provinceId || loadingD"
+                                class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-50 disabled:cursor-not-allowed">
+                            <option value="">— เลือก —</option>
+                            <template x-for="d in districts" :key="d.id">
+                                <option :value="d.id" x-text="d.name_th" :selected="String(d.id) === String(districtId)"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    {{-- ตำบล/แขวง --}}
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">
+                            ตำบล/แขวง
+                            <span x-show="loadingS" class="text-indigo-500"><i class="bi bi-arrow-repeat animate-spin"></i></span>
+                        </label>
+                        <select x-model="subdistrictId"
+                                :disabled="!districtId || loadingS"
+                                class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-50 disabled:cursor-not-allowed">
+                            <option value="">— เลือก —</option>
+                            <template x-for="s in subdistricts" :key="s.id">
+                                <option :value="s.id"
+                                        x-text="s.name_th + (s.zip_code ? ' (' + s.zip_code + ')' : '')"
+                                        :selected="String(s.id) === String(subdistrictId)"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+
+                {{-- Hidden inputs feed the form submit. The visible
+                     <select x-model> values flow through Alpine; we
+                     mirror them onto these <input>s so the controller
+                     gets clean string IDs. --}}
+                <input type="hidden" name="province_id"    :value="provinceId">
+                <input type="hidden" name="district_id"    :value="districtId">
+                <input type="hidden" name="subdistrict_id" :value="subdistrictId">
+
+                {{-- Optional address detail (street, building, room) --}}
+                <div class="mt-3">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">
+                        รายละเอียดที่อยู่เพิ่มเติม
+                        <span class="text-slate-400 font-normal">— เช่น "ห้อง A2, ชั้น 3"</span>
+                    </label>
+                    <input type="text" name="location_detail" maxlength="500" value="{{ $val('location_detail') }}"
+                           class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                           placeholder="ที่อยู่ละเอียด / จุดสังเกต">
+                </div>
+            </div>
 
             {{-- ── Group 1: Time + Venue + Organizer ─────────────────── --}}
             <div>
