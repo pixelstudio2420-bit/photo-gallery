@@ -287,7 +287,18 @@ class EventController extends Controller
             ? $countBundles->map(fn ($p) => (float) $p->price / (int) $p->photo_count)->min()
             : 0;
 
-        return view('public.events.show', compact('event', 'photos', 'prices', 'packages', 'basePricePerPhoto'));
+        // Time-decay urgency — drives countdown badge + bonus discount in
+        // the bundle cards section. computeTimeDecayBonus returns 0 when
+        // disabled or far from expiry, so this is safe to call always.
+        $bundleService    = app(\App\Services\Pricing\BundleService::class);
+        $timeDecayBonus   = $bundleService->computeTimeDecayBonus($event);
+        $timeDecayTier    = $bundleService->urgencyTier($event);
+        $timeDecayExpiry  = $event->auto_delete_at;
+
+        return view('public.events.show', compact(
+            'event', 'photos', 'prices', 'packages', 'basePricePerPhoto',
+            'timeDecayBonus', 'timeDecayTier', 'timeDecayExpiry'
+        ));
     }
 
     /**

@@ -95,26 +95,153 @@
     </div>
   @endif
 
-  {{-- ── Stats Cards ───────────────────────────── --}}
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+  {{-- ── Stats Cards (5 KPIs) ───────────────────── --}}
+  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
     <div class="rounded-xl bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/[0.06] p-4">
-      <div class="text-xs text-gray-400 mb-1">แพ็กเกจที่มี</div>
+      <div class="text-xs text-gray-400 mb-1"><i class="bi bi-collection mr-1"></i>แพ็กเกจ</div>
       <div class="text-2xl font-bold">{{ $packages->count() }}</div>
     </div>
     <div class="rounded-xl bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/[0.06] p-4">
-      <div class="text-xs text-gray-400 mb-1">ยอดขายรวม</div>
-      <div class="text-2xl font-bold">{{ $stats['total_purchases'] }} ครั้ง</div>
+      <div class="text-xs text-gray-400 mb-1"><i class="bi bi-cart-check mr-1"></i>ยอดขาย</div>
+      <div class="text-2xl font-bold">{{ $stats['total_purchases'] }}</div>
+      <div class="text-[10px] text-gray-400">ครั้ง</div>
     </div>
     <div class="rounded-xl bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/[0.06] p-4">
-      <div class="text-xs text-gray-400 mb-1">รายได้จากแพ็กเกจ</div>
-      <div class="text-2xl font-bold text-emerald-600">฿{{ number_format($stats['total_revenue'], 0) }}</div>
+      <div class="text-xs text-gray-400 mb-1"><i class="bi bi-cash-stack mr-1 text-emerald-500"></i>รายได้รวม</div>
+      <div class="text-xl md:text-2xl font-bold text-emerald-600">฿{{ number_format($stats['total_revenue'], 0) }}</div>
     </div>
     <div class="rounded-xl bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/[0.06] p-4">
-      <div class="text-xs text-gray-400 mb-1">ขายดีที่สุด</div>
-      <div class="text-sm font-semibold truncate">{{ $stats['best_seller']?->name ?? '—' }}</div>
-      <div class="text-xs text-gray-400">{{ $stats['best_seller']?->purchase_count ?? 0 }} ครั้ง</div>
+      <div class="text-xs text-gray-400 mb-1"><i class="bi bi-receipt mr-1 text-blue-500"></i>AOV เฉลี่ย</div>
+      <div class="text-xl md:text-2xl font-bold text-blue-600">฿{{ number_format($stats['avg_order_value'], 0) }}</div>
+      <div class="text-[10px] text-gray-400">ต่อออเดอร์</div>
+    </div>
+    <div class="rounded-xl bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/[0.06] p-4">
+      <div class="text-xs text-gray-400 mb-1"><i class="bi bi-percent mr-1 text-purple-500"></i>Conversion</div>
+      <div class="text-xl md:text-2xl font-bold text-purple-600">{{ $stats['conversion_pct'] }}%</div>
+      <div class="text-[10px] text-gray-400">/ {{ number_format($event->view_count ?? 0) }} views</div>
     </div>
   </div>
+
+  {{-- ── 14-day Revenue Trend (sparkline) ─────────── --}}
+  @if($stats['total_purchases'] > 0)
+    <div class="mb-4 rounded-xl bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/[0.06] p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h6 class="font-semibold text-sm"><i class="bi bi-graph-up mr-1 text-indigo-500"></i> รายได้ 14 วันล่าสุด</h6>
+        <span class="text-[11px] text-gray-400">รวม ฿{{ number_format(collect($stats['trend'])->sum('revenue'), 0) }}</span>
+      </div>
+      @php
+        $maxRev = max(1, collect($stats['trend'])->max('revenue'));
+      @endphp
+      <div class="flex items-end gap-1 h-20">
+        @foreach($stats['trend'] as $day)
+          @php
+            $h = $day['revenue'] > 0 ? max(8, ($day['revenue'] / $maxRev) * 100) : 4;
+            $isToday = $loop->last;
+          @endphp
+          <div class="flex-1 flex flex-col items-center gap-1 group relative">
+            <div class="w-full rounded-t transition-all
+                        {{ $day['revenue'] > 0 ? 'bg-gradient-to-t from-indigo-500 to-violet-500' : 'bg-gray-200 dark:bg-white/[0.06]' }}
+                        {{ $isToday ? 'ring-2 ring-amber-400' : '' }}"
+                 style="height: {{ $h }}%;"></div>
+            <div class="text-[9px] text-gray-400">{{ $day['date'] }}</div>
+            {{-- Hover tooltip --}}
+            @if($day['revenue'] > 0)
+              <div class="absolute bottom-full mb-1 px-2 py-1 bg-gray-900 text-white text-[10px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                {{ $day['count'] }} ออเดอร์ · ฿{{ number_format($day['revenue'], 0) }}
+              </div>
+            @endif
+          </div>
+        @endforeach
+      </div>
+    </div>
+  @endif
+
+  {{-- ── Per-Bundle Performance Table ─────────────── --}}
+  @if($stats['total_purchases'] > 0)
+    <div class="mb-4 rounded-xl bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/[0.06] overflow-hidden">
+      <div class="px-5 py-3 border-b border-gray-100 dark:border-white/[0.06]">
+        <h6 class="font-semibold text-sm"><i class="bi bi-bar-chart mr-1 text-emerald-500"></i> ประสิทธิภาพแต่ละแพ็กเกจ</h6>
+      </div>
+      <div class="divide-y divide-gray-100 dark:divide-white/[0.04]">
+        @foreach($stats['per_bundle']->where('purchases', '>', 0) as $b)
+          <div class="px-5 py-3 flex items-center gap-3">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="font-medium text-sm">{{ $b['name'] }}</span>
+                @if($b['is_featured'])
+                  <i class="bi bi-star-fill text-amber-500 text-[10px]"></i>
+                @endif
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/[0.06] text-gray-500">{{ $b['type'] }}</span>
+              </div>
+              <div class="h-2 bg-gray-100 dark:bg-white/[0.06] rounded-full overflow-hidden">
+                <div class="h-full bg-gradient-to-r from-indigo-500 to-violet-500" style="width: {{ $b['share_pct'] }}%"></div>
+              </div>
+            </div>
+            <div class="text-right shrink-0">
+              <div class="font-bold text-sm">{{ $b['purchases'] }}<span class="text-[10px] text-gray-400 ml-0.5">ครั้ง</span></div>
+              <div class="text-[11px] text-emerald-600">฿{{ number_format($b['revenue'], 0) }}</div>
+              <div class="text-[10px] text-gray-400">{{ $b['share_pct'] }}%</div>
+            </div>
+          </div>
+        @endforeach
+      </div>
+    </div>
+  @endif
+
+  {{-- ── Recent Orders + Recent Changes (2 columns) ── --}}
+  @if($stats['total_purchases'] > 0 || $stats['recent_changes']->count() > 0)
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
+
+    {{-- Recent Orders --}}
+    @if($stats['recent_orders']->count() > 0)
+    <div class="rounded-xl bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/[0.06] overflow-hidden">
+      <div class="px-4 py-2.5 border-b border-gray-100 dark:border-white/[0.06]">
+        <h6 class="font-semibold text-sm"><i class="bi bi-clock-history mr-1 text-blue-500"></i> ออเดอร์ล่าสุด (7 วัน)</h6>
+      </div>
+      <div class="divide-y divide-gray-100 dark:divide-white/[0.04] max-h-64 overflow-y-auto">
+        @foreach($stats['recent_orders']->take(8) as $o)
+          @php $pkg = $packages->firstWhere('id', $o->package_id); @endphp
+          <div class="px-4 py-2 flex items-center justify-between gap-2 text-xs">
+            <div class="min-w-0">
+              <div class="font-medium truncate">#{{ $o->id }} · {{ $pkg?->name ?? '—' }}</div>
+              <div class="text-[10px] text-gray-400">{{ \Carbon\Carbon::parse($o->paid_at)->diffForHumans() }}</div>
+            </div>
+            <div class="font-semibold text-emerald-600 shrink-0">฿{{ number_format($o->total, 0) }}</div>
+          </div>
+        @endforeach
+      </div>
+    </div>
+    @endif
+
+    {{-- Recent Changes (audit log) --}}
+    @if($stats['recent_changes']->count() > 0)
+    <div class="rounded-xl bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/[0.06] overflow-hidden">
+      <div class="px-4 py-2.5 border-b border-gray-100 dark:border-white/[0.06]">
+        <h6 class="font-semibold text-sm"><i class="bi bi-journal-text mr-1 text-amber-500"></i> ประวัติการแก้ไขแพ็กเกจ</h6>
+      </div>
+      <div class="divide-y divide-gray-100 dark:divide-white/[0.04] max-h-64 overflow-y-auto">
+        @foreach($stats['recent_changes'] as $log)
+          <div class="px-4 py-2 text-xs">
+            <div class="flex items-center justify-between gap-2">
+              <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase
+                @if($log->action === 'create') bg-emerald-100 text-emerald-700
+                @elseif($log->action === 'update') bg-blue-100 text-blue-700
+                @elseif($log->action === 'delete') bg-red-100 text-red-700
+                @else bg-gray-100 text-gray-700
+                @endif">{{ $log->action }}</span>
+              <span class="text-[10px] text-gray-400">{{ $log->created_at?->diffForHumans() }}</span>
+            </div>
+            @if($log->reason)
+              <div class="text-[11px] text-gray-500 mt-1">{{ \Illuminate\Support\Str::limit($log->reason, 60) }}</div>
+            @endif
+            <div class="text-[10px] text-gray-400 mt-0.5">โดย: {{ $log->changed_by_role ?? 'system' }}</div>
+          </div>
+        @endforeach
+      </div>
+    </div>
+    @endif
+  </div>
+  @endif
 
   {{-- ── Apply Template Section ─────────────────── --}}
   <div class="mb-6 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 p-5 text-white" x-data="{ open: false, selected: '{{ $suggestedTemplate }}' }">

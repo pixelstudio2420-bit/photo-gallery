@@ -48,12 +48,8 @@ class EventPackageController extends Controller
         $templates = $this->bundles->templates();
         $suggestedTemplate = $this->bundles->templateKeyForCategory(optional($event->category)->slug);
 
-        // Stats: total revenue from these bundles + per-bundle counts
-        $stats = [
-            'total_purchases' => $packages->sum('purchase_count'),
-            'total_revenue'   => $packages->sum(fn ($p) => $p->purchase_count * (float) $p->price),
-            'best_seller'     => $packages->sortByDesc('purchase_count')->first(),
-        ];
+        // Comprehensive stats — drives the dashboard panels.
+        $stats = $this->computeStats($event, $packages);
 
         // Detect bundles whose price has drifted from what the current
         // per-photo + discount would yield. Drives the warning banner +
@@ -242,6 +238,118 @@ class EventPackageController extends Controller
         $package->update(['is_featured' => !$package->is_featured]);
 
         return back()->with('success', $package->is_featured ? 'ตั้งเป็น "ขายดีที่สุด" สำเร็จ' : 'ยกเลิก "ขายดีที่สุด" สำเร็จ');
+    }
+
+    /* ───────── Stats computation ───────── */
+
+    /**
+     * Build the dashboard stats payload for the photographer's bundle
+     * management page. Pulls from:
+     *   - pricing_packages.purchase_count (denormalized counter from
+     *     OrderObserver — incremented on every paid order with a
+     *     package_id matching one of these bundles)
+     *   - orders + order_items joined to compute revenue & AOV
+     *   - pricing_package_logs for change-frequency anomalies
+     *
+     * All queries are scoped to the event being managed so a
+     * photographer with many events doesn't see noise from others.
+     */
+    private function computeStats(Event $event, $packages): array
+    {
+        // Total purchases + revenue from the denormalized counter — fast
+        // even on accounts with thousands of orders.
+        $totalPurchases = (int) $packages->sum('purchase_count');
+        $totalRevenue   = (float) $packages->sum(
+            fn ($p) => (int) $p->purchase_count * (float) $p->price
+        );
+
+        $bestSeller = $packages
+            ->where('purchase_count', '>', 0)
+            ->sortByDesc('purchase_count')
+            ->first();
+
+        // Real-time pulses — fresh order data over the last week so the
+        // photographer can see "is anyone buying right now?".
+        $weekStart = now()->subDays(7);
+        $recentOrders = \App\Models\Order::query()
+            ->where('event_id', $event->id)
+            ->whereIn('package_id', $packages->pluck('id'))
+            ->where('status', 'paid')
+            ->where('paid_at', '>=', $weekStart)
+            ->orderByDesc('paid_at')
+            ->limit(20)
+            ->get(['id', 'package_id', 'total', 'paid_at']);
+
+        // Revenue trend — last 14 days grouped per day. Returns 14 buckets
+        // even when a day has 0 sales so the spark line renders cleanly.
+        $trend = collect();
+        for ($i = 13; $i >= 0; $i--) {
+            $day = now()->subDays($i)->startOfDay();
+            $next = $day->copy()->addDay();
+            $row = \App\Models\Order::query()
+                ->where('event_id', $event->id)
+                ->whereIn('package_id', $packages->pluck('id'))
+                ->where('status', 'paid')
+                ->whereBetween('paid_at', [$day, $next])
+                ->selectRaw('COUNT(*) as cnt, COALESCE(SUM(total), 0) as rev')
+                ->first();
+            $trend->push([
+                'date'     => $day->format('d/m'),
+                'count'    => (int) ($row->cnt ?? 0),
+                'revenue' => (float) ($row->rev ?? 0),
+            ]);
+        }
+
+        // Conversion proxy — bundles purchased ÷ event view_count. Not a
+        // perfect funnel metric (no per-view tracking on package cards
+        // specifically) but useful for relative comparisons across
+        // bundles + a sanity check on whether the event has buyer
+        // traffic at all.
+        $views = max(1, (int) ($event->view_count ?? 0));
+        $conversionPct = $totalPurchases > 0
+            ? round(($totalPurchases / $views) * 100, 2)
+            : 0.0;
+
+        // Per-bundle breakdown — drives the "which bundle is winning?"
+        // table at the bottom of the dashboard.
+        $perBundle = $packages->map(function ($p) use ($totalPurchases) {
+            $purchases = (int) $p->purchase_count;
+            $revenue   = $purchases * (float) $p->price;
+            $share     = $totalPurchases > 0 ? round($purchases / $totalPurchases * 100, 1) : 0;
+            return [
+                'id'        => $p->id,
+                'name'      => $p->name,
+                'type'      => $p->bundle_type,
+                'price'     => (float) $p->price,
+                'purchases' => $purchases,
+                'revenue'   => $revenue,
+                'share_pct' => $share,
+                'is_featured' => (bool) $p->is_featured,
+            ];
+        })->sortByDesc('purchases')->values();
+
+        // Recent admin/system price changes — surfaces unusual activity
+        // the photographer may want to know about (e.g. an admin tweaked
+        // pricing, or auto-recalc fired).
+        $recentChanges = \App\Models\PricingPackageLog::query()
+            ->where('event_id', $event->id)
+            ->orderByDesc('created_at')
+            ->limit(5)
+            ->get(['id', 'action', 'changed_by_role', 'reason', 'created_at']);
+
+        return [
+            'total_purchases' => $totalPurchases,
+            'total_revenue'   => $totalRevenue,
+            'best_seller'     => $bestSeller,
+            'recent_orders'   => $recentOrders,
+            'trend'           => $trend,
+            'conversion_pct'  => $conversionPct,
+            'per_bundle'      => $perBundle,
+            'recent_changes'  => $recentChanges,
+            'avg_order_value' => $totalPurchases > 0
+                ? round($totalRevenue / $totalPurchases, 2)
+                : 0,
+        ];
     }
 
     /* ───────── Auth helpers ───────── */

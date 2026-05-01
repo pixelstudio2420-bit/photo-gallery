@@ -494,6 +494,86 @@ class BundleService
     }
 
     /* ═══════════════════════════════════════════════════════════════
+     * Time-Decay Pricing — urgency discount as event nears expiry
+     * ═══════════════════════════════════════════════════════════════ */
+
+    /**
+     * Compute the time-decay bonus discount % for an event based on how
+     * close it is to expiring (`auto_delete_at`). Photo galleries have
+     * a natural urgency curve: buyers procrastinate until reminded that
+     * "your photos disappear in 3 days". This bonus turns that urgency
+     * into a price signal — the closer to expiry, the deeper the discount,
+     * encouraging the conversion before the gallery is gone for good.
+     *
+     * Curve (default — tunable via AppSetting):
+     *   ≥ 14 days remaining → 0%   (full price, no urgency)
+     *   7-13 days           → 5%   (mild urgency)
+     *   3-6 days            → 10%  (real urgency)
+     *   1-2 days            → 15%  (last call)
+     *   < 24 hours          → 20%  (final hours)
+     *
+     * Returns 0 when:
+     *   - The event has no auto_delete_at (no expiry → no urgency)
+     *   - Time-decay is globally disabled via AppSetting
+     *   - The event has already expired (past auto_delete_at)
+     */
+    public function computeTimeDecayBonus(Event $event): float
+    {
+        // Global feature flag (admin-controllable kill switch).
+        $enabled = (bool) \App\Models\AppSetting::get('time_decay_enabled', '0');
+        if (!$enabled) return 0.0;
+
+        // No expiry → no urgency.
+        $expiry = $event->auto_delete_at ?? null;
+        if (!$expiry) return 0.0;
+
+        $expiryAt = \Carbon\Carbon::parse($expiry);
+        $now      = now();
+
+        // Already past expiry — no bonus.
+        if ($now->greaterThanOrEqualTo($expiryAt)) return 0.0;
+
+        $daysRemaining = $now->diffInHours($expiryAt) / 24;
+
+        // Tunable thresholds via AppSetting; defaults match the docblock curve.
+        $maxBonus = (float) \App\Models\AppSetting::get('time_decay_max_bonus_pct', '20');
+
+        return match (true) {
+            $daysRemaining >= 14 => 0.0,
+            $daysRemaining >= 7  => round($maxBonus * 0.25, 1),  // ~5% default
+            $daysRemaining >= 3  => round($maxBonus * 0.50, 1),  // ~10%
+            $daysRemaining >= 1  => round($maxBonus * 0.75, 1),  // ~15%
+            default              => $maxBonus,                   // ~20%
+        };
+    }
+
+    /**
+     * Human-readable urgency tier — drives badge text and colour on the
+     * bundle cards. Returns one of:
+     *   - null    (no urgency)
+     *   - 'mild'  (≥ 7 days)
+     *   - 'real'  (3-6 days)
+     *   - 'last'  (1-2 days)
+     *   - 'final' (< 24h)
+     */
+    public function urgencyTier(Event $event): ?string
+    {
+        if (!\App\Models\AppSetting::get('time_decay_enabled', '0')) return null;
+        if (!$event->auto_delete_at) return null;
+
+        $hours = now()->diffInHours(\Carbon\Carbon::parse($event->auto_delete_at), false);
+        if ($hours <= 0) return null;
+
+        return match (true) {
+            $hours < 24       => 'final',
+            $hours < 24 * 3   => 'last',
+            $hours < 24 * 7   => 'real',
+            $hours < 24 * 14  => 'mild',
+            default           => null,
+        };
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
      * Stats — invoked from Order observer when a paid order has a package
      * ═══════════════════════════════════════════════════════════════ */
 

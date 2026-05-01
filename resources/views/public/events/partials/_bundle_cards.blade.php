@@ -78,6 +78,50 @@
       </p>
     </div>
 
+    {{-- ── Time-Decay Urgency Banner ───────────────────────────
+         Renders when the event has an auto_delete_at and the
+         photographer (or admin) has enabled time-decay pricing.
+         Drives the loss-aversion + scarcity psychology levers:
+           "ภาพเหลืออีก X วัน — ลดเพิ่มอีก Y%!"
+         The bonus is added on top of every bundle's existing
+         discount in the price math below. --}}
+    @if(!empty($timeDecayBonus) && $timeDecayBonus > 0)
+      @php
+        $tierStyle = match($timeDecayTier) {
+            'final' => ['bg' => 'from-red-500 to-rose-600',     'icon' => 'bi-fire',         'label' => '🔥 ชั่วโมงสุดท้าย!'],
+            'last'  => ['bg' => 'from-orange-500 to-red-500',   'icon' => 'bi-alarm-fill',   'label' => '⏰ เหลือไม่กี่วัน'],
+            'real'  => ['bg' => 'from-amber-500 to-orange-500', 'icon' => 'bi-clock-history','label' => '⏳ ใกล้หมดอายุ'],
+            'mild'  => ['bg' => 'from-yellow-500 to-amber-500', 'icon' => 'bi-clock',        'label' => '📅 พิเศษช่วงนี้'],
+            default => ['bg' => 'from-amber-500 to-orange-500', 'icon' => 'bi-clock',        'label' => 'พิเศษช่วงนี้'],
+        };
+        $hoursLeft = !empty($timeDecayExpiry) ? max(0, now()->diffInHours(\Carbon\Carbon::parse($timeDecayExpiry), false)) : 0;
+        $daysLeft  = floor($hoursLeft / 24);
+      @endphp
+      <div class="mb-4 rounded-2xl p-4 bg-gradient-to-r {{ $tierStyle['bg'] }} text-white shadow-lg">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div class="flex items-center gap-3 min-w-0">
+            <i class="bi {{ $tierStyle['icon'] }} text-3xl shrink-0"></i>
+            <div class="min-w-0">
+              <div class="font-bold text-base md:text-lg leading-tight">
+                {{ $tierStyle['label'] }} — ลดเพิ่มอีก {{ (int) $timeDecayBonus }}%
+              </div>
+              <div class="text-xs md:text-sm text-white/85 mt-0.5">
+                @if($daysLeft >= 1)
+                  ภาพในอีเวนต์นี้จะหายอัตโนมัติในอีก <strong>{{ $daysLeft }} วัน</strong> — รีบซื้อก่อนภาพหาย!
+                @else
+                  ภาพหายในอีก <strong>{{ $hoursLeft }} ชั่วโมง</strong> — รีบเก็บเลยตอนนี้!
+                @endif
+              </div>
+            </div>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="text-[10px] uppercase tracking-wide text-white/70">ส่วนลดพิเศษ</div>
+            <div class="text-2xl md:text-3xl font-black">+{{ (int) $timeDecayBonus }}%</div>
+          </div>
+        </div>
+      </div>
+    @endif
+
     {{-- ── Cards container.
          Mobile: x-show toggled by `open`, x-collapse animates the slide.
          Desktop (md+): `open` initializes to true via matchMedia in
@@ -95,9 +139,23 @@
           $isCount     = $pkg->bundle_type === 'count';
           $isFace      = $pkg->bundle_type === 'face_match';
           $isEventAll  = $pkg->bundle_type === 'event_all';
-          $perPhoto    = $isCount && $pkg->photo_count ? round((float)$pkg->price / $pkg->photo_count, 2) : null;
-          $savingsPct  = $pkg->original_price && $pkg->original_price > $pkg->price
-              ? round(((float)$pkg->original_price - (float)$pkg->price) / (float)$pkg->original_price * 100)
+
+          // Apply time-decay bonus to count + event_all bundles. The
+          // displayed price = stored bundle price × (1 - bonus%). Stored
+          // values stay as-is (no DB writes per page view); the discount
+          // only takes effect at checkout via cart-level coupon-style
+          // application. face_match bundles aren't reduced — their price
+          // is computed live from per_photo + own discount_pct anyway.
+          $bonusPct       = (!$isFace && !empty($timeDecayBonus)) ? (float) $timeDecayBonus : 0;
+          $effectivePrice = $isFace
+              ? (float) $pkg->price
+              : round((float) $pkg->price * (1 - $bonusPct / 100), 0);
+
+          $perPhoto    = $isCount && $pkg->photo_count
+              ? round($effectivePrice / $pkg->photo_count, 2)
+              : null;
+          $savingsPct  = $pkg->original_price && $pkg->original_price > $effectivePrice
+              ? round(((float)$pkg->original_price - $effectivePrice) / (float)$pkg->original_price * 100)
               : 0;
         @endphp
 
@@ -148,8 +206,11 @@
                  strongly to the dollar amount they're saving than to the
                  percentage off, especially above ฿500 of savings. --}}
             @php
-              $savingsAmount = $pkg->original_price && $pkg->original_price > $pkg->price
-                  ? (float) $pkg->original_price - (float) $pkg->price
+              // Savings amount uses the EFFECTIVE price (after time-decay
+              // bonus, if applicable) so the displayed savings number
+              // matches what the buyer actually pays at checkout.
+              $savingsAmount = $pkg->original_price && $pkg->original_price > $effectivePrice
+                  ? (float) $pkg->original_price - $effectivePrice
                   : 0;
             @endphp
             <div class="text-center mb-3">
@@ -158,12 +219,20 @@
                 <div class="text-base md:text-lg font-bold text-pink-600 dark:text-pink-400 leading-tight">ราคาผันแปร</div>
                 <div class="text-[10px] text-gray-500 mt-0.5">สูงสุด ฿{{ number_format($pkg->max_price, 0) }}</div>
               @else
-                @if($pkg->original_price && $pkg->original_price > $pkg->price)
+                @if($pkg->original_price && $pkg->original_price > $effectivePrice)
                   <div class="text-[11px] text-gray-400 line-through">฿{{ number_format($pkg->original_price, 0) }}</div>
                 @endif
                 <div class="text-xl md:text-2xl lg:text-3xl font-extrabold leading-none {{ $pkg->is_featured ? 'text-amber-600 dark:text-amber-400' : 'text-indigo-600 dark:text-indigo-400' }}">
-                  ฿{{ number_format($pkg->price, 0) }}
+                  ฿{{ number_format($effectivePrice, 0) }}
                 </div>
+                {{-- When time-decay bonus is active, surface it explicitly so
+                     the buyer sees WHY this price is lower than it was —
+                     reinforces the urgency message in the banner above. --}}
+                @if($bonusPct > 0)
+                  <div class="text-[10px] text-red-600 font-semibold mt-0.5">
+                    +ลดเพิ่ม {{ (int) $bonusPct }}% ก่อนภาพหาย
+                  </div>
+                @endif
                 @if($savingsAmount > 0)
                   <div class="text-[11px] text-emerald-600 font-bold mt-1">
                     💰 ประหยัด ฿{{ number_format($savingsAmount, 0) }}
