@@ -46,6 +46,15 @@
         applyTheme(next);
     }
 
+    // Set a specific theme — used by segmented controls where each
+    // option is a SET action (not a TOGGLE). Re-clicking the active
+    // option is a no-op.
+    function setTheme(theme) {
+        if (theme !== 'light' && theme !== 'dark') return;
+        localStorage.setItem(STORAGE_KEY, theme);
+        applyTheme(theme);
+    }
+
     // Apply immediately (before DOM ready to prevent flash)
     applyTheme(getPreference());
 
@@ -54,9 +63,20 @@
         // Re-apply to ensure icons are correct after DOM is parsed
         applyTheme(getPreference());
 
-        // Attach click handlers
+        // Toggle (single-button) variant: clicking flips current ↔ other.
         document.querySelectorAll('.theme-toggle').forEach(btn => {
             btn.addEventListener('click', toggleTheme);
+        });
+
+        // Set (segmented-control) variant: data-theme-set="light"|"dark"
+        // on each option button. Active state is purely CSS-driven via
+        // Tailwind's `dark:` variants reacting to the .dark class on
+        // <html>, so no DOM updates needed beyond the applyTheme call.
+        document.querySelectorAll('[data-theme-set]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const t = btn.getAttribute('data-theme-set');
+                if (t === 'light' || t === 'dark') setTheme(t);
+            });
         });
     });
 
@@ -69,4 +89,5 @@
 
     // Expose globally
     window.toggleTheme = toggleTheme;
+    window.setTheme    = setTheme;
 })();
