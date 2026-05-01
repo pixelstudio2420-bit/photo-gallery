@@ -732,8 +732,17 @@ class SeoService
         // ------------------------------------------------------------------
         // 10. Favicon
         // ------------------------------------------------------------------
+        // The stored value is an R2/S3 object key (e.g.
+        // "system/favicon/user_0/abc.ico"), not a browser-ready URL.
+        // Resolve it through the same path the favicon partial uses
+        // before emitting; otherwise the bare key gets resolved
+        // RELATIVE to the current page and 404s on every non-root URL
+        // (e.g. /events/3 requests /events/system/favicon/...).
         if ($s['seo_favicon'] !== '') {
-            $out[] = '<link rel="icon" href="' . e($s['seo_favicon']) . '">';
+            $faviconHref = $this->resolveFaviconUrl($s['seo_favicon']);
+            if ($faviconHref !== '') {
+                $out[] = '<link rel="icon" href="' . e($faviconHref) . '">';
+            }
         }
 
         // ------------------------------------------------------------------
@@ -805,6 +814,53 @@ HTML;
         }
 
         return implode("\n", $out) . "\n";
+    }
+
+    /**
+     * Resolve a stored favicon key to a browser-fetchable URL.
+     *
+     * The AppSetting('seo_favicon') value is an R2/S3 object key (e.g.
+     * "system/favicon/user_0/abc.ico"), not a URL. Without this resolution
+     * step the bare key gets emitted into <link rel="icon">, the browser
+     * resolves it relative to the current path, and every non-root page
+     * generates a 404 on a phantom path like /events/3/system/favicon/...
+     *
+     * Resolution order mirrors the favicon partial:
+     *   1. R2 public URL (when configured) — preferred.
+     *   2. Local public disk URL — for non-R2 deploys.
+     *   3. Empty string — caller skips emitting the link entirely.
+     *
+     * The candidate is sanity-checked against an absolute URL/path
+     * pattern. Bare keys (no leading slash) are wrapped as /storage/{key}
+     * so the browser at least sees an absolute path.
+     *
+     * @param  string  $key  Storage object key from AppSetting.
+     * @return string  A browser-ready URL, or empty string if unresolvable.
+     */
+    private function resolveFaviconUrl(string $key): string
+    {
+        if ($key === '') return '';
+
+        $candidate = '';
+        try {
+            $candidate = (string) app(\App\Services\Media\R2MediaService::class)->url($key);
+        } catch (\Throwable) {
+            try {
+                $candidate = (string) \Illuminate\Support\Facades\Storage::disk('public')->url($key);
+            } catch (\Throwable) {
+                $candidate = '';
+            }
+        }
+
+        if ($candidate === '') return '';
+
+        // Absolute URL or path → trust as-is.
+        if (preg_match('#^(?:https?:)?/#i', $candidate)) {
+            return $candidate;
+        }
+
+        // Bare key → wrap as absolute /storage/ path.
+        return '/storage/' . ltrim($candidate, '/');
     }
 
     // =========================================================================

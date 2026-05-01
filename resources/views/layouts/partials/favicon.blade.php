@@ -53,14 +53,28 @@
         // "system/favicon/user_0/abc.ico") when `filesystems.disks.r2.url`
         // is unset or empty — that bare key, dropped into a <link href>,
         // gets resolved by the browser RELATIVE to the current page, so
-        // a checkout page at /payment/checkout/foo would request
-        // /payment/checkout/system/favicon/user_0/abc.ico → 404.
+        // a page at /events/3 would request /events/system/favicon/...
+        // → 404.
         //
-        // Only trust the candidate if it's an absolute URL (http:/https:)
-        // or an absolute path (leading /). Otherwise discard and let the
-        // /favicon.ico fallback take over.
-        if ($candidate !== '' && preg_match('#^(?:https?:)?/#i', $candidate)) {
-            $faviconUrl = $candidate;
+        // Two-tier handling:
+        //   1. Absolute URL (http(s)://) or absolute path (/...) → trust it.
+        //   2. Bare key (no leading slash) → STILL salvageable: prepend
+        //      a leading slash + storage path so the browser at least
+        //      sees an absolute path. Better than letting the fallback
+        //      kick in because the file IS reachable via /storage/{key}
+        //      on most public-disk deploys — and we'd rather show the
+        //      operator's branded favicon than the default loadroop one.
+        if ($candidate !== '') {
+            if (preg_match('#^(?:https?:)?/#i', $candidate)) {
+                // Already absolute — use directly.
+                $faviconUrl = $candidate;
+            } else {
+                // Bare key. Wrap it as /storage/{key} so the browser sees
+                // an absolute path. If that 404s on this deploy, the
+                // browser will fall through to its own /favicon.ico
+                // request which hits the static file.
+                $faviconUrl = '/storage/' . ltrim($candidate, '/');
+            }
         }
     }
 @endphp
