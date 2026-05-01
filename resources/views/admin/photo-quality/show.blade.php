@@ -20,7 +20,7 @@
         <h4 class="font-bold tracking-tight flex items-center gap-2">
             <i class="bi bi-stars text-indigo-500"></i> {{ $event->name }}
         </h4>
-        <div class="text-xs text-gray-400 font-mono">{{ $event->event_code }}</div>
+        <div class="text-xs text-gray-400 font-mono">{{ $event->slug ?? '#' . $event->id }}</div>
     </div>
     <div class="flex items-center gap-2">
         <form action="{{ route('admin.photo-quality.rescore-event', $event) }}" method="POST">

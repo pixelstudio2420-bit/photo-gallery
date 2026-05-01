@@ -7,7 +7,15 @@ use App\Models\Event;
 use App\Models\EventPhoto;
 use App\Services\PhotoQualityScoringService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
+/**
+ * Admin photo-quality dashboard.
+ *
+ * Aggregates quality_score from event_photos so admins can see which
+ * events have the lowest avg score (likely needs more curation), which
+ * have never been scored, and which photos are dragging the average down.
+ */
 class PhotoQualityController extends Controller
 {
     public function __construct(protected PhotoQualityScoringService $svc) {}
@@ -16,14 +24,36 @@ class PhotoQualityController extends Controller
     {
         $kpis = $this->svc->kpis();
 
-        // Events sorted by average score desc, with photo counts
+        // Per-event aggregates via subqueries — avoids N+1 while still
+        // getting fresh counts. The actual table name is `event_events`
+        // (legacy of the early multi-tenant prefix scheme); using the
+        // Event model's qualifyColumn keeps us safe against future
+        // table-name changes.
         $events = Event::query()
-            ->select('events.id', 'events.name', 'events.event_code', 'events.created_at',
-                \DB::raw('(SELECT COUNT(*) FROM event_photos WHERE event_id = events.id AND status != "deleted") as photo_count'),
-                \DB::raw('(SELECT ROUND(AVG(quality_score),1) FROM event_photos WHERE event_id = events.id AND quality_score IS NOT NULL) as avg_score'),
-                \DB::raw('(SELECT MAX(quality_scored_at) FROM event_photos WHERE event_id = events.id) as last_scored_at')
+            ->select([
+                'event_events.id',
+                'event_events.name',
+                'event_events.slug',
+                'event_events.created_at',
+            ])
+            ->selectSub(
+                EventPhoto::selectRaw('COUNT(*)')
+                    ->whereColumn('event_id', 'event_events.id')
+                    ->where('status', '!=', 'deleted'),
+                'photo_count'
             )
-            ->orderByDesc('created_at')
+            ->selectSub(
+                EventPhoto::selectRaw('ROUND(AVG(quality_score)::numeric, 1)')
+                    ->whereColumn('event_id', 'event_events.id')
+                    ->whereNotNull('quality_score'),
+                'avg_score'
+            )
+            ->selectSub(
+                EventPhoto::selectRaw('MAX(quality_scored_at)')
+                    ->whereColumn('event_id', 'event_events.id'),
+                'last_scored_at'
+            )
+            ->orderByDesc('event_events.created_at')
             ->paginate(20);
 
         return view('admin.photo-quality.index', compact('kpis', 'events'));

@@ -67,7 +67,11 @@
                 <tr>
                     <td class="px-4 py-3">
                         <div class="font-semibold">{{ $e->name }}</div>
-                        <div class="text-[11px] text-gray-400 font-mono">{{ $e->event_code }}</div>
+                        {{-- The schema uses `slug` (not the legacy event_code
+                             column referenced before — see PhotoQualityController
+                             update). Falls back to the numeric id for events
+                             that haven't generated a slug yet. --}}
+                        <div class="text-[11px] text-gray-400 font-mono">{{ $e->slug ?? '#' . $e->id }}</div>
                     </td>
                     <td class="px-4 py-3">{{ number_format($e->photo_count ?? 0) }}</td>
                     <td class="px-4 py-3">

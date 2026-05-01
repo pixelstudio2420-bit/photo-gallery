@@ -39,6 +39,82 @@
 </div>
 @endif
 
+{{-- ── REAL Subscription Plans (live data) ─────────────────────────
+     The legacy creator/seller/pro tier sliders below are kept for
+     backward-compat but the marketplace actually runs on the 5-plan
+     ladder in subscription_plans. This section shows what photographers
+     ACTUALLY get (storage, commission, AI credits) so admins don't
+     confuse the legacy AppSetting values with what's live in production.
+     Edits flow through `/admin/subscriptions/plans/{code}/edit`,
+     not this page. --}}
+@if(isset($realPlans) && $realPlans->count() > 0)
+  <div class="rounded-2xl bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-500/10 dark:to-violet-500/10 border-2 border-indigo-300 dark:border-indigo-500/30 p-5 mb-5">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div>
+        <div class="flex items-center gap-2 font-bold text-indigo-900 dark:text-indigo-200 text-base">
+          <i class="bi bi-stack text-lg"></i>
+          แผนสมาชิกที่ลูกค้าใช้จริง (live data จาก subscription_plans)
+        </div>
+        <p class="text-[11px] text-indigo-700 dark:text-indigo-300/80 mt-1 leading-relaxed">
+          ค่าจริงในการคำนวณ quota + commission ของช่างภาพ — ใช้แทน 3-tier เดิมด้านล่าง
+          (legacy values คงไว้สำหรับ backward-compat เท่านั้น)
+        </p>
+      </div>
+      <a href="{{ route('admin.subscriptions.plans') }}"
+         class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition shrink-0">
+        <i class="bi bi-pencil-square"></i> แก้ไขแผน
+      </a>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2.5">
+      @foreach($realPlans as $plan)
+        @php
+          $storageGB = $plan->storage_bytes
+              ? round($plan->storage_bytes / 1073741824, 1)
+              : 0;
+          $count    = $planCounts[$plan->code] ?? 0;
+          $isPublic = (int) $plan->is_public === 1;
+        @endphp
+        <div class="rounded-xl bg-white dark:bg-slate-800 border border-indigo-200 dark:border-white/[0.08] p-3 {{ $isPublic ? '' : 'opacity-60' }}">
+          <div class="flex items-center justify-between mb-2">
+            <div class="font-bold text-sm text-indigo-900 dark:text-indigo-200">{{ $plan->name }}</div>
+            @if(!$isPublic)
+              <span class="text-[9px] px-1.5 py-0.5 bg-gray-100 dark:bg-white/[0.06] text-gray-500 rounded">ซ่อน</span>
+            @endif
+          </div>
+          <div class="space-y-1 text-[11px] text-gray-600 dark:text-gray-400">
+            <div class="flex justify-between">
+              <span>ราคา</span>
+              <span class="font-semibold text-gray-900 dark:text-gray-100">
+                @if($plan->price_thb > 0)
+                  ฿{{ number_format($plan->price_thb, 0) }}/เดือน
+                @else
+                  ฟรี
+                @endif
+              </span>
+            </div>
+            <div class="flex justify-between">
+              <span>Storage</span>
+              <span class="font-semibold text-emerald-600">{{ $storageGB }}GB</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Commission</span>
+              <span class="font-semibold text-amber-600">{{ (int) $plan->commission_pct }}%</span>
+            </div>
+            <div class="flex justify-between">
+              <span>AI Credits</span>
+              <span class="font-semibold text-purple-600">{{ number_format($plan->monthly_ai_credits ?? 0) }}/เดือน</span>
+            </div>
+          </div>
+          <div class="mt-2.5 pt-2.5 border-t border-gray-100 dark:border-white/[0.04] text-[10px] text-gray-500">
+            <i class="bi bi-people mr-0.5"></i>{{ $count }} ช่างภาพใช้แผนนี้
+          </div>
+        </div>
+      @endforeach
+    </div>
+  </div>
+@endif
+
 {{-- ── Snapshot KPIs ──────────────────────────────────────────── --}}
 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-5">
   <div class="rounded-2xl p-4 border border-teal-200 bg-teal-50 dark:bg-teal-500/10 dark:border-teal-500/30">

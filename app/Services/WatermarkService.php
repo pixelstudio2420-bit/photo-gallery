@@ -198,9 +198,14 @@ class WatermarkService
             $box   = imagettfbbox($fontSize, 0, $fontFile, $text);
             $textW = abs($box[4] - $box[0]);
             $textH = abs($box[5] - $box[1]);
-            // Enough gap so adjacent copies stay readable.
-            $stepX = max($textW + (int) ($fontSize * 1.5), 120);
-            $stepY = max($textH * 3, 80);
+
+            // Tile spacing multiplier (see drawImageTiled() for the same
+            // contract). 100 = default, 40 = tight, 200 = airy.
+            $spacingPct = max(40, min(200, (int) $this->getSetting('watermark_tile_spacing', '100')));
+            $factor = $spacingPct / 100.0;
+
+            $stepX = max($textW + (int) ($fontSize * 1.5 * $factor), 120);
+            $stepY = max((int) ($textH * 3 * $factor), 80);
 
             // Start from -stepX/2 so the top row isn't hugged against the edge.
             for ($yy = $textH; $yy < $imgH + $textH; $yy += $stepY) {
@@ -369,9 +374,15 @@ class WatermarkService
     private function drawImageTiled(
         GdImage $dest, GdImage $wm, int $imgW, int $imgH, int $wmW, int $wmH
     ): void {
-        // Leave ~40% of the watermark width as gutter so tiles breathe.
-        $stepX = max($wmW + (int) ($wmW * 0.4), 80);
-        $stepY = max($wmH + (int) ($wmH * 0.6), 80);
+        // Tile-spacing multiplier from settings (40-200, default 100).
+        // 100 reproduces the original gutter (~40% of wm width).
+        // 40   = very tight (~16% gutter), useful for piracy protection.
+        // 200  = airy (~80% gutter), preserves more of the image.
+        $spacingPct = max(40, min(200, (int) $this->getSetting('watermark_tile_spacing', '100')));
+        $factor = $spacingPct / 100.0;
+
+        $stepX = max($wmW + (int) ($wmW * 0.4 * $factor), 80);
+        $stepY = max($wmH + (int) ($wmH * 0.6 * $factor), 80);
 
         imagealphablending($dest, true);
         for ($y = 0; $y < $imgH; $y += $stepY) {

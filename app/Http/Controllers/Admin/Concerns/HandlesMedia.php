@@ -103,6 +103,9 @@ trait HandlesMedia
             'watermark_enabled', 'watermark_type', 'watermark_text',
             'watermark_opacity', 'watermark_color', 'watermark_position',
             'watermark_size_percent', 'watermark_image_path',
+            // Tile-spacing controls how far apart repeated watermark
+            // copies are when position = 'tiled'. 40-200, default 100.
+            'watermark_tile_spacing',
         ];
 
         $all      = AppSetting::getAll();

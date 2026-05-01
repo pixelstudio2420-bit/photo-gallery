@@ -492,7 +492,26 @@ class SettingsController extends Controller
 
         $snapshot = app(\App\Services\StorageQuotaService::class)->adminSnapshot();
 
-        return view('admin.settings.photographer-storage', compact('settings', 'snapshot'));
+        // Real subscription_plans data — the legacy creator/seller/pro tier
+        // settings on this page are an older 3-tier model. The actual
+        // marketplace runs on a 5-plan ladder (free / starter / pro /
+        // business / studio) defined in subscription_plans. We surface the
+        // live data here so admins see what photographers ACTUALLY get,
+        // not the stale legacy values.
+        $realPlans = \DB::table('subscription_plans')
+            ->where('is_active', 1)
+            ->orderBy('sort_order')
+            ->get(['code', 'name', 'price_thb', 'storage_bytes', 'commission_pct', 'monthly_ai_credits', 'is_public']);
+
+        // Photographer counts per real plan (drives the "X photographers
+        // are on this tier" stat on each card).
+        $planCounts = \App\Models\PhotographerProfile::query()
+            ->where('status', 'approved')
+            ->select('subscription_plan_code', \DB::raw('COUNT(*) as cnt'))
+            ->groupBy('subscription_plan_code')
+            ->pluck('cnt', 'subscription_plan_code');
+
+        return view('admin.settings.photographer-storage', compact('settings', 'snapshot', 'realPlans', 'planCounts'));
     }
 
     public function updatePhotographerStorage(Request $request)

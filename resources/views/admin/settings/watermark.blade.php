@@ -203,9 +203,32 @@
         {{-- Image Upload Options --}}
         <div id="section-image" class="pt-4 border-t border-slate-200 dark:border-white/10" style="display:none;">
           <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Watermark Image</label>
-          @if(!empty($settings['watermark_image_path']))
+          @php
+            // Resolve the stored R2/S3 object key into a browser-fetchable URL.
+            // The previous Storage::url() call returned a /storage/... path that
+            // didn't exist on the local public disk (file lives in R2), so the
+            // preview <img> 404'd on every render. Same resolution chain as
+            // layouts.partials.favicon for consistency.
+            $wmUrl = '';
+            $wmKey = $settings['watermark_image_path'] ?? '';
+            if ($wmKey) {
+                try {
+                    $wmUrl = (string) app(\App\Services\Media\R2MediaService::class)->url($wmKey);
+                } catch (\Throwable) {
+                    try {
+                        $wmUrl = (string) \Illuminate\Support\Facades\Storage::disk('public')->url($wmKey);
+                    } catch (\Throwable) {
+                        $wmUrl = '';
+                    }
+                }
+                if ($wmUrl !== '' && !preg_match('#^(?:https?:)?/#i', $wmUrl)) {
+                    $wmUrl = '/storage/' . ltrim($wmUrl, '/');
+                }
+            }
+          @endphp
+          @if($wmUrl)
             <div class="mb-3">
-              <img src="{{ Storage::url($settings['watermark_image_path']) }}"
+              <img src="{{ $wmUrl }}"
                    alt="Current watermark" id="watermarkPreview"
                    class="max-h-28 rounded-lg border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-slate-800 p-1">
               <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Current watermark image</p>
@@ -278,6 +301,34 @@
               <span>10%</span><span>80%</span>
             </div>
           </div>
+        </div>
+
+        {{-- Tile Spacing — only relevant when position = tiled. Controls
+             the gutter between repeated watermark copies. 50% = tight
+             (overlapping look), 200% = airy (sparse pattern). Service
+             reads `watermark_tile_spacing` from AppSetting and scales
+             the default step distances accordingly. --}}
+        <div class="mt-5 pt-5 border-t border-slate-200 dark:border-white/10" id="section-tile-spacing">
+          <label class="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+            <span>
+              <i class="bi bi-grid-3x3-gap mr-1"></i>Tile Spacing
+              <span class="text-[10px] font-normal text-slate-400 ml-1">(เฉพาะเมื่อเลือก Tiled)</span>
+            </span>
+            <span class="text-indigo-600 dark:text-indigo-400 font-bold" id="tileSpacingVal">{{ $settings['watermark_tile_spacing'] ?: 100 }}%</span>
+          </label>
+          <input type="range" name="watermark_tile_spacing" class="tw-range" min="40" max="200" step="10"
+                 value="{{ $settings['watermark_tile_spacing'] ?: 100 }}"
+                 oninput="document.getElementById('tileSpacingVal').textContent = this.value + '%'">
+          <div class="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+            <span>40% (แน่น)</span>
+            <span>100% (ปกติ)</span>
+            <span>200% (โปร่ง)</span>
+          </div>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+            <i class="bi bi-info-circle mr-1"></i>
+            ระยะห่างระหว่างลายน้ำที่ทำซ้ำ — ค่าน้อย = ลายน้ำติดกันแน่น (ป้องกันการครอปได้ดี),
+            ค่ามาก = ลายห่างกัน (ภาพดูสะอาดกว่า)
+          </p>
         </div>
       </div>
     </div>
