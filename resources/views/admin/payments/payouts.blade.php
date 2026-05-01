@@ -251,8 +251,32 @@
                 $photographer = $payout->photographer;
                 $pName = trim(($photographer->first_name ?? '') . ' ' . ($photographer->last_name ?? '')) ?: '-';
                 $pEmail = $photographer->email ?? '';
-                $pAvatar = $photographer->avatar ?? null;
                 $pInitial = mb_substr($photographer->first_name ?? 'U', 0, 1);
+
+                // Avatars are stored as raw R2 keys ("auth/avatar/user_3/foo.png").
+                // Feeding that directly to <img src> let the browser resolve
+                // it relative to the current URL — on this page that meant
+                // /admin/payments/auth/avatar/... which 404s. Resolve through
+                // R2MediaService::url() (which catches its own throwables and
+                // returns '' on failure) so it always becomes an absolute
+                // CDN URL or null. The @if($pAvatar) below then falls back
+                // to the initials block for missing/broken avatars instead
+                // of rendering a broken <img>.
+                $pAvatar = null;
+                $rawAvatar = $photographer->avatar ?? null;
+                if ($rawAvatar) {
+                    if (preg_match('#^(?:https?:)?//#i', $rawAvatar)) {
+                        // Already absolute (older rows / external URLs)
+                        $pAvatar = $rawAvatar;
+                    } else {
+                        try {
+                            $resolved = (string) app(\App\Services\Media\R2MediaService::class)->url($rawAvatar);
+                            $pAvatar = $resolved !== '' ? $resolved : null;
+                        } catch (\Throwable) {
+                            $pAvatar = null;
+                        }
+                    }
+                }
               @endphp
               <tr style="transition:background .12s;">
                 {{-- Checkbox --}}
