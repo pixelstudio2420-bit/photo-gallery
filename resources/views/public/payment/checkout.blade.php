@@ -112,10 +112,15 @@
         </div>
       </form>
 
-      {{-- PromptPay preview.
+      {{-- PromptPay preview — branded savable card.
            Shown immediately when PromptPay is the default-selected method so
            the customer sees the QR without a second click. `promptpay-default`
-           flag is read by toggleSections() on page load. --}}
+           flag is read by toggleSections() on page load.
+
+           The QR <img> stays PRISTINE (no logo overlay) — PromptPay EMVCo
+           spec requires unmodified QR or banking apps may fail to scan.
+           Branding is purely decorative AROUND the QR (header band +
+           corner brackets + footer ribbon). --}}
       @if(!empty($promptPayNumber))
       @php
         $ppGateway = new \App\Services\Payment\PromptPayGateway();
@@ -124,29 +129,90 @@
         $ppQrUrl   = 'https://api.qrserver.com/v1/create-qr-code/?' . http_build_query([
           'data' => $ppPayload, 'size' => '220x220', 'ecc' => 'M', 'margin' => '10', 'format' => 'png'
         ]);
-        // Is PromptPay the default-selected method (first in the list)?
         $firstMethodType = $paymentMethods->first()->method_type ?? null;
         $ppIsDefault     = $firstMethodType === 'promptpay';
+
+        // Brand info for the savable card.
+        $_ppSiteName  = $siteName ?? \App\Models\AppSetting::get('site_name', '') ?: config('app.name', 'Loadroop');
+        $_ppBrandHost = preg_replace('/^www\./i', '', parse_url(config('app.url', 'https://loadroop.com'), PHP_URL_HOST) ?: 'loadroop.com');
       @endphp
-      <div id="section-promptpay" class="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 shadow-sm overflow-hidden" @if(!$ppIsDefault) style="display:none;" @endif>
-        <div class="px-5 py-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-500/5 dark:to-teal-500/5 border-b border-slate-200 dark:border-white/10 flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white flex items-center justify-center shadow-md">
-            <i class="bi bi-qr-code"></i>
+      <div id="section-promptpay" @if(!$ppIsDefault) style="display:none;" @endif>
+        {{-- THE SAVABLE CARD — wrapped in #promptpay-card so html2canvas
+             rasterises only this region. Action buttons sit below the
+             card on purpose so they don't appear in the saved image. --}}
+        <div id="promptpay-card" class="rounded-2xl overflow-hidden bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 shadow-lg">
+          {{-- Brand header — gradient indigo→purple→pink with site name --}}
+          <div class="relative px-5 py-5 text-center bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 overflow-hidden">
+            <div class="absolute inset-0 opacity-30 pointer-events-none"
+                 style="background: radial-gradient(circle at 20% 20%, rgba(255,255,255,.18), transparent 40%), radial-gradient(circle at 80% 80%, rgba(255,255,255,.10), transparent 50%);"></div>
+            <div class="relative">
+              <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-white/20 backdrop-blur-md mb-2 border border-white/30">
+                <i class="bi bi-qr-code text-white text-xl"></i>
+              </div>
+              <h3 class="font-bold text-white text-lg mb-0.5">PromptPay QR Code</h3>
+              <div class="text-[10px] tracking-[0.22em] uppercase font-bold text-white/85">
+                {{ $_ppSiteName }}
+              </div>
+            </div>
           </div>
-          <div>
-            <h3 class="font-semibold text-slate-900 dark:text-white">PromptPay QR Code</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400">QR นี้ใช้ดูตัวอย่าง · ระบบจะสร้างใหม่ให้ออเดอร์นี้</p>
+
+          <div class="p-6 text-center">
+            {{-- QR with indigo+pink corner brackets — purely decorative,
+                 sits OUTSIDE the QR's quiet zone so scanning isn't affected. --}}
+            <div class="relative inline-block p-3 rounded-2xl bg-white shadow-md">
+              <span class="absolute w-5 h-5" style="top:-2px;left:-2px;border-top:3px solid #7c3aed;border-left:3px solid #7c3aed;border-top-left-radius:14px;"></span>
+              <span class="absolute w-5 h-5" style="top:-2px;right:-2px;border-top:3px solid #7c3aed;border-right:3px solid #7c3aed;border-top-right-radius:14px;"></span>
+              <span class="absolute w-5 h-5" style="bottom:-2px;left:-2px;border-bottom:3px solid #ec4899;border-left:3px solid #ec4899;border-bottom-left-radius:14px;"></span>
+              <span class="absolute w-5 h-5" style="bottom:-2px;right:-2px;border-bottom:3px solid #ec4899;border-right:3px solid #ec4899;border-bottom-right-radius:14px;"></span>
+              <img id="promptpay-qr-img" src="{{ $ppQrUrl }}" alt="PromptPay QR" class="w-52 h-52" crossorigin="anonymous">
+            </div>
+
+            <div class="mt-4 text-2xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 bg-clip-text text-transparent">
+              ฿{{ number_format($orderAmt, 2) }}
+            </div>
+            <div class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              PromptPay: <strong class="text-slate-900 dark:text-white font-mono">{{ $promptPayNumber }}</strong>
+              <button type="button"
+                      onclick="navigator.clipboard.writeText('{{ $promptPayNumber }}'); this.innerHTML='<i class=\'bi bi-check2 text-emerald-500\'></i>'; setTimeout(()=>{this.innerHTML='<i class=\'bi bi-clipboard text-xs\'></i>'},1500)"
+                      class="ml-1 text-slate-400 hover:text-indigo-500 transition align-middle" title="คัดลอกเบอร์ PromptPay">
+                <i class="bi bi-clipboard text-xs"></i>
+              </button>
+            </div>
+
+            @if(!empty($order->order_number))
+              <div class="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
+                คำสั่งซื้อ #{{ $order->order_number }}
+              </div>
+            @endif
+          </div>
+
+          {{-- Footer ribbon — brand domain --}}
+          <div class="px-5 py-2.5 bg-gradient-to-br from-slate-900 to-indigo-950 text-white text-sm font-semibold flex items-center justify-center gap-2">
+            <i class="bi bi-globe2 text-violet-300"></i>
+            <span>{{ $_ppBrandHost }}</span>
           </div>
         </div>
-        <div class="p-6 text-center">
-          <div class="inline-block p-3 rounded-2xl bg-white border-2 border-dashed border-emerald-300 dark:border-emerald-500/40 shadow-sm">
-            <img src="{{ $ppQrUrl }}" alt="PromptPay QR" class="w-52 h-52">
-          </div>
-          <div class="mt-4 text-sm text-slate-500 dark:text-slate-400">PromptPay: <strong class="text-slate-900 dark:text-white font-mono">{{ $promptPayNumber }}</strong></div>
-          <div class="mt-1 text-2xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
-            {{ number_format($orderAmt, 2) }} ฿
-          </div>
+        {{-- /promptpay-card --}}
+
+        {{-- Save / share row — sits OUTSIDE the card so it's not in the
+             saved image. Web Share API on iOS opens the native share
+             sheet (Save to Photos / AirDrop / LINE), download fallback
+             on Android + desktop. --}}
+        <div class="mt-3 flex flex-col items-center gap-2">
+          <button type="button" id="savePpQrBtn" onclick="savePromptPayQR(this)"
+                  class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold shadow-md hover:shadow-lg transition-all">
+            <i class="bi bi-download"></i>
+            <span>บันทึกรูป QR Code</span>
+          </button>
+          <p id="iosLongPressHint" class="hidden text-[11px] text-slate-500 dark:text-slate-400 text-center max-w-xs">
+            <i class="bi bi-info-circle"></i>
+            iPhone: ถ้าหน้าต่างแชร์ไม่ขึ้น ให้ค้างนิ้วบน QR Code แล้วเลือก "Save Image"
+          </p>
         </div>
+
+        <p class="mt-3 text-xs text-slate-500 dark:text-slate-400 text-center">
+          <i class="bi bi-info-circle"></i> QR นี้ใช้ดูตัวอย่าง · ระบบจะสร้างใหม่ให้ออเดอร์นี้หลังกด "ชำระเงิน"
+        </p>
       </div>
       @endif
 
@@ -348,4 +414,117 @@ document.addEventListener('DOMContentLoaded', function() {
   if (checked) toggleSections(checked.value);
 });
 </script>
+
+{{-- ── Branded QR card "Save" — html2canvas + Web Share API ──────────
+     Loads only on this page (not via app.js). Capture region is
+     #promptpay-card; action buttons are deliberately outside it so
+     they don't appear in the saved image. ────────────────────────── --}}
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+<script>
+(function () {
+  // Show the iPhone "long-press" hint only on iOS — Android/desktop
+  // users get the direct download path and don't need this hint.
+  // Newer iPads report as MacIntel, so test for ontouchend as well.
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.platform || '')
+             || (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+  if (isIOS) {
+    const hint = document.getElementById('iosLongPressHint');
+    if (hint) hint.classList.remove('hidden');
+  }
+
+  // Wait for the QR <img> to actually finish loading before capture —
+  // html2canvas would otherwise rasterise an empty <img> if user clicks
+  // Save before the network round-trip finishes.
+  const qrReady = new Promise((resolve) => {
+    const img = document.getElementById('promptpay-qr-img');
+    if (!img) return resolve();
+    if (img.complete && img.naturalWidth > 0) return resolve();
+    img.addEventListener('load',  resolve, { once: true });
+    img.addEventListener('error', resolve, { once: true });
+  });
+
+  window.savePromptPayQR = async function (btn) {
+    if (typeof html2canvas !== 'function') {
+      alert('กำลังโหลดเครื่องมือบันทึก กรุณารอสักครู่');
+      return;
+    }
+    const card = document.getElementById('promptpay-card');
+    if (!card) return;
+
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-arrow-repeat" style="display:inline-block;animation:spin 1s linear infinite"></i> <span>กำลังสร้างภาพ…</span>';
+
+    try {
+      await qrReady;
+      // 2× scale = retina-quality without bloating the file. useCORS
+      // lets html2canvas read the api.qrserver.com QR (which sets
+      // Access-Control-Allow-Origin: *).
+      const canvas = await html2canvas(card, {
+        scale: 2,
+        backgroundColor: null,
+        useCORS: true,
+        logging: false,
+      });
+
+      // toBlob is more memory-efficient than toDataURL for retina-sized
+      // canvases — older iPhones can OOM on the bigger 2× output.
+      const blob = await new Promise((res) => canvas.toBlob(res, 'image/png', 0.95));
+      if (!blob) throw new Error('toBlob returned null');
+
+      const fileName = 'promptpay-qr-' + Date.now() + '.png';
+      const file = new File([blob], fileName, { type: 'image/png' });
+
+      // Strategy 1 — Web Share API (the iOS-friendly path).
+      // iOS Safari 15+ supports navigator.share with files. This is
+      // the ONLY reliable way to save to camera roll on iOS — Safari
+      // ignores anchor[download] and opens the image in a new tab.
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'PromptPay QR Code',
+            text: 'QR Code สำหรับชำระเงิน',
+          });
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-check2"></i> <span>บันทึกแล้ว</span>';
+          setTimeout(() => { btn.innerHTML = original; }, 2200);
+          return;
+        } catch (err) {
+          // AbortError = user cancelled the share sheet — silent restore.
+          // Anything else falls through to download fallback.
+          if (err.name === 'AbortError') {
+            btn.disabled = false;
+            btn.innerHTML = original;
+            return;
+          }
+        }
+      }
+
+      // Strategy 2 — Download via blob URL (Android Chrome + desktop).
+      // On iOS this opens the image in a new tab, but the long-press
+      // hint we showed earlier covers that fallback.
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 500);
+
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-check2"></i> <span>บันทึกแล้ว</span>';
+      setTimeout(() => { btn.innerHTML = original; }, 2200);
+    } catch (err) {
+      console.error('savePromptPayQR failed', err);
+      btn.disabled = false;
+      btn.innerHTML = original;
+      alert('บันทึกไม่สำเร็จ — iPhone: ลองค้างนิ้วบน QR Code แล้วเลือก "Save Image"');
+    }
+  };
+})();
+</script>
+<style>
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style>
 @endsection
