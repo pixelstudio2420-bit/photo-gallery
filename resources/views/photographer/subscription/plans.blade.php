@@ -3,31 +3,16 @@
 @section('title', 'เลือกแผนสมัครสมาชิก')
 
 @php
-  // All known features and their display labels. The list is filtered
-  // below by the global feature-flag layer so deprecated features
-  // (color_enhance / smart_captions / video_thumbnails / api_access)
-  // don't show up as "missing" rows on every plan card. Single source
-  // of truth: SubscriptionService::featureGloballyEnabled() — flipping
-  // a flag back ON in admin restores its row here automatically.
-  $featureLabelsAll = [
-    'face_search'         => ['ค้นหาด้วยใบหน้า (AI)',     'bi-person-bounding-box'],
-    'quality_filter'      => ['คัดรูปเสียอัตโนมัติ',       'bi-funnel'],
-    'duplicate_detection' => ['ตรวจจับรูปซ้ำ',            'bi-files'],
-    'auto_tagging'        => ['แท็กอัตโนมัติ',            'bi-tags'],
-    'best_shot'           => ['เลือกช็อตเด็ด',            'bi-trophy'],
-    'priority_upload'     => ['อัปโหลดด่วน 2x',           'bi-lightning-charge'],
-    'color_enhance'       => ['ปรับสีอัตโนมัติ',          'bi-palette2'],
-    'customer_analytics'  => ['Analytics ลูกค้า',         'bi-graph-up'],
-    'smart_captions'      => ['Smart Captions',         'bi-chat-quote'],
-    'custom_branding'     => ['Custom Branding',        'bi-palette'],
-    'video_thumbnails'    => ['Video Thumbnails',       'bi-play-btn'],
-    'api_access'          => ['API Access',             'bi-key'],
-    'white_label'         => ['White-label',            'bi-incognito'],
-    'presets'             => ['Lightroom Presets',       'bi-sliders'],
-  ];
+  // Single source of truth — FeatureFlagController::featureLabels()
+  // returns [label, icon, group] for every feature that exists in
+  // the system, including LINE Integration / SLA / Dedicated CSM /
+  // AI Preview that older copies of this view didn't know about.
+  // Filter by the global flag so deprecated / kill-switched features
+  // never render as "missing" rows on every plan card.
   $subs = app(\App\Services\SubscriptionService::class);
-  $featureLabels = collect($featureLabelsAll)
+  $featureLabels = collect(\App\Http\Controllers\Admin\FeatureFlagController::featureLabels())
     ->filter(fn($_, $code) => $subs->featureGloballyEnabled($code))
+    ->map(fn($v) => [$v[0], $v[1]])  // strip group → keep [label, icon] for the existing template
     ->all();
 
   // The "popular" plan we want to lift visually. Pro is our default sweet spot.

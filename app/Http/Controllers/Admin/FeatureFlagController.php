@@ -121,6 +121,55 @@ class FeatureFlagController extends Controller
         return in_array($feature, self::DEPRECATED_FEATURES, true) ? '0' : '1';
     }
 
+    /**
+     * Per-feature display metadata used by photographer-facing views
+     * (subscription dashboard, plan picker, promo, sell-photos).
+     *
+     * Returns an associative array keyed by feature code with values:
+     *   [label, bootstrap-icon, group]
+     *
+     * Single source of truth so a label/icon change propagates to
+     * every view automatically. The plan-picker / dashboard pages
+     * pre-2026-05-02 each had their own hardcoded copy that drifted
+     * out of sync with FEATURES — this method ends that drift.
+     */
+    public static function featureLabels(): array
+    {
+        return [
+            // ── AI ────────────────────────────────────────────────
+            'face_search'          => ['ค้นหาด้วยใบหน้า (AI)',      'bi-person-bounding-box', 'ai'],
+            'quality_filter'       => ['คัดรูปเสียอัตโนมัติ',        'bi-funnel',              'ai'],
+            'duplicate_detection'  => ['ตรวจจับรูปซ้ำ',             'bi-files',               'ai'],
+            'auto_tagging'         => ['แท็กอัตโนมัติ',             'bi-tags',                'ai'],
+            'best_shot'            => ['เลือกช็อตเด็ด',             'bi-trophy',              'ai'],
+            'ai_preview_limited'   => ['AI Preview (จำกัด)',         'bi-eye',                 'ai'],
+            'color_enhance'        => ['ปรับสีอัตโนมัติ',           'bi-palette2',            'ai'],
+            'smart_captions'       => ['Smart Captions',           'bi-chat-quote',          'ai'],
+            'video_thumbnails'     => ['Video Thumbnails',         'bi-play-btn',            'ai'],
+            // ── LINE ──────────────────────────────────────────────
+            'line_delivery'        => ['ส่งรูปเข้า LINE หลังจ่าย',   'bi-line',                'line'],
+            'line_notify_admin'    => ['แจ้งยอด/ออเดอร์เข้า LINE',  'bi-bell-fill',           'line'],
+            'line_notify_customer' => ['แจ้งสถานะออเดอร์ใน LINE',   'bi-chat-dots-fill',      'line'],
+            'line_broadcast'       => ['Broadcast LINE OA',        'bi-broadcast',           'line'],
+            'line_lifecycle'       => ['Lifecycle LINE messages',  'bi-clock-history',       'line'],
+            'line_login'           => ['LINE Login',               'bi-line',                'line'],
+            // ── Workflow ──────────────────────────────────────────
+            'priority_upload'      => ['อัปโหลดด่วน 2x',            'bi-lightning-charge',    'workflow'],
+            'customer_analytics'   => ['Analytics ลูกค้า',          'bi-graph-up',            'workflow'],
+            'presets'              => ['Lightroom Presets',        'bi-sliders',             'workflow'],
+            // ── Branding ─────────────────────────────────────────
+            'custom_branding'      => ['Custom Branding',          'bi-palette',             'branding'],
+            'white_label'          => ['White-label',              'bi-incognito',           'branding'],
+            // ── Platform ─────────────────────────────────────────
+            'chat'                 => ['ระบบแชทกับลูกค้า',          'bi-chat-left-dots',      'platform'],
+            'sla_99_99'            => ['SLA 99.99% uptime',        'bi-shield-check',        'platform'],
+            'dedicated_csm'        => ['Dedicated CSM',            'bi-person-badge',        'platform'],
+            'team_seats'           => ['Team Members',             'bi-people',              'platform'],
+            'api_access'           => ['Public API',               'bi-key',                 'platform'],
+            'chatbot'              => ['AI Chatbot',               'bi-robot',               'platform'],
+        ];
+    }
+
     public function index(): View
     {
         $flags = [];

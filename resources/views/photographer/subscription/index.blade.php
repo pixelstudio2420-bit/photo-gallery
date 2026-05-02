@@ -11,21 +11,15 @@
   $isFree   = (bool) ($summary['is_free'] ?? true);
   $inGrace  = (bool) ($summary['in_grace'] ?? false);
   $willCancel = (bool) ($summary['cancel_at_period_end'] ?? false);
-  $featureLabels = [
-    'face_search'         => 'ค้นหาด้วยใบหน้า',
-    'quality_filter'      => 'คัดรูปเสียด้วย AI',
-    'duplicate_detection' => 'ตรวจจับรูปซ้ำ',
-    'auto_tagging'        => 'แท็กอัตโนมัติ',
-    'best_shot'           => 'เลือกช็อตเด็ด',
-    'priority_upload'     => 'อัพโหลดด่วน',
-    'color_enhance'       => 'ปรับสีอัตโนมัติ',
-    'customer_analytics'  => 'Analytics ลูกค้า',
-    'smart_captions'      => 'Smart Captions',
-    'custom_branding'     => 'Custom Branding',
-    'video_thumbnails'    => 'Video Thumbnails',
-    'api_access'          => 'API Access',
-    'white_label'         => 'White-label',
-  ];
+  // Pull labels from FeatureFlagController — single source of truth so
+  // a label change here also updates the plan-picker, admin features
+  // page, and plan-edit screen. Filter by the global flag so admin's
+  // kill-switched features don't render as "missing" rows.
+  $subs = app(\App\Services\SubscriptionService::class);
+  $featureLabels = collect(\App\Http\Controllers\Admin\FeatureFlagController::featureLabels())
+    ->filter(fn($_, $code) => $subs->featureGloballyEnabled($code))
+    ->map(fn($v) => $v[0])  // dashboard view only needs the label string
+    ->all();
 @endphp
 
 @section('content')
