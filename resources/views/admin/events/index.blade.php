@@ -279,6 +279,25 @@
                 </button>
                 @endif
               </form>
+              {{-- Delete (archive) — controller's destroy() flips status to
+                   'archived' rather than hard-deleting, so this is fully
+                   reversible. We still gate behind a SweetAlert confirm
+                   because users read "ลบ" as permanent and we want them to
+                   pause + see the recovery message before clicking through.
+                   Hidden status='archived' check skips the button on rows
+                   that are already archived (toggle is the right action
+                   there, not a re-delete). --}}
+              @if(($event->status ?? '') !== 'archived')
+              <form method="POST" action="{{ route('admin.events.destroy', $event) }}" class="inline" data-confirm-archive>
+                @csrf
+                @method('DELETE')
+                <button type="submit" class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-rose-600/[0.08] text-rose-600 transition hover:bg-rose-600/[0.15]"
+                        title="ลบอีเวนต์ (ย้ายไปเก็บถาวร)"
+                        data-event-name="{{ $event->name }}">
+                  <i class="bi bi-trash text-sm"></i>
+                </button>
+              </form>
+              @endif
             </div>
           </td>
         </tr>
@@ -302,3 +321,45 @@
 @endif
 </div>{{-- end #admin-pagination-area --}}
 @endsection
+
+@push('scripts')
+<script>
+// Wire archive-confirm dialog for every <form data-confirm-archive>.
+// One delegated listener handles all rows, including any rows added
+// dynamically by the htmx/AJAX live-search if it ever lands. The
+// controller's destroy() does an archive (status flip), not a hard
+// delete — the dialog wording reflects that so admins know it's
+// reversible via the toggle button on the archived events tab.
+document.addEventListener('submit', function (e) {
+  const form = e.target.closest('form[data-confirm-archive]');
+  if (!form) return;
+  // Skip the dialog if SweetAlert hasn't loaded yet (e.g. CDN blocked) —
+  // fall back to the native browser confirm so the action still works.
+  if (typeof Swal === 'undefined') return;
+
+  e.preventDefault();
+  const btn  = form.querySelector('[data-event-name]');
+  const name = btn ? btn.dataset.eventName : 'อีเวนต์นี้';
+
+  Swal.fire({
+    title: `ย้าย "${name}" ไปที่เก็บถาวร?`,
+    html: 'อีเวนต์จะถูกซ่อนจากผู้ใช้ทั่วไป<br>'
+        + '<span class="text-xs text-gray-500">รูปและคำสั่งซื้อยังอยู่ครบ — กู้คืนได้ภายหลังโดยเปลี่ยนสถานะกลับ</span>',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: '<i class="bi bi-archive"></i> ยืนยันลบ',
+    cancelButtonText:  'ยกเลิก',
+    confirmButtonColor: '#e11d48',  // rose-600 — matches button bg
+    cancelButtonColor:  '#64748b',  // slate-500
+    reverseButtons: true,
+    focusCancel: true,             // safer default — admin can hit Enter to dismiss
+  }).then(result => {
+    if (result.isConfirmed) {
+      // submit() bypasses the listener (no submit event re-fires on .submit()),
+      // so we don't recurse into this dialog.
+      form.submit();
+    }
+  });
+});
+</script>
+@endpush
