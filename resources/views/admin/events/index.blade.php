@@ -184,8 +184,18 @@
           {{-- Cover + Name --}}
           <td class="pl-5 py-3 px-4">
             <div class="flex items-center gap-3">
-              @if($event->cover_image)
-              <img src="{{ $event->cover_image }}" alt="" class="w-10 h-10 rounded-lg object-cover flex-shrink-0">
+              {{--
+                cover_image_url accessor (Event::getCoverImageUrlAttribute)
+                resolves the raw R2 key to an absolute CDN URL with try/catch
+                so a missing/broken object falls through to the icon block
+                instead of rendering a broken <img>. Using the raw cover_image
+                column here makes the browser treat the key as a relative URL
+                and 404 against /admin/events/events/photographer_X/... — the
+                exact bug a user just reported.
+              --}}
+              @php $coverUrl = $event->cover_image_url; @endphp
+              @if($coverUrl)
+              <img src="{{ $coverUrl }}" alt="" loading="lazy" class="w-10 h-10 rounded-lg object-cover flex-shrink-0">
               @else
               <div class="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
                 <i class="bi bi-image text-gray-400 dark:text-gray-500"></i>
