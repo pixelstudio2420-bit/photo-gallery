@@ -190,13 +190,6 @@
   <main class="main-content">
     @yield('hero')
 
-    {{-- LINE friend soft-prompt — only renders for authenticated users
-         who haven't been flagged as friends yet AND have an OA configured.
-         Sits between hero and content so it's visible but not intrusive. --}}
-    <div class="max-w-7xl mx-auto px-4 pt-3">
-      @include('partials.line-friend-prompt')
-    </div>
-
     @hasSection('content')
     <div class="max-w-7xl mx-auto px-4 py-4">
       @yield('content')
@@ -205,6 +198,13 @@
 
     @yield('content-full')
   </main>
+
+  {{-- LINE friend popup — fixed-position modal so it lives outside the
+       content flow. Self-gated: only renders when user is authed +
+       not yet a friend + admin has configured an OA + 7-day cooldown
+       from prior dismissal has lapsed. Smart trigger inside (4-18s
+       depending on page intent). --}}
+  @include('partials.line-friend-prompt')
 
   {{-- Footer --}}
   @include('layouts.partials.footer')
