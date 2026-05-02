@@ -16,6 +16,11 @@
   $discount = $hasSale
     ? round((($product->price - $product->sale_price) / max($product->price, 0.01)) * 100)
     : 0;
+  // Lead-magnet detection: price=0 items are gated behind LINE friend
+  // collection (per the "ฟรี — รับผ่าน LINE" marketing strategy). The
+  // card shows "FREE" instead of "0 ฿" + a LINE accent so users
+  // immediately understand the value-vs-cost trade-off.
+  $isFree = (float) $product->price === 0.0 && empty($product->sale_price);
 @endphp
 
 <div class="product-card-wrap h-full">
@@ -61,7 +66,16 @@
 
       {{-- Badges (top-right) --}}
       <div class="absolute top-3 right-3 flex flex-col gap-1.5 items-end">
-        @if($hasSale)
+        {{-- FREE badge — green LINE-themed, replaces sale% for price=0 items.
+             Eye-catching but doesn't scream "discount" because there's no
+             original price to discount from. --}}
+        @if($isFree)
+          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold
+                       bg-gradient-to-r from-emerald-500 to-green-600 text-white
+                       shadow-md shadow-emerald-500/30">
+            <i class="bi bi-gift-fill mr-1 text-[10px]"></i>FREE
+          </span>
+        @elseif($hasSale)
           <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold
                        bg-gradient-to-r from-rose-500 to-pink-500 text-white
                        shadow-md shadow-rose-500/30">
@@ -137,7 +151,20 @@
       <div class="mt-auto pt-3 border-t border-slate-100 dark:border-slate-800
                   flex items-end justify-between gap-2">
         <div>
-          @if($hasSale)
+          @if($isFree)
+            {{-- FREE products: emerald + LINE accent. Replaces "0 ฿"
+                 with explicit "FREE / รับผ่าน LINE" so the value
+                 proposition reads as a deliberate trade (LINE friend
+                 → access) not "lol free zero baht." --}}
+            <div class="text-[10px] font-semibold uppercase tracking-wider leading-none mb-0.5
+                        text-emerald-600 dark:text-emerald-400">รับฟรี</div>
+            <div class="text-xl font-extrabold leading-tight
+                        text-emerald-600 dark:text-emerald-400
+                        flex items-center gap-1.5">
+              FREE
+              <i class="bi bi-line text-[15px]" title="รับผ่าน LINE @loadroop"></i>
+            </div>
+          @elseif($hasSale)
             <div class="text-xs leading-none mb-0.5
                         text-slate-400 dark:text-slate-500 line-through">
               {{ number_format($product->price, 0) }} ฿
@@ -159,13 +186,16 @@
             </div>
           @endif
         </div>
-        <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl shrink-0
-                     bg-gradient-to-br from-indigo-600 to-violet-600 text-white
-                     shadow-md shadow-indigo-500/25
-                     group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-indigo-500/40
-                     transition-all duration-200"
+        {{-- CTA arrow — green for FREE (LINE), indigo for paid. Same
+             hover lift pattern across both so the visual rhythm of
+             the grid stays consistent. --}}
+        <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl shrink-0 text-white shadow-md transition-all duration-200
+                     {{ $isFree
+                          ? 'bg-gradient-to-br from-emerald-500 to-green-600 shadow-emerald-500/25 group-hover:shadow-emerald-500/40'
+                          : 'bg-gradient-to-br from-indigo-600 to-violet-600 shadow-indigo-500/25 group-hover:shadow-indigo-500/40' }}
+                     group-hover:scale-110 group-hover:shadow-lg"
               aria-label="ดูรายละเอียด">
-          <i class="bi bi-arrow-right"></i>
+          <i class="bi {{ $isFree ? 'bi-gift-fill' : 'bi-arrow-right' }}"></i>
         </span>
       </div>
     </div>
