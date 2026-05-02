@@ -76,7 +76,18 @@ class EventController extends Controller
                 });
             })
             ->when($request->category, fn($q, $c) => $q->where('category_id', $c))
-            ->when($request->status, fn($q, $s) => $q->where('status', $s))
+            // Status filter — when admin picks a specific status (incl. 'archived'),
+            // honour it. When NO status filter is set, hide archived events
+            // by default. Without this hide, clicking the row's delete button
+            // (which flips status → 'archived') leaves the row visually
+            // unchanged and the admin reports "ลบแล้วไม่หาย". Archived
+            // events are still reachable via the Status dropdown ("Archived")
+            // for recovery / audit.
+            ->when(
+                $request->status,
+                fn($q, $s) => $q->where('status', $s),
+                fn($q)     => $q->where('status', '!=', 'archived'),
+            )
             ->when($request->province, fn($q, $p) => $q->where('province_id', $p))
             ->when($request->photographer, fn($q, $p) => $q->where('photographer_id', $p))
             ->when($request->sort, function ($q, $sort) {
@@ -407,8 +418,12 @@ class EventController extends Controller
             newValues: ['status' => 'archived', 'event_id' => (int) $event->id],
         );
 
+        // Tell the admin WHERE the event went so they don't think the
+        // delete failed when the row vanishes from the default list.
+        // The default index now hides archived rows; the Status dropdown
+        // → Archived option exposes them again for recovery.
         return redirect()->route('admin.events.index')
-            ->with('success', "ย้ายอีเวนต์ \"{$name}\" ไปที่เก็บถาวรสำเร็จ");
+            ->with('success', "ลบอีเวนต์ \"{$name}\" สำเร็จ — เลือก \"Archived\" จากตัวกรองสถานะเพื่อดู/กู้คืน");
     }
 
     public function toggleStatus(Event $event)
