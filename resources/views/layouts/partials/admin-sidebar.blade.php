@@ -450,11 +450,25 @@
     @endif
 
     @if($can('coupons'))
-    <a class="{{ $linkCls }} {{ request()->routeIs('admin.coupons.*') ? $linkActive : '' }}"
-       href="{{ route('admin.coupons.index') }}" :class="{ '!justify-center !px-0 !mx-2 !shadow-none': sidebarCollapsed }">
-      <i class="bi bi-ticket-perforated text-base w-5 text-center shrink-0"></i>
-      <span x-show="!sidebarCollapsed" x-transition.opacity>คูปองส่วนลด</span>
-    </a>
+    {{-- Coupons expandable — list + dashboard view. Both routes
+         existed but only the index was linked; admins navigated
+         deep-link to the dashboard via URL bar before. --}}
+    @php $couponsOpen = request()->routeIs('admin.coupons.*'); @endphp
+    <div x-data="{ open: {{ $couponsOpen ? 'true' : 'false' }} }">
+      <button class="{{ $linkCls }} w-full {{ $couponsOpen ? '!text-white !bg-indigo-500/10' : '' }}"
+        @click="open = !open" type="button"
+        :class="{ '!justify-center !px-0 !mx-2': sidebarCollapsed }">
+        <i class="bi bi-ticket-perforated text-base w-5 text-center shrink-0" :class="{ '!text-indigo-400': open }"></i>
+        <span x-show="!sidebarCollapsed" x-transition.opacity>คูปองส่วนลด</span>
+        <i class="{{ $chevronCls }}" :class="{ '!rotate-90 !opacity-80': open }" x-show="!sidebarCollapsed"></i>
+      </button>
+      <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="pb-1">
+        <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.coupons.dashboard') ? $sublinkActive : '' }}"
+           href="{{ route('admin.coupons.dashboard') }}">ภาพรวม</a>
+        <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.coupons.index') ? $sublinkActive : '' }}"
+           href="{{ route('admin.coupons.index') }}">รายการคูปอง</a>
+      </div>
+    </div>
     <a class="{{ $linkCls }} {{ request()->routeIs('admin.gift-cards.*') ? $linkActive : '' }}"
        href="{{ route('admin.gift-cards.index') }}" :class="{ '!justify-center !px-0 !mx-2 !shadow-none': sidebarCollapsed }">
       <i class="bi bi-gift text-base w-5 text-center shrink-0"></i>
@@ -491,6 +505,9 @@
         </a>
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.marketing.seo') ? $sublinkActive : '' }}" href="{{ route('admin.marketing.seo') }}">
           <i class="bi bi-search text-purple-400 text-[0.6rem]"></i> SEO & Social
+        </a>
+        <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.pseo.*') ? $sublinkActive : '' }}" href="{{ route('admin.pseo.index') }}">
+          <i class="bi bi-magic text-fuchsia-400 text-[0.6rem]"></i> Programmatic SEO
         </a>
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.marketing.subscribers') ? $sublinkActive : '' }}" href="{{ route('admin.marketing.subscribers') }}">
           <i class="bi bi-envelope-heart text-pink-400 text-[0.6rem]"></i> Newsletter Subscribers
@@ -612,6 +629,15 @@
       @endif
     </a>
     @endif
+
+    {{-- Announcements — site-wide banner messages (maintenance notices,
+         feature launches, etc.). Lives in Communications because admin
+         CRAFTS comm to users here, separate from inbound messages. --}}
+    <a class="{{ $linkCls }} {{ request()->routeIs('admin.announcements.*') ? $linkActive : '' }}"
+       href="{{ route('admin.announcements.index') }}" :class="{ '!justify-center !px-0 !mx-2 !shadow-none': sidebarCollapsed }">
+      <i class="bi bi-megaphone text-base w-5 text-center shrink-0"></i>
+      <span x-show="!sidebarCollapsed" x-transition.opacity>ประกาศระบบ</span>
+    </a>
 
     {{-- Notifications expandable — list + new routing matrix.
          Auto-opens when admin is on any /admin/notifications/* path so
@@ -921,8 +947,11 @@
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.scheduler.*') ? $sublinkActive : '' }}" href="{{ route('admin.scheduler.index') }}">
           <i class="bi bi-diagram-3 text-sky-400 text-[0.6rem]"></i> Scheduler & Queue
         </a>
-        <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.alerts.*') ? $sublinkActive : '' }}" href="{{ route('admin.alerts.index') }}">
+        <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.alerts.index') ? $sublinkActive : '' }}" href="{{ route('admin.alerts.index') }}">
           <i class="bi bi-bell-fill text-rose-400 text-[0.6rem]"></i> Alert Rules
+        </a>
+        <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.alerts.events') ? $sublinkActive : '' }}" href="{{ route('admin.alerts.events') }}">
+          <i class="bi bi-clock-history text-rose-300 text-[0.6rem]"></i> Alert History
         </a>
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.event-health.*') ? $sublinkActive : '' }}" href="{{ route('admin.event-health.index') }}">
           <i class="bi bi-clipboard2-pulse text-green-400 text-[0.6rem]"></i> Event Health
@@ -930,8 +959,17 @@
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.system.readiness') ? $sublinkActive : '' }}" href="{{ route('admin.system.readiness') }}">
           <i class="bi bi-rocket-takeoff text-indigo-400 text-[0.6rem]"></i> Production Readiness
         </a>
+        <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.usage') ? $sublinkActive : '' }}" href="{{ route('admin.usage') }}">
+          <i class="bi bi-speedometer text-cyan-400 text-[0.6rem]"></i> Usage / Quota Dashboard
+        </a>
+        <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.analytics.capacity') || request()->routeIs('admin.analytics.trend') ? $sublinkActive : '' }}" href="{{ route('admin.analytics.capacity') }}">
+          <i class="bi bi-bar-chart-line-fill text-blue-400 text-[0.6rem]"></i> Capacity Analytics
+        </a>
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.unit-economics.*') ? $sublinkActive : '' }}" href="{{ route('admin.unit-economics.index') }}">
           <i class="bi bi-graph-up-arrow text-emerald-400 text-[0.6rem]"></i> Unit Economics / LTV
+        </a>
+        <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.diagnostics.*') ? $sublinkActive : '' }}" href="{{ route('admin.diagnostics.aws') }}">
+          <i class="bi bi-tools text-orange-400 text-[0.6rem]"></i> Diagnostics (AWS / Face)
         </a>
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.data-export.*') ? $sublinkActive : '' }}" href="{{ route('admin.data-export.index') }}">
           <i class="bi bi-shield-lock text-teal-400 text-[0.6rem]"></i> PDPA Data Export
