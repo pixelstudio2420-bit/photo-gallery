@@ -50,6 +50,14 @@ Route::prefix('webhooks')->group(function () {
         ->name('webhook.google_calendar');
     Route::post('/line', [PaymentWebhookController::class, 'lineWebhook'])->name('webhook.line');
     Route::post('/facebook', [PaymentWebhookController::class, 'facebookWebhook'])->name('webhook.facebook');
+
+    // LINE OA follow/unfollow webhook — flips auth_users.line_is_friend
+    // when customers add or remove our LINE OA. Configure in LINE Console
+    // under Messaging API → Webhook URL.
+    // URL: https://loadroop.com/api/webhooks/line-oa
+    // Signature: X-Line-Signature (HMAC-SHA256 of body using channel_secret)
+    Route::post('/line-oa', [\App\Http\Controllers\Api\LineOaWebhookController::class, 'handle'])
+        ->name('webhook.line_oa');
 });
 
 // ─────────────────────────────────────────────────────────────────────

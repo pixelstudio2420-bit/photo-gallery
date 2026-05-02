@@ -534,16 +534,28 @@ class AuthController extends Controller
         $nonce        = \Illuminate\Support\Str::random(16);
         session(['line_oauth_state' => $state]);
 
-        $params = http_build_query([
+        $params = [
             'response_type' => 'code',
             'client_id'     => $creds['channel_id'],
             'redirect_uri'  => $creds['redirect'],
             'state'         => $state,
             'scope'         => 'profile openid email',
             'nonce'         => $nonce,
-        ]);
+        ];
 
-        return redirect('https://access.line.me/oauth2/v2.1/authorize?' . $params);
+        // bot_prompt=aggressive — when the LINE Login channel is linked
+        // to our LINE OA, this surfaces the "Add @loadroop as friend"
+        // toggle on the consent screen with default-ON. User signs in
+        // once → friend-add happens silently in the same flow. This is
+        // the single highest-impact change for LINE friend collection.
+        // (See docs: developers.line.biz/en/docs/line-login/link-a-bot)
+        // Skipped when the channel isn't linked to a bot — admin can
+        // disable via setting if it ever causes friction.
+        if (\App\Models\AppSetting::get('line_login_aggressive_friend_add', '1') === '1') {
+            $params['bot_prompt'] = 'aggressive';
+        }
+
+        return redirect('https://access.line.me/oauth2/v2.1/authorize?' . http_build_query($params));
     }
 
     public function callbackLine(Request $request)
@@ -629,12 +641,42 @@ class AuthController extends Controller
             }
         }
 
-        return $this->handleSocialCallback('line', $profile['userId'], [
+        $user = $this->handleSocialCallback('line', $profile['userId'], [
             'email'      => $email,
             'first_name' => $profile['displayName'] ?? 'LINE User',
             'last_name'  => '',
             'avatar'     => $profile['pictureUrl'] ?? null,
         ]);
+
+        // Capture LINE userId + flip is_friend = true.
+        //
+        // When the channel is linked to our LINE OA and we sent
+        // bot_prompt=aggressive in the redirect, the consent screen
+        // surfaces "Add @loadroop as friend" with default-ON. Most users
+        // don't uncheck it, so completing the OAuth flow effectively
+        // means they are now a friend of the OA. We optimistically mark
+        // them friend here; the LINE OA webhook (follow/unfollow) is the
+        // source of truth and will correct the flag if they tap unfollow
+        // later.
+        //
+        // handleSocialCallback returns either a redirect or sometimes the
+        // newly-logged-in user — defensive guard so we don't crash if its
+        // return shape changes in the future.
+        if (\Illuminate\Support\Facades\Auth::check()) {
+            $authedUser = \Illuminate\Support\Facades\Auth::user();
+            if ($authedUser) {
+                $aggressive = \App\Models\AppSetting::get('line_login_aggressive_friend_add', '1') === '1';
+                $authedUser->forceFill([
+                    'line_user_id' => $profile['userId'],
+                    // Only flip is_friend when aggressive prompt was used —
+                    // otherwise we have no evidence they actually added.
+                    'line_is_friend'         => $aggressive ? true : ($authedUser->line_is_friend ?? false),
+                    'line_friend_changed_at' => $aggressive ? now() : ($authedUser->line_friend_changed_at ?? null),
+                ])->save();
+            }
+        }
+
+        return $user;
     }
 
     // ---------- Facebook ----------

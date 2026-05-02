@@ -190,6 +190,13 @@
   <main class="main-content">
     @yield('hero')
 
+    {{-- LINE friend soft-prompt — only renders for authenticated users
+         who haven't been flagged as friends yet AND have an OA configured.
+         Sits between hero and content so it's visible but not intrusive. --}}
+    <div class="max-w-7xl mx-auto px-4 pt-3">
+      @include('partials.line-friend-prompt')
+    </div>
+
     @hasSection('content')
     <div class="max-w-7xl mx-auto px-4 py-4">
       @yield('content')
