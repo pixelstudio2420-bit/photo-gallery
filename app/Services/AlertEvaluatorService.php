@@ -44,6 +44,28 @@ class AlertEvaluatorService
             'flagged_photos'      => ['label' => 'รูปถูก flag รอตรวจ',          'unit' => 'รูป', 'src' => 'event_photos'],
             'new_users_24h'       => ['label' => 'ผู้ใช้ใหม่ (24h)',             'unit' => 'คน',  'src' => 'auth_users'],
 
+            // ── Security & business-health metrics (added 2026-05-02) ──
+            // Security: brute-force attempts on /admin/login. Catches both
+            // mass scans and targeted attacks before they breach an account.
+            'failed_admin_logins_24h' => ['label' => 'Admin login ล้มเหลว (24h)','unit' => 'ครั้ง','src' => 'security_login_attempts'],
+            // Revenue: provider/gateway dropped a transaction (Stripe/Omise/PromptPay).
+            // A spike usually means the provider is having issues — admin should
+            // check the provider's status page before customers complain.
+            'failed_payments_24h'     => ['label' => 'Payment ล้มเหลว (24h)',   'unit' => 'ครั้ง','src' => 'payment_transactions'],
+            // Customer trust: refund requests waiting for admin decision.
+            // Hitting 5+ pending typically means SLA is slipping → unhappy users.
+            'pending_refunds'         => ['label' => 'คำขอคืนเงินรอตอบ',        'unit' => 'คำขอ','src' => 'refund_requests'],
+            // Business health: zero orders in the last 24h is a "the lights
+            // are still on but no one's buying" signal — could be a pricing
+            // page bug, payment outage, or marketing pause. Use operator <=
+            // so the rule fires when the number DROPS below threshold.
+            'orders_today_count'      => ['label' => 'ออเดอร์ใน 24h',           'unit' => 'ออเดอร์','src' => 'orders'],
+            // Admin awareness: largest single order in the last hour.
+            // Useful for big-ticket events (e.g. studio bookings) so admin
+            // can ensure the photographer is notified + slip is verified
+            // promptly. Threshold is configurable per business.
+            'highest_order_amount_1h' => ['label' => 'ออเดอร์มูลค่าสูงสุด (1h)','unit' => 'THB','src' => 'orders'],
+
             // ── Payment & Payout health (added 2026-04-29) ─────────────────
             //
             // Why these metrics matter:
@@ -116,6 +138,44 @@ class AlertEvaluatorService
                 'admin_email_failures_24h' => (float) $this->safeCount('email_logs', fn ($q) =>
                     $q->where('status', 'failed')
                       ->where('created_at', '>=', now()->subDay())
+                ),
+
+                // Security: failed login attempts in last 24h. Both admin
+                // and user attempts roll up here — a sudden spike is the
+                // signal regardless of which guard is being targeted.
+                // Note: table column is `attempted_at`, not `created_at`.
+                'failed_admin_logins_24h' => (float) $this->safeCount('security_login_attempts', fn ($q) =>
+                    $q->where('success', false)
+                      ->where('attempted_at', '>=', now()->subDay())
+                ),
+                // Revenue: payment transactions that flipped to failed in
+                // the last 24h. Captures gateway issues + customer card
+                // declines — spike = provider problem, low = card issue.
+                'failed_payments_24h' => (float) $this->safeCount('payment_transactions', fn ($q) =>
+                    $q->where('status', 'failed')
+                      ->where('updated_at', '>=', now()->subDay())
+                ),
+                // Customer trust: refunds awaiting admin decision. SLA
+                // typically wants this < 5 outstanding at any time.
+                'pending_refunds' => (float) $this->safeCount('refund_requests', fn ($q) =>
+                    $q->where('status', 'pending')
+                ),
+                // Business health: orders placed in last 24h. Use operator
+                // `<=` on the alert rule to fire when this DROPS below a
+                // floor (e.g. 0 = something's broken, the funnel is dead).
+                'orders_today_count' => (float) $this->safeCount('orders', fn ($q) =>
+                    $q->where('created_at', '>=', now()->subDay())
+                ),
+                // Admin awareness: largest single-order value in last hour.
+                // Helps admins spot big-ticket sales for white-glove follow
+                // up (slip approval, photographer notification). Returns 0
+                // when there are no orders — alert won't fire on quiet hour.
+                'highest_order_amount_1h' => (float) (
+                    Schema::hasTable('orders')
+                        ? (DB::table('orders')
+                            ->where('created_at', '>=', now()->subHour())
+                            ->max('total') ?? 0)
+                        : 0
                 ),
                 default               => null,
             };

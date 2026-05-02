@@ -208,6 +208,87 @@ class DefaultAlertRulesSeeder extends Seeder
                 'channels'         => ['admin'],
                 'cooldown_minutes' => 360,
             ],
+
+            // ── Security ───────────────────────────────────────────────────
+            // Brute-force detection. >50 failed attempts in 24h = active
+            // attack OR a user keeps fat-fingering their password — either
+            // way admin should look. Cloudflare WAF rate-limits the login
+            // path at edge, so any volume that gets THIS far is the guarded
+            // signal worth alerting on.
+            [
+                'name'             => 'Login ล้มเหลวพุ่ง (24h > 50)',
+                'description'      => 'มี Login ล้มเหลว >50 ครั้งใน 24 ชั่วโมง — อาจเป็น brute-force หรือมีคนล็อคบัญชีตัวเอง',
+                'metric'           => 'failed_admin_logins_24h',
+                'operator'         => '>=',
+                'threshold'        => 50,
+                'severity'         => 'warn',
+                'channels'         => ['admin', 'email', 'line'],
+                'cooldown_minutes' => 120,
+            ],
+
+            // ── Revenue / payment health ───────────────────────────────────
+            // Failed transactions in 24h. >10 = either provider is down
+            // or customers have widespread card issues. Both warrant
+            // admin awareness within the hour.
+            [
+                'name'             => 'Payment ล้มเหลวพุ่ง (24h > 10)',
+                'description'      => 'มี Payment transaction ล้มเหลว >10 ครั้งใน 24 ชั่วโมง — ตรวจสอบสถานะ Stripe/Omise/PromptPay',
+                'metric'           => 'failed_payments_24h',
+                'operator'         => '>=',
+                'threshold'        => 10,
+                'severity'         => 'warn',
+                'channels'         => ['admin', 'email', 'line'],
+                'cooldown_minutes' => 60,
+            ],
+
+            // ── Customer trust ─────────────────────────────────────────────
+            // Refunds piling up = SLA slipping. Trigger early so admin
+            // catches them before customer escalates to social media.
+            [
+                'name'             => 'คำขอคืนเงินคั่งค้าง (>5)',
+                'description'      => 'มีคำขอคืนเงิน >5 รายการรอตอบ — ตอบช้า = ลูกค้าโกรธ + เสี่ยงรีวิวเสีย',
+                'metric'           => 'pending_refunds',
+                'operator'         => '>=',
+                'threshold'        => 5,
+                'severity'         => 'warn',
+                'channels'         => ['admin', 'email'],
+                'cooldown_minutes' => 240,
+            ],
+
+            // ── Business pulse — low / no orders ───────────────────────────
+            // Reverse alert: fires when value DROPS below threshold (operator
+            // <=). Zero orders in a day on a live marketplace usually means
+            // checkout flow is broken. Off by default — admin should set
+            // a baseline (e.g. <= 1 order in 24h) once they know their
+            // typical volume. cooldown is high so this doesn't spam during
+            // genuinely quiet days (e.g. holidays).
+            [
+                'name'             => 'ออเดอร์เงียบ (24h ≤ 0)',
+                'description'      => 'ไม่มีออเดอร์เลยใน 24 ชั่วโมง — ตรวจ checkout flow / payment ว่ายังทำงานไหม (ปิดไว้ default — ปรับ threshold ตามปริมาณจริง)',
+                'metric'           => 'orders_today_count',
+                'operator'         => '<=',
+                'threshold'        => 0,
+                'severity'         => 'warn',
+                'channels'         => ['admin', 'email'],
+                'cooldown_minutes' => 720,    // 12h — don't spam at midnight
+                'is_active'        => false,  // admin must enable explicitly
+            ],
+
+            // ── Admin awareness — big-ticket order ─────────────────────────
+            // Single order > 5,000 baht in last hour. Useful for white-glove
+            // follow-up (verify slip ASAP, notify photographer, double-check
+            // event delivery). Not a problem — informational, info severity,
+            // doesn't wake anyone at 3am (no LINE/email channel).
+            [
+                'name'             => 'ออเดอร์มูลค่าสูง (>฿5,000)',
+                'description'      => 'มีออเดอร์ใหญ่ใน 1 ชั่วโมงที่ผ่านมา — ตรวจสลิปและแจ้งช่างภาพให้เร็ว',
+                'metric'           => 'highest_order_amount_1h',
+                'operator'         => '>=',
+                'threshold'        => 5000,
+                'severity'         => 'info',
+                'channels'         => ['admin'],
+                'cooldown_minutes' => 60,
+            ],
         ];
 
         $created = 0; $updated = 0;
@@ -222,10 +303,13 @@ class DefaultAlertRulesSeeder extends Seeder
                 ]);
                 $updated++;
             } else {
-                AlertRule::create(array_merge($rule, [
+                // Defaults come FIRST so per-rule `is_active` (e.g. the
+                // "quiet orders" rule that ships disabled) actually wins.
+                // array_merge: later values overwrite earlier with same key.
+                AlertRule::create(array_merge([
                     'is_active' => true,
                     'firing'    => false,
-                ]));
+                ], $rule));
                 $created++;
             }
         }
