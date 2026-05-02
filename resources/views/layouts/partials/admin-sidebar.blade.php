@@ -613,11 +613,25 @@
     </a>
     @endif
 
-    <a class="{{ $linkCls }} {{ request()->routeIs('admin.notifications.*') ? $linkActive : '' }}"
-       href="{{ route('admin.notifications.index') }}" :class="{ '!justify-center !px-0 !mx-2 !shadow-none': sidebarCollapsed }">
-      <i class="bi bi-bell text-base w-5 text-center shrink-0"></i>
-      <span x-show="!sidebarCollapsed" x-transition.opacity>การแจ้งเตือน</span>
-    </a>
+    {{-- Notifications expandable — list + new routing matrix.
+         Auto-opens when admin is on any /admin/notifications/* path so
+         the active sublink is visible without manual expand. --}}
+    @php $notifOpen = request()->routeIs('admin.notifications.*'); @endphp
+    <div x-data="{ open: {{ $notifOpen ? 'true' : 'false' }} }">
+      <button class="{{ $linkCls }} w-full {{ $notifOpen ? '!text-white !bg-indigo-500/10' : '' }}"
+        @click="open = !open" type="button"
+        :class="{ '!justify-center !px-0 !mx-2': sidebarCollapsed }">
+        <i class="bi bi-bell text-base w-5 text-center shrink-0" :class="{ '!text-indigo-400': open }"></i>
+        <span x-show="!sidebarCollapsed" x-transition.opacity>การแจ้งเตือน</span>
+        <i class="{{ $chevronCls }}" :class="{ '!rotate-90 !opacity-80': open }" x-show="!sidebarCollapsed"></i>
+      </button>
+      <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="pb-1">
+        <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.notifications.index') ? $sublinkActive : '' }}"
+           href="{{ route('admin.notifications.index') }}">รายการแจ้งเตือน</a>
+        <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.notifications.routing*') ? $sublinkActive : '' }}"
+           href="{{ route('admin.notifications.routing') }}">เส้นทางการแจ้งเตือน</a>
+      </div>
+    </div>
     @endif
 
     {{-- ═══════════════════════════════════════════

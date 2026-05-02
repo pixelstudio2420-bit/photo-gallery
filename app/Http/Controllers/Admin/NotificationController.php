@@ -182,4 +182,80 @@ class NotificationController extends Controller
 
         return back()->with('success', "ส่งการแจ้งเตือนไปยัง " . count($userIds) . " ผู้ใช้เรียบร้อย");
     }
+
+    /*--------------------------------------------------------------------
+    | Notification Routing — admin-managed matrix
+    |--------------------------------------------------------------------
+    | Lets admin control which audiences (customer/photographer/admin)
+    | get notified for each event_key, and via which channels (in_app/
+    | email/line/sms/push). Backed by notification_routing_rules table;
+    | consulted at trigger sites via NotificationRouter::shouldNotify().
+    |
+    | The view renders a grouped matrix; the update path receives the
+    | full posted state and upserts every (event, audience) row in a
+    | single transaction so partial saves can't leave the matrix in an
+    | inconsistent state.
+    */
+    public function routing()
+    {
+        $catalogue = \App\Services\NotificationRouter::catalogue();
+        $existing  = \App\Models\NotificationRoutingRule::all()
+            ->keyBy(fn ($r) => $r->event_key . '|' . $r->audience);
+
+        return view('admin.notifications.routing', [
+            'catalogue' => $catalogue,
+            'existing'  => $existing,
+            'audiences' => \App\Models\NotificationRoutingRule::AUDIENCES,
+            'channels'  => \App\Models\NotificationRoutingRule::CHANNELS,
+        ]);
+    }
+
+    public function updateRouting(Request $request)
+    {
+        // Each posted row is keyed `rules[event_key][audience][channel|enabled]`.
+        // Fall back to empty array when nothing posted (e.g. all checkboxes
+        // unchecked) — the loop below still runs and writes is_enabled=false
+        // rows for every catalogue entry, which is the correct UX.
+        $posted    = $request->input('rules', []);
+        $catalogue = \App\Services\NotificationRouter::catalogue();
+        $audiences = \App\Models\NotificationRoutingRule::AUDIENCES;
+
+        DB::transaction(function () use ($posted, $catalogue, $audiences) {
+            foreach ($catalogue as $eventKey => $meta) {
+                foreach ($audiences as $audience) {
+                    // Skip audiences this event doesn't apply to (e.g. don't
+                    // create a "customer" rule for "photographer.signup").
+                    if (!in_array($audience, $meta['audiences'], true)) {
+                        continue;
+                    }
+
+                    $row = $posted[$eventKey][$audience] ?? [];
+
+                    \App\Models\NotificationRoutingRule::updateOrCreate(
+                        ['event_key' => $eventKey, 'audience' => $audience],
+                        [
+                            'in_app_enabled' => !empty($row['in_app']),
+                            'email_enabled'  => !empty($row['email']),
+                            'line_enabled'   => !empty($row['line']),
+                            'sms_enabled'    => !empty($row['sms']),
+                            'push_enabled'   => !empty($row['push']),
+                            'is_enabled'     => !empty($row['enabled']),
+                        ],
+                    );
+                }
+            }
+        });
+
+        // Bust the in-memory + Cache:: copy so the next request reads fresh
+        // values without waiting for the 5-min TTL.
+        app(\App\Services\NotificationRouter::class)->flush();
+
+        \App\Services\ActivityLogger::admin(
+            action:      'notification.routing_updated',
+            target:      null,
+            description: 'อัปเดตการกำหนดเส้นทางการแจ้งเตือน',
+        );
+
+        return back()->with('success', 'บันทึกการตั้งค่าการแจ้งเตือนเรียบร้อย');
+    }
 }

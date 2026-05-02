@@ -861,6 +861,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/bulk-action', [\App\Http\Controllers\Admin\NotificationController::class, 'bulkAction'])->name('bulk-action');
             Route::post('/cleanup', [\App\Http\Controllers\Admin\NotificationController::class, 'cleanup'])->name('cleanup');
             Route::post('/broadcast', [\App\Http\Controllers\Admin\NotificationController::class, 'broadcast'])->name('broadcast');
+
+            // Routing matrix — admin controls who gets notified for which
+            // event via which channel. Backed by notification_routing_rules
+            // table; consulted by NotificationRouter at trigger sites.
+            Route::get('/routing',  [\App\Http\Controllers\Admin\NotificationController::class, 'routing'])->name('routing');
+            Route::post('/routing', [\App\Http\Controllers\Admin\NotificationController::class, 'updateRouting'])->name('routing.update');
         });
 
         // Events
