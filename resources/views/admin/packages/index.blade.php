@@ -538,12 +538,28 @@ function confirmDelete(id, name) {
 
       const tierTH = ({ low: 'ราคาประหยัด', mid: 'ราคากลาง', premium: 'ราคาพรีเมียม' })[data.tier] || data.tier;
       const sourceTH = data.source === 'event' ? 'จากอีเวนต์ที่เลือก' : 'จากค่าเฉลี่ยทั้งระบบ';
-      hint.innerHTML =
+
+      // First line: source + tier + discount + savings
+      // Second line: effective per-photo earnings (so admin sees what
+      //   each photo in the bundle is "worth" after the discount —
+      //   if it dropped too low they can override manually)
+      // Third line (only if floor kicked in): warning that we capped
+      //   the discount to protect photographer's no-loss floor.
+      let html =
         '<i class="bi bi-check-circle-fill"></i> ' +
-        `คำนวณ ${sourceTH}: ราคา/ภาพ ฿${data.per_photo.toLocaleString()} (${tierTH}) · ` +
-        `ลด ${data.discount_pct}% · ประหยัด ฿${data.savings.toLocaleString()} ` +
-        `<span class="opacity-60">(แก้ไขได้ตามต้องการ)</span>`;
-      hint.className = 'text-[11px] text-emerald-600 mt-1.5 leading-snug';
+        `คำนวณ${sourceTH}: ราคา/ภาพ ฿${data.per_photo.toLocaleString()} (${tierTH}) · ` +
+        `ลด ${data.discount_pct}% · ประหยัด ฿${data.savings.toLocaleString()}<br>` +
+        `<i class="bi bi-coin opacity-70"></i> ราคา/ภาพในแพ็กเกจ: <strong>฿${data.effective_per_photo.toLocaleString()}</strong> ` +
+        `<span class="opacity-60">(${Math.round((data.effective_per_photo / data.per_photo) * 100)}% ของราคาเดี่ยว · แก้ไขได้)</span>`;
+
+      if (data.floor_applied) {
+        html += `<br><span class="text-amber-700"><i class="bi bi-shield-check"></i> ` +
+                `ระบบบังคับราคาขั้นต่ำเพื่อกันขาดทุน — ` +
+                `ส่วนลดที่ curve คำนวณไว้ลึกเกินจึงปรับให้ขึ้นอยู่ที่ระดับปลอดภัย</span>`;
+      }
+
+      hint.innerHTML = html;
+      hint.className = 'text-[11px] text-emerald-700 mt-1.5 leading-snug';
       hint.classList.remove('hidden');
     } catch (e) {
       hint.textContent = 'คำนวณไม่สำเร็จ — ลองใหม่อีกครั้ง';

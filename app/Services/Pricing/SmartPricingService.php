@@ -35,8 +35,28 @@ class SmartPricingService
      * Hard ceiling on discount %. Below this the value-perception
      * gradient flattens (further off doesn't drive more conversion)
      * and the photographer's margin starts hurting.
+     *
+     * Pair with MIN_BUNDLE_RETENTION_PCT below — the discount cap
+     * limits the curve, the retention floor enforces the FINAL
+     * price (in case charm-snap rounds the curve target down).
      */
     private const MAX_DISCOUNT_PCT = 60.0;
+
+    /**
+     * Hard floor: a bundle's final price must retain at least this
+     * percentage of `photo_count × per_photo` AFTER curve discount,
+     * charm pricing, and any other adjustment. Mirrors the discount
+     * cap (60% off ⇒ 40% retained) but is enforced as the LAST
+     * gate in computeBundlePrice — so even an aggressive curve
+     * + charm-snap-down can never make the photographer "ขาดทุน".
+     *
+     * Concrete safety net: with a 50-photo premium-featured bundle
+     * (60% curve discount), the raw price ฿5,000 charm-snaps to
+     * ฿4,990 — 10 baht under the 40% retention floor. Without this
+     * gate the photographer would silently lose ~฿8 commission per
+     * sale on every premium 50-pack.
+     */
+    private const MIN_BUNDLE_RETENTION_PCT = 40.0;
 
     /**
      * Tier classification thresholds (THB per photo).
@@ -130,22 +150,38 @@ class SmartPricingService
      *
      * Returns:
      *   [
-     *     'price'          => float  // charm-snapped final price
-     *     'original_price' => float  // count × per_photo (pre-discount)
-     *     'discount_pct'   => float  // ACTUAL % the buyer sees (post-snap)
-     *     'savings'        => float  // original - price (loss-aversion frame)
+     *     'price'              => float  // charm-snapped, floor-protected final price
+     *     'original_price'     => float  // count × per_photo (pre-discount)
+     *     'discount_pct'       => float  // ACTUAL % the buyer sees (post-snap)
+     *     'savings'            => float  // original - price (loss-aversion frame)
+     *     'effective_per_photo'=> float  // price ÷ count — what each photo
+     *                                    //   in the bundle is worth after discount
+     *     'floor_applied'      => bool   // true if the retention floor had to
+     *                                    //   intervene against the curve+charm result
      *   ]
      *
-     * Profit floor: the snapped price is never allowed below
-     * `$perPhoto × 1.0` (i.e. you never sell a bundle for less than the
-     * solo price of one photo). That guards against absurd combinations
-     * (e.g. someone manually edits per_photo to ฿2 — the curve would
-     * try to charge ฿0.96 for a 6-photo bundle which is silly).
+     * No-loss guarantee:
+     *   1. Curve discount capped at MAX_DISCOUNT_PCT (default 60%)
+     *      via computeDiscount().
+     *   2. AFTER charm-snap, if the snapped price falls below the
+     *      retention floor (MIN_BUNDLE_RETENTION_PCT × original),
+     *      we re-snap UP via snapToCharmCeil() so the buyer pays
+     *      a charm-shaped price ≥ floor.
+     *   3. Absolute sanity floor: never below 1× per_photo (catches
+     *      absurd configs, e.g. per_photo manually edited to ฿2).
+     *
+     * Together these ensure the photographer ALWAYS retains at
+     * least 40% of `photo_count × per_photo` — no silent margin
+     * leak from overly aggressive curve combos.
      */
     public function computeBundlePrice(int $photoCount, float $perPhoto, bool $isFeatured = false): array
     {
         if ($perPhoto <= 0 || $photoCount <= 0) {
-            return ['price' => 0.0, 'original_price' => 0.0, 'discount_pct' => 0.0, 'savings' => 0.0];
+            return [
+                'price' => 0.0, 'original_price' => 0.0,
+                'discount_pct' => 0.0, 'savings' => 0.0,
+                'effective_per_photo' => 0.0, 'floor_applied' => false,
+            ];
         }
 
         $original  = round($photoCount * $perPhoto, 2);
@@ -153,14 +189,31 @@ class SmartPricingService
         $rawPrice  = $original * (1 - $discount / 100);
 
         // Charm-snap (rounds to ...9 / ...90 / ...990 endings).
-        $price = $this->snapToCharm($rawPrice);
+        $price        = $this->snapToCharm($rawPrice);
+        $floorApplied = false;
 
-        // Profit floor: never below 1× per-photo solo price. Catches
-        // edge cases where a tiny per_photo + featured bonus + 50-photo
-        // bundle produced an embarrassingly low number.
-        $minPrice = round($perPhoto, 2);
-        if ($price < $minPrice) {
-            $price = $minPrice;
+        // ── Guard 1: retention floor ────────────────────────────
+        // The "no-loss" floor — bundle price must retain at least
+        // MIN_BUNDLE_RETENTION_PCT% of the original. If charm-snap
+        // pushed us below it (possible on max-discount + featured
+        // combos), bump UP to the next charm endpoint above the
+        // floor — buyer still sees a *9 / *90 / *900 price, but
+        // the photographer never silently loses commission to
+        // arithmetic rounding.
+        $minRetention = round($original * (self::MIN_BUNDLE_RETENTION_PCT / 100), 2);
+        if ($price < $minRetention) {
+            $price = $this->snapToCharmCeil($minRetention);
+            $floorApplied = true;
+        }
+
+        // ── Guard 2: absolute sanity floor ──────────────────────
+        // Last-resort catch for absurd configs. In practice this
+        // is dwarfed by the retention floor above for any normal
+        // bundle (10-photo bundle ≥ ฿100 > 1× per_photo always).
+        $absMinPrice = round($perPhoto, 2);
+        if ($price < $absMinPrice) {
+            $price = $absMinPrice;
+            $floorApplied = true;
         }
 
         // Recompute the actual discount % after charm + floor adjustment
@@ -170,10 +223,12 @@ class SmartPricingService
             : 0;
 
         return [
-            'price'          => round($price, 2),
-            'original_price' => $original,
-            'discount_pct'   => round($actualDiscount, 1),
-            'savings'        => round(max(0, $original - $price), 2),
+            'price'               => round($price, 2),
+            'original_price'      => $original,
+            'discount_pct'        => round($actualDiscount, 1),
+            'savings'             => round(max(0, $original - $price), 2),
+            'effective_per_photo' => round($price / $photoCount, 2),
+            'floor_applied'       => $floorApplied,
         ];
     }
 
@@ -216,6 +271,36 @@ class SmartPricingService
 
         // ≥ 10k: 14900, 19900, 29900, 49900, 99900.
         return round($price / 1000) * 1000 - 100;
+    }
+
+    /**
+     * Charm-snap that rounds UP — never below the input price.
+     *
+     * Used by the retention floor in computeBundlePrice: when the
+     * normal snapToCharm() lands below our no-loss floor we re-snap
+     * to the next charm endpoint ≥ floor so the price stays both
+     * charm-shaped AND above the photographer-protection threshold.
+     *
+     * Example: floor ฿5,000 → snapToCharm gives ฿4,990 (below floor)
+     *          → snapToCharmCeil gives ฿5,090 (next *90 ending above).
+     */
+    public function snapToCharmCeil(float $price): float
+    {
+        $snapped = $this->snapToCharm($price);
+        if ($snapped >= $price) {
+            return $snapped;
+        }
+
+        // snapToCharm went below — bump up by exactly one charm step.
+        // Step size matches the snap granularity for that price band:
+        //   <100   → 10  (29 → 39)
+        //   <1k    → 10  (279 → 289)
+        //   <10k   → 100 (4990 → 5090)
+        //   ≥10k   → 1000 (14900 → 15900)
+        if ($price < 100)   return $snapped + 10;
+        if ($price < 1000)  return $snapped + 10;
+        if ($price < 10000) return $snapped + 100;
+        return $snapped + 1000;
     }
 
     /* ═══════════════════════════════════════════════════════════════

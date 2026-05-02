@@ -139,13 +139,15 @@ class PackageController extends Controller
         );
 
         return response()->json([
-            'price'          => $result['price'],
-            'original_price' => $result['original_price'],
-            'discount_pct'   => $result['discount_pct'],
-            'savings'        => $result['savings'],
-            'per_photo'      => round($perPhoto, 2),
-            'tier'           => $smart->priceTier($perPhoto),
-            'source'         => $source,
+            'price'               => $result['price'],
+            'original_price'      => $result['original_price'],
+            'discount_pct'        => $result['discount_pct'],
+            'savings'             => $result['savings'],
+            'effective_per_photo' => $result['effective_per_photo'],
+            'floor_applied'       => $result['floor_applied'],
+            'per_photo'           => round($perPhoto, 2),
+            'tier'                => $smart->priceTier($perPhoto),
+            'source'              => $source,
         ]);
     }
 
