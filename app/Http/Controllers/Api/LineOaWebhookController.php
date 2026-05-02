@@ -96,12 +96,38 @@ class LineOaWebhookController extends Controller
             // Idempotent: only flip + bump timestamp when the value
             // actually changes. Avoids touching updated_at on every
             // webhook retry.
-            if ((bool) $user->line_is_friend !== $isFriend) {
+            $wasFriend = (bool) $user->line_is_friend;
+            if ($wasFriend !== $isFriend) {
                 $user->forceFill([
                     'line_is_friend'         => $isFriend,
                     'line_friend_changed_at' => now(),
                 ])->save();
                 $matched++;
+
+                // ─── Welcome coupon delivery (the popup's promise) ───
+                // When user transitions from non-friend → friend, issue
+                // the welcome coupon promised by the friend-add popup
+                // ("ส่วนลด ฿100 ครั้งถัดไป") and push the code to their
+                // LINE. The service handles idempotency so re-following
+                // (after an unfollow) just resends the existing code,
+                // never grants a fresh discount.
+                //
+                // Wrapped so a coupon-side failure (e.g. coupons table
+                // schema drift) doesn't 500 the webhook + cause LINE to
+                // retry → flip the friend flag again. The webhook returns
+                // 200 even if coupon issuance fails; admin can re-send
+                // manually from /admin/coupons if needed.
+                if ($isFriend) {
+                    try {
+                        app(\App\Services\LineFriendCouponService::class)
+                            ->issueWelcomeCoupon($user);
+                    } catch (\Throwable $e) {
+                        Log::warning('line_oa.webhook.coupon_issue_failed', [
+                            'user_id' => $user->id,
+                            'error'   => $e->getMessage(),
+                        ]);
+                    }
+                }
             }
         }
 
