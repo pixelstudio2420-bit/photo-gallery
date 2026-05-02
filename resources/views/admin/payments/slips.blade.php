@@ -645,6 +645,63 @@
                   $decidedBy = ['label' => 'อัตโนมัติ',  'icon' => 'bi-robot',         'color' => 'text-violet-700', 'bg' => 'bg-violet-100'];
               }
           }
+
+          /* ── SlipOK diagnostic (set by SlipVerifier on every attempt) ──
+             Lets admin see "why didn't SlipOK verify this slip?" inline
+             instead of having to inspect the verify_breakdown jsonb column
+             or grep production logs. The diagnostic carries:
+                enabled    — was the umbrella SlipOK toggle on?
+                configured — were API key + URL set?
+                attempted  — did SlipVerifier actually call SlipOKService::verify?
+                success    — did SlipOK return success=true?
+                error_code — SlipOK-specific code or our internal code
+                              (MISSING_CREDENTIALS / FILE_NOT_FOUND / EXCEPTION)
+                error_msg  — human-readable error string from SlipOK or PHP
+                trans_ref  — set on success
+                amount     — set on success
+
+             $verifyBreakdown is a jsonb column — Postgres returns it as a
+             string from a raw query, so decode here.
+          ──────────────────────────────────────────────────────────────── */
+          $verifyBreakdown = is_string($slip->verify_breakdown ?? null)
+              ? (json_decode($slip->verify_breakdown, true) ?: [])
+              : (is_array($slip->verify_breakdown ?? null) ? $slip->verify_breakdown : []);
+          $slipokDiag = $verifyBreakdown['_slipok_diagnostic'] ?? null;
+
+          // Map diagnostic into a one-line Thai reason. We bias toward the
+          // most actionable explanation — i.e. "API key หาย" beats a raw
+          // "code: 1012" because the admin needs to know what to fix.
+          $slipokReason = null;
+          $slipokReasonTone = 'gray'; // gray = info, amber = config, rose = error
+          if ($slipokDiag) {
+              if (empty($slipokDiag['enabled'])) {
+                  $slipokReason = 'SlipOK ปิดอยู่';
+                  $slipokReasonTone = 'gray';
+              } elseif (empty($slipokDiag['configured'])) {
+                  $slipokReason = 'API Key/URL ยังไม่ได้ตั้งค่า';
+                  $slipokReasonTone = 'amber';
+              } elseif (empty($slipokDiag['attempted'])) {
+                  $slipokReason = 'ยังไม่ได้เรียก API (รอ retry)';
+                  $slipokReasonTone = 'gray';
+              } elseif (empty($slipokDiag['success'])) {
+                  $code = (string) ($slipokDiag['error_code'] ?? 'unknown');
+                  $msg  = (string) ($slipokDiag['error_msg']  ?? '');
+                  // Friendly labels for our own internal codes; SlipOK-side
+                  // numeric codes pass through as-is so admin can search docs.
+                  $codeMap = [
+                      'MISSING_CREDENTIALS' => 'API Key/URL ขาดหาย',
+                      'FILE_NOT_FOUND'      => 'หาไฟล์สลิปไม่เจอบนเซิร์ฟเวอร์',
+                      'EXCEPTION'           => 'เครือข่าย/ระบบขัดข้อง',
+                  ];
+                  $label = $codeMap[$code] ?? "code: {$code}";
+                  $slipokReason = $msg !== '' ? "{$label} — {$msg}" : $label;
+                  $slipokReasonTone = 'rose';
+              } else {
+                  // success=true → no need to surface a reason; the
+                  // "SlipOK ตรวจแล้ว" pill + transRef already say it.
+                  $slipokReason = null;
+              }
+          }
         @endphp
         <tr class="hover:bg-gray-50/50 transition align-middle">
           <td class="px-3 py-3">
@@ -740,6 +797,28 @@
                 </span>
               @endif
             </div>
+
+            {{-- "Why didn't SlipOK verify this?" — pulled from the
+                 _slipok_diagnostic block that SlipVerifier writes into
+                 verify_breakdown on every attempt. Only shown for states
+                 where the answer is non-obvious (admin-action states),
+                 not for "ตรวจแล้ว" or "กำลังตรวจ" where the pill itself
+                 is the answer. Tone color matches severity: rose for
+                 hard errors, amber for config gaps, gray for "just wait". --}}
+            @if($slipokReason && in_array($pipelineState['key'], ['slipok_manual','slipok_skipped','slipok_retry','slipok_off']))
+              @php
+                  $toneClasses = [
+                      'rose'  => ['text' => 'text-rose-700',  'icon' => 'bi-exclamation-triangle-fill text-rose-500'],
+                      'amber' => ['text' => 'text-amber-700', 'icon' => 'bi-exclamation-circle-fill text-amber-500'],
+                      'gray'  => ['text' => 'text-gray-600',  'icon' => 'bi-info-circle-fill text-gray-400'],
+                  ][$slipokReasonTone] ?? ['text' => 'text-gray-600', 'icon' => 'bi-info-circle-fill text-gray-400'];
+              @endphp
+              <p class="text-[10px] mt-1 flex items-start gap-1 {{ $toneClasses['text'] }}"
+                 title="{{ 'enabled=' . ($slipokDiag['enabled'] ? 'on' : 'off') . ' / configured=' . ($slipokDiag['configured'] ? 'yes' : 'no') . ' / attempted=' . ($slipokDiag['attempted'] ? 'yes' : 'no') . ' / code=' . ($slipokDiag['error_code'] ?? '-') }}">
+                <i class="bi {{ $toneClasses['icon'] }} text-[10px] mt-0.5 shrink-0"></i>
+                <span class="leading-tight">{{ Str::limit($slipokReason, 70) }}</span>
+              </p>
+            @endif
 
             {{-- Age — when admin sees "กำลังตรวจ" they want to know
                  "for how long?" so they can spot stuck slips. --}}
