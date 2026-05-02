@@ -262,8 +262,8 @@ window.lineFriendPopup = function () {
       // User clicked the CTA — they're going to LINE now. Suppress
       // for 30 days so we don't badger them while the OA webhook
       // catches up + flips line_is_friend in the DB. (Once flipped,
-      // the popup is server-side gated by the @if guard so it stops
-      // rendering entirely.)
+      // the popup is server-side gated by the Blade if-guard so it
+      // stops rendering entirely.)
       localStorage.setItem(
         'line_friend_popup_dismissed_until',
         String(Date.now() + 30 * 24 * 60 * 60 * 1000)
