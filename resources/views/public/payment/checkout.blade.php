@@ -170,20 +170,52 @@
             <div class="mt-4 text-2xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 bg-clip-text text-transparent">
               ฿{{ number_format($orderAmt, 2) }}
             </div>
-            <div class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              PromptPay: <strong class="text-slate-900 dark:text-white font-mono">{{ $promptPayNumber }}</strong>
-              <button type="button"
-                      onclick="navigator.clipboard.writeText('{{ $promptPayNumber }}'); this.innerHTML='<i class=\'bi bi-check2 text-emerald-500\'></i>'; setTimeout(()=>{this.innerHTML='<i class=\'bi bi-clipboard text-xs\'></i>'},1500)"
-                      class="ml-1 text-slate-400 hover:text-indigo-500 transition align-middle" title="คัดลอกเบอร์ PromptPay">
-                <i class="bi bi-clipboard text-xs"></i>
+
+            {{-- Recipient label — replaces the raw "PromptPay: 081xxx" line.
+                 Shows the brand as recipient (matches banking-app UX where
+                 scanning the QR reveals the recipient name for confirmation,
+                 not the underlying phone number). Hides the phone publicly,
+                 still gives customer a trust signal that they're paying to
+                 a real, verified account. The "?" link at the end reveals
+                 the number for users who need to enter it manually as a
+                 fallback when QR scan fails (cached on click — no extra
+                 round-trip). --}}
+            <div class="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium
+                        bg-emerald-50 text-emerald-700 border border-emerald-100
+                        dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20">
+              <i class="bi bi-shield-check"></i>
+              <span>ผู้รับ:</span>
+              <strong>{{ $_ppSiteName }}</strong>
+            </div>
+
+            <div class="mt-2 text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-center gap-2 flex-wrap">
+              @if(!empty($order->order_number))
+                <span>#{{ $order->order_number }}</span>
+                <span aria-hidden="true">·</span>
+              @endif
+              <button type="button" id="ppShowNumberBtn"
+                      onclick="(function(b){const v=document.getElementById('ppNumberFallback');if(v.classList.contains('hidden')){v.classList.remove('hidden');b.style.display='none';}})(this)"
+                      class="text-indigo-600 dark:text-indigo-400 hover:underline">
+                ใช้เลขแทน QR?
               </button>
             </div>
 
-            @if(!empty($order->order_number))
-              <div class="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
-                คำสั่งซื้อ #{{ $order->order_number }}
+            {{-- Hidden by default — revealed on "ใช้เลขแทน QR?" click.
+                 No extra request: the number is rendered but display:none
+                 until needed. Provides the fallback path for the rare case
+                 where a customer's bank app can't read the QR (broken
+                 camera, blurry screen, etc.). --}}
+            <div id="ppNumberFallback" class="hidden mt-2">
+              <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/50 text-sm">
+                <span class="text-slate-500 dark:text-slate-400">PromptPay:</span>
+                <strong class="text-slate-900 dark:text-white font-mono">{{ $promptPayNumber }}</strong>
+                <button type="button"
+                        onclick="navigator.clipboard.writeText('{{ $promptPayNumber }}'); this.innerHTML='<i class=\'bi bi-check2 text-emerald-500\'></i>'; setTimeout(()=>{this.innerHTML='<i class=\'bi bi-clipboard text-xs\'></i>'},1500)"
+                        class="text-slate-400 hover:text-indigo-500 transition" title="คัดลอกเบอร์ PromptPay">
+                  <i class="bi bi-clipboard text-xs"></i>
+                </button>
               </div>
-            @endif
+            </div>
           </div>
 
           {{-- Footer ribbon — brand domain --}}

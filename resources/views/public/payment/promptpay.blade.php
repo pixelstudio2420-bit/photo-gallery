@@ -84,14 +84,38 @@
           @endif
         </div>
 
+        {{-- Recipient label (replaces "หมายเลข PromptPay: 081-xxx").
+             Banking app shows recipient name on scan, so the raw number
+             is redundant + leaks privacy. Trust signal kept via the
+             ✓ badge with brand name. Hidden fallback below for users
+             who can't scan QR. --}}
         @if(!empty($promptPayNumber))
-          <div class="text-sm text-slate-500 dark:text-slate-400 mb-1">หมายเลข PromptPay:</div>
-          <div class="inline-flex items-center gap-2 font-mono font-bold text-slate-900 dark:text-white mb-3">
-            {{ $promptPayNumber }}
-            <button onclick="navigator.clipboard.writeText('{{ $promptPayNumber }}'); this.innerHTML='<i class=\'bi bi-check2\'></i>'; setTimeout(()=>{this.innerHTML='<i class=\'bi bi-clipboard\'></i>'}, 1500)"
-                    class="text-slate-400 hover:text-indigo-500 transition" title="คัดลอก">
-              <i class="bi bi-clipboard text-xs"></i>
+          <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium mb-3
+                      bg-emerald-50 text-emerald-700 border border-emerald-100
+                      dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20">
+            <i class="bi bi-shield-check"></i>
+            <span>ผู้รับ:</span>
+            <strong>{{ $_ppSiteName }}</strong>
+          </div>
+
+          {{-- "ใช้เลขแทน QR?" toggle for fallback when QR can't be scanned. --}}
+          <div class="text-[11px] text-slate-500 dark:text-slate-400 mb-2">
+            <button type="button" id="ppShowNumberBtnStandalone"
+                    onclick="(function(b){const v=document.getElementById('ppNumberFallbackStandalone');if(v.classList.contains('hidden')){v.classList.remove('hidden');b.style.display='none';}})(this)"
+                    class="text-indigo-600 dark:text-indigo-400 hover:underline">
+              ใช้เลขแทน QR?
             </button>
+          </div>
+
+          <div id="ppNumberFallbackStandalone" class="hidden mb-3">
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/50 text-sm">
+              <span class="text-slate-500 dark:text-slate-400">PromptPay:</span>
+              <strong class="text-slate-900 dark:text-white font-mono">{{ $promptPayNumber }}</strong>
+              <button onclick="navigator.clipboard.writeText('{{ $promptPayNumber }}'); this.innerHTML='<i class=\'bi bi-check2 text-emerald-500\'></i>'; setTimeout(()=>{this.innerHTML='<i class=\'bi bi-clipboard text-xs\'></i>'}, 1500)"
+                      class="text-slate-400 hover:text-indigo-500 transition" title="คัดลอก">
+                <i class="bi bi-clipboard text-xs"></i>
+              </button>
+            </div>
           </div>
         @endif
 
