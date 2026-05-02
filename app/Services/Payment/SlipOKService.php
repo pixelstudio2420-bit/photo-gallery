@@ -91,23 +91,41 @@ class SlipOKService
         $apiKey = AppSetting::get('slipok_api_key', '');
         $apiUrl = $this->resolveApiUrl();
 
+        // Every diagnostic log line carries enough context that an admin
+        // can answer "why didn't this slip go to SlipOK?" by greping
+        // production logs for the slip filename. Keep PII out (no API key).
+        $logCtx = [
+            'image'         => basename($imagePath),
+            'has_api_key'   => $apiKey !== '',
+            'api_url_set'   => $apiUrl !== null,
+        ];
+
         if (empty($apiKey) || $apiUrl === null) {
+            Log::warning('SlipOK verify SKIPPED — credentials missing', $logCtx);
             return ['success' => false, 'data' => [], 'error_code' => 'MISSING_CREDENTIALS', 'raw' => []];
         }
 
         if (!file_exists($imagePath)) {
+            Log::warning('SlipOK verify SKIPPED — file not found', $logCtx + ['path' => $imagePath]);
             return ['success' => false, 'data' => [], 'error_code' => 'FILE_NOT_FOUND', 'raw' => []];
         }
 
+        $start = microtime(true);
         try {
             $response = Http::timeout(15)
                 ->withHeaders(['x-authorization' => $apiKey])
                 ->attach('files[]', fopen($imagePath, 'r'), basename($imagePath))
                 ->post($apiUrl);
 
-            $body = $response->json() ?? [];
+            $elapsed = (int) ((microtime(true) - $start) * 1000);
+            $body    = $response->json() ?? [];
 
             if ($response->successful() && ($body['success'] ?? false)) {
+                Log::info('SlipOK verify SUCCESS', $logCtx + [
+                    'elapsed_ms' => $elapsed,
+                    'trans_ref'  => $body['data']['transRef'] ?? null,
+                    'amount'     => $body['data']['amount']   ?? null,
+                ]);
                 return [
                     'success'    => true,
                     'data'       => $body['data'] ?? $body,
@@ -116,15 +134,38 @@ class SlipOKService
                 ];
             }
 
+            // Distinguish API-level rejection (200 with success=false)
+            // from HTTP-level error (4xx/5xx). The error_code captured in
+            // both cases helps admin spot patterns ("seeing 1012 a lot →
+            // API key got rotated").
+            $errorCode = (string) ($body['code'] ?? $body['error'] ?? $response->status());
+            $errorMsg  = (string) ($body['message'] ?? $body['error'] ?? '');
+            Log::warning('SlipOK verify FAILED — API returned non-success', $logCtx + [
+                'http_status' => $response->status(),
+                'error_code'  => $errorCode,
+                'message'     => $errorMsg,
+                'elapsed_ms'  => $elapsed,
+            ]);
             return [
                 'success'    => false,
                 'data'       => $body,
-                'error_code' => (string) ($body['code'] ?? $response->status()),
+                'error_code' => $errorCode,
+                'error_msg'  => $errorMsg,
                 'raw'        => $body,
             ];
         } catch (\Throwable $e) {
-            Log::error('SlipOK API error: ' . $e->getMessage());
-            return ['success' => false, 'data' => [], 'error_code' => 'EXCEPTION', 'raw' => []];
+            $elapsed = (int) ((microtime(true) - $start) * 1000);
+            Log::error('SlipOK verify EXCEPTION', $logCtx + [
+                'error'      => $e->getMessage(),
+                'elapsed_ms' => $elapsed,
+            ]);
+            return [
+                'success'    => false,
+                'data'       => [],
+                'error_code' => 'EXCEPTION',
+                'error_msg'  => $e->getMessage(),
+                'raw'        => [],
+            ];
         }
     }
 

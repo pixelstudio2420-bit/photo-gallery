@@ -103,6 +103,22 @@ class SlipVerifier
         $breakdown = $this->buildBreakdown($checks, $hasExif);
         $score     = (int) min(100, array_sum(array_column($breakdown, 'points')));
 
+        // Stash SlipOK call result inside the breakdown so admin can see
+        // EXACTLY why SlipOK didn't verify a slip — e.g., disabled, bad
+        // credentials, network timeout, or API rejection. Without this,
+        // failed SlipOK calls were invisible in the admin UI ("ทำไมไม่
+        // เข้า SlipOK?") and admin had to grep production logs.
+        $breakdown['_slipok_diagnostic'] = [
+            'enabled'    => $slipok->isEnabled(),
+            'configured' => $slipok->isConfigured(),
+            'attempted'  => $slipokResult !== null,
+            'success'    => $slipokResult['success'] ?? false,
+            'error_code' => $slipokResult['error_code'] ?? null,
+            'error_msg'  => $slipokResult['error_msg']  ?? null,
+            'trans_ref'  => $normalised['trans_ref']    ?? null,
+            'amount'     => $normalised['amount']       ?? null,
+        ];
+
         // ── Fraud detection (critical — caps score) ─────────────────────────
         $fraudFlags = $this->detectFraud($checks, $file, $hash, $slipokDupRef, $normalised, $orderAmount);
         if (!empty($fraudFlags)) {

@@ -1004,6 +1004,118 @@ class PaymentController extends Controller
     }
 
     /*--------------------------------------------------------------------------
+    | Per-Slip Re-verify
+    |--------------------------------------------------------------------------
+    | Admin clicks "ส่งให้ SlipOK ตรวจอีกครั้ง" on a pending slip.
+    | Re-pulls the slip image from R2, calls SlipOK synchronously, updates
+    | the slip's slipok_trans_ref + verify_breakdown so the admin can see
+    | what SlipOK actually said — useful for debugging "ทำไมไม่เข้า SlipOK".
+    | Does NOT auto-flip status to approved; admin still decides.
+    */
+    public function reverifySlipOK(Request $request, int $slipId)
+    {
+        $slip = \App\Models\PaymentSlip::find($slipId);
+        if (!$slip) {
+            return response()->json(['ok' => false, 'message' => 'ไม่พบสลิป'], 404);
+        }
+
+        $svc = new \App\Services\Payment\SlipOKService();
+        if (!$svc->isEnabled()) {
+            return response()->json(['ok' => false, 'message' => 'SlipOK ปิดใช้งานอยู่'], 400);
+        }
+        if (!$svc->isConfigured()) {
+            return response()->json(['ok' => false, 'message' => 'ยังไม่ได้ตั้งค่า API URL หรือ API Key'], 400);
+        }
+
+        // Pull slip image from R2 (or wherever it lives) into a temp file
+        // — SlipOK SDK takes a local path, not a URL.
+        $tempPath = $this->materialiseSlipForReverify($slip->slip_path);
+        if (!$tempPath) {
+            return response()->json([
+                'ok'      => false,
+                'message' => 'ไม่สามารถดึงไฟล์สลิปจาก storage — slip_path: ' . $slip->slip_path,
+            ], 500);
+        }
+
+        try {
+            $result = $svc->verify($tempPath);
+        } finally {
+            @unlink($tempPath);
+        }
+
+        // Persist the result to the slip's breakdown regardless of success
+        // — admin needs visibility on FAILURES too.
+        $breakdown = is_string($slip->verify_breakdown)
+            ? (json_decode($slip->verify_breakdown, true) ?: [])
+            : (is_array($slip->verify_breakdown) ? $slip->verify_breakdown : []);
+
+        $diag = [
+            'attempted'  => true,
+            'success'    => $result['success'] ?? false,
+            'error_code' => $result['error_code'] ?? null,
+            'error_msg'  => $result['error_msg']  ?? null,
+            'reverified_at' => now()->toIso8601String(),
+            'reverified_by' => Auth::guard('admin')->id(),
+        ];
+
+        $update = ['verify_breakdown' => array_merge($breakdown, ['_slipok_diagnostic' => $diag])];
+
+        if ($result['success']) {
+            $normalised = $svc->normaliseResult($result['data']);
+            $update['slipok_trans_ref'] = $normalised['trans_ref'];
+            $update['receiver_account'] = $normalised['receiver_account'];
+            $update['receiver_name']    = $normalised['receiver_name'];
+            $update['sender_name']      = $normalised['sender_name'];
+            $diag['trans_ref']          = $normalised['trans_ref'];
+            $diag['amount']             = $normalised['amount'];
+            $update['verify_breakdown'] = array_merge($breakdown, ['_slipok_diagnostic' => $diag]);
+        }
+        $slip->update($update);
+
+        \App\Services\ActivityLogger::admin(
+            action:      'slip.reverified_slipok',
+            target:      $slip,
+            description: "Re-verified slip #{$slip->id} via SlipOK — " . ($result['success'] ? 'success' : 'failed: ' . ($result['error_code'] ?? 'unknown')),
+            newValues:   $diag,
+        );
+
+        return response()->json([
+            'ok'           => $result['success'],
+            'message'      => $result['success']
+                ? "SlipOK ตรวจสำเร็จ — transRef: " . ($update['slipok_trans_ref'] ?? '-')
+                : "SlipOK ปฏิเสธ — error: " . ($result['error_code'] ?: 'unknown'),
+            'trans_ref'    => $update['slipok_trans_ref'] ?? null,
+            'error_code'   => $result['error_code'] ?? null,
+            'error_msg'    => $result['error_msg']  ?? null,
+            'http_status'  => $result['success'] ? 200 : 422,
+        ]);
+    }
+
+    private function materialiseSlipForReverify(?string $slipPath): ?string
+    {
+        if (empty($slipPath)) return null;
+        if (is_file($slipPath)) return $slipPath;
+
+        foreach (['payment-slips', 'r2', 'local', 'public'] as $disk) {
+            try {
+                if (\Illuminate\Support\Facades\Storage::disk($disk)->exists($slipPath)) {
+                    $stream = \Illuminate\Support\Facades\Storage::disk($disk)->readStream($slipPath);
+                    if (!$stream) continue;
+                    $temp = tempnam(sys_get_temp_dir(), 'slipok_reverify_');
+                    $out  = fopen($temp, 'w');
+                    stream_copy_to_stream($stream, $out);
+                    fclose($out);
+                    if (is_resource($stream)) fclose($stream);
+                    return $temp;
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+        return null;
+    }
+
+    /*--------------------------------------------------------------------------
     | Private Helpers
     |--------------------------------------------------------------------------*/
     private function createDownloadTokens(Order $order): void

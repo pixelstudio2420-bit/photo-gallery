@@ -911,6 +911,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
             // settings page. JSON responses for inline UI feedback.
             Route::post('/slips/test-slipok',         [\App\Http\Controllers\Admin\PaymentController::class, 'testSlipOK'])->name('slips.test-slipok');
             Route::post('/slips/generate-slipok-secret', [\App\Http\Controllers\Admin\PaymentController::class, 'generateSlipOKSecret'])->name('slips.generate-slipok-secret');
+            // Per-slip re-verify — admin clicks "ส่ง SlipOK ตรวจอีก" on a
+            // pending slip to manually trigger SlipOK + see the result
+            // (useful for debugging "ทำไม slip ไม่เข้า SlipOK").
+            Route::post('/slips/{slip}/reverify-slipok', [\App\Http\Controllers\Admin\PaymentController::class, 'reverifySlipOK'])->name('slips.reverify-slipok');
             Route::get('/payouts', [\App\Http\Controllers\Admin\PaymentController::class, 'payouts'])->name('payouts');
             // Bulk route before parameterized route to avoid conflicts
             Route::post('/payouts/bulk-mark-paid', [\App\Http\Controllers\Admin\PaymentController::class, 'bulkMarkPaid'])->name('payouts.bulk-mark-paid');

@@ -779,6 +779,18 @@
                 onclick="openRejectModal({{ $slip->id }}, '{{ $slip->order_number ?? $slip->order_id }}')">
                 <i class="bi bi-x-lg text-sm"></i>
               </button>
+              {{-- Re-verify with SlipOK — only shown when SlipOK is enabled
+                   AND we don't already have a transRef. Lets admin manually
+                   trigger a SlipOK call + see the exact error code, useful
+                   for "ทำไม slip ไม่เข้า SlipOK" debugging. --}}
+              @if($slipokEnabledGlobally && !$hasSlipokRef)
+                <button type="button"
+                  class="w-8 h-8 rounded-lg bg-violet-500/[0.08] text-violet-600 flex items-center justify-center transition hover:bg-violet-500/[0.15]"
+                  title="ส่งให้ SlipOK ตรวจอีกครั้ง"
+                  onclick="reverifySlipOK({{ $slip->id }}, this)">
+                  <i class="bi bi-arrow-repeat text-sm"></i>
+                </button>
+              @endif
             </div>
             @else
             <span class="text-gray-500 text-sm">-</span>
@@ -941,6 +953,42 @@ function openRejectModal(slipId, orderNum) {
   document.getElementById('rejectForm').action = '/admin/payments/slips/' + slipId + '/reject';
   document.querySelector('#rejectForm textarea[name="reason"]').value = '';
   window.dispatchEvent(new CustomEvent('open-reject-modal'));
+}
+
+/* Re-verify with SlipOK — admin clicks the violet refresh icon on a
+   pending slip. Triggers a fresh call to the SlipOK API + writes the
+   result into the slip row. Visual feedback inline (button spins),
+   alert on completion with the actual error code so admin sees WHY
+   it failed in plain text instead of guessing. */
+function reverifySlipOK(slipId, btn) {
+  const icon = btn.querySelector('i');
+  const orig = icon.className;
+  icon.className = 'bi bi-arrow-repeat animate-spin text-sm';
+  btn.disabled = true;
+
+  fetch('/admin/payments/slips/' + slipId + '/reverify-slipok', {
+    method: 'POST',
+    headers: {
+      'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+      'Accept': 'application/json'
+    }
+  })
+    .then(r => r.json().then(j => ({ status: r.status, body: j })))
+    .then(({ status, body }) => {
+      if (body.ok) {
+        alert('✓ SlipOK ยืนยันสำเร็จ\n\ntransRef: ' + (body.trans_ref || '-') + '\n\nหน้าจะรีเฟรชเพื่อแสดงผล');
+        window.location.reload();
+      } else {
+        alert('✗ SlipOK ปฏิเสธ\n\nError code: ' + (body.error_code || '-') + '\nDetail: ' + (body.error_msg || body.message || '-'));
+      }
+    })
+    .catch(err => {
+      alert('เชื่อมต่อล้มเหลว: ' + err.message);
+    })
+    .finally(() => {
+      icon.className = orig;
+      btn.disabled = false;
+    });
 }
 
 // Bulk approve
