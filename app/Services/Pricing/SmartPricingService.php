@@ -233,44 +233,52 @@ class SmartPricingService
     }
 
     /**
-     * Snap a raw price to the nearest charm-pricing endpoint.
+     * Snap a raw price to the nearest "*9 ending" charm endpoint,
+     * ALWAYS rounding DOWN.
      *
-     * Endings used (Thai retail convention):
-     *   <฿100         → ends in 9        (29, 39, 49, 59, …, 99)
-     *   ฿100-999      → ends in 9        (109, 199, 299, 399, …, 999)
-     *   ฿1,000-9,999  → ends in 90       (1190, 1990, 2490, 4990, …)
-     *   ≥ ฿10,000     → ends in 900      (14900, 19900, 29900, 99900)
+     * Two design decisions, each driven by a real bug we hit in
+     * smoke testing:
      *
-     * The function preserves "9" psychology while keeping snapped values
-     * close enough to the curve target that we don't accidentally over-
-     * or under-charge by more than one charm-step.
+     *   1. Snap DOWN, not snap-to-nearest. With round(), two adjacent
+     *      bundle counts could land in opposite directions (e.g., 270
+     *      → 269 down, 405 → 409 up) and the per-photo cost would
+     *      INCREASE between adjacent counts. Buyers reasonably expect
+     *      "more photos = cheaper per photo" — any inversion reads
+     *      as a bug. Snap-down is monotonicity-preserving: raw price
+     *      grows monotonically with count, and floor-snap can only
+     *      shift each value DOWN by ≤ step, so the order is kept.
+     *
+     *   2. Step=10 across ALL price bands. Mixed granularity (10 for
+     *      sub-1k, 100 for thousands) introduced bucket-jump inversions
+     *      around the band boundaries (e.g., ฿999 → next charm endpoint
+     *      ฿1,099 jumps 100 baht for 1 extra photo, which inverts
+     *      per-photo when curve discount can't keep up). Uniform 10-baht
+     *      grid trades a bit of charm aesthetics on large prices
+     *      (฿14,999 instead of ฿14,900) for absolute monotonicity.
+     *
+     * Endings produced (all *9):
+     *     19, 29, …, 99, 109, 199, 999, 1099, 1199, 9999, 10099, …
+     *
+     * Trade-off: ~10 baht more revenue would come from snap-to-nearest,
+     * but this exact 10 baht is what causes the inversion. The retention
+     * floor in computeBundlePrice() catches any drop below
+     * MIN_BUNDLE_RETENTION_PCT, so the photographer never loses
+     * commission to this snap.
      */
     public function snapToCharm(float $price): float
     {
-        if ($price < 30) {
-            // Tiny prices: snap to ฿19, ฿29 — anything lower is silly.
-            return max(19.0, floor($price / 10) * 10 + 9);
-        }
+        // Largest *9-ending value ≤ $price (uniform 10-baht grid).
+        // Examples:
+        //   $price=270  → 269
+        //   $price=405  → 399
+        //   $price=1100 → 1099
+        //   $price=1418 → 1409
+        //   $price=14900→ 14899
+        $snapped = floor(($price - 9) / 10) * 10 + 9;
 
-        if ($price < 100) {
-            // 35 → 39, 87 → 89, 95 → 99
-            return floor($price / 10) * 10 + 9;
-        }
-
-        if ($price < 1000) {
-            // 270 → 269, 481 → 479 (or 489 if closer), 700 → 699.
-            // Round to nearest 10, then -1 to land on a *9 ending.
-            return round($price / 10) * 10 - 1;
-        }
-
-        if ($price < 10000) {
-            // 1200 → 1190, 1240 → 1290, 2400 → 2390, 4990 → 4990.
-            // Round to nearest 100, then -10 to land on a *90 ending.
-            return round($price / 100) * 100 - 10;
-        }
-
-        // ≥ 10k: 14900, 19900, 29900, 49900, 99900.
-        return round($price / 1000) * 1000 - 100;
+        // Tiny prices: never snap below ฿19. Anything lower than ฿19
+        // for a sellable bundle is a config error, not a real price.
+        return max(19.0, $snapped);
     }
 
     /**
@@ -290,17 +298,9 @@ class SmartPricingService
         if ($snapped >= $price) {
             return $snapped;
         }
-
-        // snapToCharm went below — bump up by exactly one charm step.
-        // Step size matches the snap granularity for that price band:
-        //   <100   → 10  (29 → 39)
-        //   <1k    → 10  (279 → 289)
-        //   <10k   → 100 (4990 → 5090)
-        //   ≥10k   → 1000 (14900 → 15900)
-        if ($price < 100)   return $snapped + 10;
-        if ($price < 1000)  return $snapped + 10;
-        if ($price < 10000) return $snapped + 100;
-        return $snapped + 1000;
+        // snapToCharm now uses a uniform 10-baht step across all price
+        // bands, so the ceiling counterpart is always snapped + 10.
+        return $snapped + 10;
     }
 
     /* ═══════════════════════════════════════════════════════════════
@@ -313,6 +313,25 @@ class SmartPricingService
      *
      * E.g. curve has {3, 6, 10, 20, 50} but caller asks for size 8.
      * We interpolate between (6, 22%) and (10, 32%) → ~27% for size 8.
+     *
+     * Below-first-anchor (count < lowest curve key) — special case:
+     * we DON'T just clamp to the first anchor's discount. Doing so
+     * means count=2 inherits the full count=3 discount %, which then
+     * causes a per-photo inversion when n=2 raw + snap-down loses
+     * more to charm-snap than n=3 does.
+     *
+     * Concrete example pre-fix: premium ฿300 →
+     *   n=2: 12% off → raw 528 → snap 519 → 259.50 / photo
+     *   n=3: 12% off → raw 792 → snap 789 → 263.00 / photo
+     * Per-photo INCREASED by ฿3.50 going from 2 → 3 photos.
+     *
+     * Post-fix: linearly scale the discount from 0% (at count=1) up
+     * to the first anchor:
+     *   n=1: 0% → solo price
+     *   n=2: 6% (= 12% × 1/2)
+     *   n=3: 12% (anchor)
+     * That gives smooth, monotonic per-photo progression even when
+     * the buyer picks a bundle size below the curve's smallest anchor.
      */
     private function lookupOrInterpolate(array $curve, int $count): float
     {
@@ -327,10 +346,19 @@ class SmartPricingService
         $values = array_values($curve);
         $first  = (float) $values[0];
         $last   = (float) end($values);
+        $firstK = (int) $keys[0];
 
-        // Outside the curve range → clamp to nearest endpoint.
-        if ($count <= $keys[0])     return $first;
-        if ($count >= end($keys))   return $last;
+        // Below first anchor → linear ramp from 0% (count=1) to the
+        // first anchor's discount. Solves the n=2 inversion problem
+        // documented in the docblock above.
+        if ($count < $firstK) {
+            if ($count <= 1 || $firstK <= 1) return 0.0;
+            $ratio = ($count - 1) / ($firstK - 1);
+            return $first * $ratio;
+        }
+
+        // Above last anchor → clamp to last anchor's discount.
+        if ($count >= end($keys)) return $last;
 
         // Inside range → linear interpolate between adjacent anchors.
         for ($i = 0; $i < count($keys) - 1; $i++) {
