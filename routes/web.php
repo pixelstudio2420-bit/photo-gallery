@@ -1822,11 +1822,33 @@ Route::prefix('photographer')->name('photographer.')->group(function () {
         Route::get('events/{event}/photos/upload', [\App\Http\Controllers\Photographer\PhotoController::class, 'create'])->name('events.photos.upload');
         Route::post('events/{event}/photos', [\App\Http\Controllers\Photographer\PhotoController::class, 'store'])
             ->name('events.photos.store')
-            // Three layered gates:
-            //   rate.limit:60,1     — burst protection (60 req/min/user)
-            //   photographer.quota  — bytes-based storage quota (existing)
-            //   usage.quota:photo.upload — count-based per-day plan cap (NEW)
-            ->middleware(['rate.limit:60,1', 'photographer.quota', 'usage.quota:photo.upload']);
+            // Policy: "block only when storage is genuinely full".
+            //
+            // Two layered gates — the daily count cap was removed so a
+            // wedding/marathon photographer uploading 500+ photos in one
+            // session never gets blocked while they still have storage left.
+            // The bytes-based storage quota is the only "you can't upload"
+            // ceiling now.
+            //
+            //   rate.limit:300,1   — burst protection (300 req/min/user).
+            //                        Each photo is 1 request (frontend uses
+            //                        single-file XHR with concurrency 3).
+            //                        300/min = 5 req/sec — enough headroom
+            //                        for any human-driven batch upload, but
+            //                        still cuts off runaway scripts that
+            //                        would try to overwhelm R2/the queue.
+            //                        (Old 60/min was the actual culprit
+            //                        when the customer reported "uploads
+            //                        fail after a while" on big shoots.)
+            //   photographer.quota — bytes-based storage quota.
+            //                        Returns 413 when remaining bytes would
+            //                        be exceeded by the next file.
+            //
+            // Usage IS still tracked — PhotoController::store calls
+            // UsageMeter::record('photo.upload', 1) AFTER successful upload
+            // so analytics + plan-overage warnings (X-Quota-Warning header
+            // on subsequent endpoints) still work. We just don't block.
+            ->middleware(['rate.limit:300,1', 'photographer.quota']);
         Route::delete('events/{event}/photos/{photo}', [\App\Http\Controllers\Photographer\PhotoController::class, 'destroy'])->name('events.photos.destroy');
         Route::post('events/{event}/photos/bulk-delete', [\App\Http\Controllers\Photographer\PhotoController::class, 'bulkDelete'])->name('events.photos.bulk-delete');
         Route::post('events/{event}/photos/reorder', [\App\Http\Controllers\Photographer\PhotoController::class, 'reorder'])->name('events.photos.reorder');
