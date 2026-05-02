@@ -577,6 +577,13 @@ Route::middleware(['auth', 'no.back'])->group(function () {
     // Payments
     Route::get('/payment/checkout/{order}', [PaymentController::class, 'checkout'])->name('payment.checkout');
     Route::post('/payment/process', [PaymentController::class, 'process'])->name('payment.process');
+    // Client-side expiry check — the countdown banner POSTs here when
+    // it ticks to 0 so the cancellation is reflected before the user
+    // has to manually refresh. Returns JSON {expired, status, redirect}
+    // so the JS can route the buyer to /orders/{id} with the warning.
+    Route::post('/payment/check-expiry/{order}', [PaymentController::class, 'checkExpiry'])
+        ->name('payment.check-expiry')
+        ->middleware('rate.limit:30,1');  // 30 calls / minute / user — defensive
     Route::post('/payment/slip/upload', [PaymentController::class, 'uploadSlip'])
         ->name('payment.slip.upload')
         // Burst protection: 5 slip uploads per minute per user.

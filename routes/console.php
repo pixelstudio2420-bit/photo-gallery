@@ -161,6 +161,17 @@ Schedule::command('carts:process-abandoned')
     ->hourly()
     ->withoutOverlapping();
 
+// Auto-cancel pending orders whose payment window expired.
+// Runs every minute so the gap between "timer hits 0" on the buyer's
+// screen and the server-side cancellation is at most ~60 seconds.
+// withoutOverlapping prevents two cron processes from racing on the
+// same batch (the service is row-locked anyway, but the lock is cheap
+// to skip when we know a sibling is already running).
+Schedule::command('orders:expire-pending')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Drop stale carts weekly
 Schedule::command('carts:cleanup --days=30')
     ->weekly()

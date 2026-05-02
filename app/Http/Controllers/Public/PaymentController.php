@@ -35,6 +35,19 @@ class PaymentController extends Controller
             ->with(['items', 'event', 'package'])
             ->firstOrFail();
 
+        // Auto-cancel if the payment window already closed. The cron
+        // (orders:expire-pending) catches most cases within 60s, but
+        // a buyer who reloads the page in that window would otherwise
+        // see a stale "pay now" UI for an order the system is about
+        // to cancel anyway. Cancel here + redirect with a friendly
+        // message so the experience is consistent.
+        if (in_array($order->status, ['pending_payment', 'pending'])
+            && $order->paymentExpired()) {
+            app(\App\Services\OrderExpireService::class)->expireOrder($order);
+            return redirect()->route('orders.show', $order->id)
+                ->with('warning', 'หมดเวลาชำระเงินแล้ว — คำสั่งซื้อนี้ถูกยกเลิกอัตโนมัติ กรุณาสั่งซื้อใหม่');
+        }
+
         // Accept both DB status values
         if (!in_array($order->status, ['pending_payment', 'pending'])) {
             return redirect()->route('orders.show', $order->id)
@@ -86,6 +99,17 @@ class PaymentController extends Controller
             ->where('user_id', Auth::id())
             ->with(['items', 'event'])
             ->firstOrFail();
+
+        // Same expiry-trap as checkout(). Buyer hit "pay" right at the
+        // tail of the window — refuse + cancel rather than handing the
+        // request to the gateway and risking a charge against an order
+        // we're about to cancel.
+        if (in_array($order->status, ['pending_payment', 'pending'])
+            && $order->paymentExpired()) {
+            app(\App\Services\OrderExpireService::class)->expireOrder($order);
+            return redirect()->route('orders.show', $order->id)
+                ->with('warning', 'หมดเวลาชำระเงินแล้ว — คำสั่งซื้อนี้ถูกยกเลิกอัตโนมัติ กรุณาสั่งซื้อใหม่');
+        }
 
         if (!in_array($order->status, ['pending_payment', 'pending'])) {
             return redirect()->route('orders.show', $order->id)
@@ -581,6 +605,49 @@ class PaymentController extends Controller
             'download_url'  => $downloadUrl,
             'slip_status'   => $latestSlip?->verify_status,
             'reject_reason' => $latestSlip?->reject_reason,
+        ]);
+    }
+
+    /**
+     * Client-side expiry check — countdown banner calls this when it
+     * ticks to 0. Returns JSON describing whether the order was
+     * cancelled by this call (or already cancelled by the cron / a
+     * previous tab) so the JS can redirect cleanly.
+     *
+     * Idempotent: calling repeatedly only cancels once thanks to the
+     * status guard inside OrderExpireService.
+     */
+    public function checkExpiry($orderId)
+    {
+        $order = Order::where('id', $orderId)
+            ->where('user_id', Auth::id())
+            ->firstOrFail();
+
+        // Try to expire — service no-ops when the order isn't actually
+        // expired yet, OR when it's already paid/cancelled. The result
+        // tells us whether to send the buyer to the orders page.
+        $justCancelled = false;
+        if (in_array($order->status, ['pending_payment', 'pending'], true)
+            && $order->paymentExpired()) {
+            $justCancelled = app(\App\Services\OrderExpireService::class)
+                ->expireOrder($order);
+            $order->refresh();
+        }
+
+        $expired  = $order->status === 'cancelled'
+                    || ($order->payment_expires_at && $order->payment_expires_at->isPast() && !$order->isPaid());
+        $redirect = $expired ? route('orders.show', $order->id) : null;
+
+        return response()->json([
+            'order_id'        => $order->id,
+            'status'          => $order->status,
+            'expired'         => $expired,
+            'just_cancelled'  => $justCancelled,
+            'seconds_left'    => max(0, $order->paymentSecondsRemaining()),
+            'redirect'        => $redirect,
+            'flash'           => $justCancelled
+                ? 'หมดเวลาชำระเงินแล้ว — คำสั่งซื้อนี้ถูกยกเลิกอัตโนมัติ'
+                : null,
         ]);
     }
 }

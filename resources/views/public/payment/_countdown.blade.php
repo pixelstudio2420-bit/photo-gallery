@@ -18,7 +18,11 @@
     $secondsLeft = max(0, (int) $order->paymentSecondsRemaining());
   @endphp
 
-  <div x-data="paymentCountdown({{ $secondsLeft }})"
+  <div x-data="paymentCountdown({{ $secondsLeft }}, {
+                  orderId: {{ (int) $order->id }},
+                  checkUrl: '{{ route('payment.check-expiry', $order->id) }}',
+                  csrfToken: '{{ csrf_token() }}'
+              })"
        x-init="start()"
        class="rounded-xl border-2 mb-3 sm:mb-4 overflow-hidden transition-colors"
        :class="state === 'urgent'
@@ -78,10 +82,14 @@
     /* Alpine factory function — define once globally; x-data wires up
        per-banner instances with their own initial second count. */
     if (!window.paymentCountdown) {
-      window.paymentCountdown = function (initialSeconds) {
+      window.paymentCountdown = function (initialSeconds, opts) {
+        opts = opts || {};
         return {
           remaining: Math.max(0, parseInt(initialSeconds) || 0),
           timer: null,
+          orderId:   opts.orderId || null,
+          checkUrl:  opts.checkUrl || null,
+          csrfToken: opts.csrfToken || null,
           /** UI state — keeps Alpine class-bindings simple. */
           get state() {
             if (this.remaining <= 0) return 'expired';
@@ -105,8 +113,35 @@
               if (this.remaining <= 0 && this.timer) {
                 clearInterval(this.timer);
                 this.timer = null;
+                // Inform the server immediately + redirect — the cron
+                // catches this within 60s, but a JS-triggered cancel
+                // closes the window so a buyer who was about to scan
+                // the QR can't pay against an order we've abandoned.
+                this.notifyExpired();
               }
             }, 1000);
+          },
+          notifyExpired() {
+            if (!this.checkUrl) return;
+            fetch(this.checkUrl, {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': this.csrfToken || ''
+              }
+            })
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+              if (data && data.expired && data.redirect) {
+                // Soft delay so the user sees "หมดเวลาแล้ว" for a
+                // beat before the redirect — abrupt navigation feels
+                // glitchy when triggered by an automatic timer.
+                setTimeout(() => { window.location.href = data.redirect; }, 1200);
+              }
+            })
+            .catch(() => {/* silent — cron will handle this within ~60s anyway */});
           },
         };
       };
