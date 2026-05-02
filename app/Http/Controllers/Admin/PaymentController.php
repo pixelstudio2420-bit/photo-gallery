@@ -918,7 +918,7 @@ class PaymentController extends Controller
         if (!$svc->isConfigured()) {
             return response()->json([
                 'ok'       => false,
-                'message'  => 'ยังไม่ได้ตั้งค่า API key หรือ Branch ID — กรุณากรอกแล้วบันทึกก่อนทดสอบ',
+                'message'  => 'ยังไม่ได้ตั้งค่า API Key หรือ API URL — กรุณากรอกแล้วบันทึกก่อนทดสอบ',
                 'category' => 'config',
             ], 400);
         }
@@ -960,7 +960,7 @@ class PaymentController extends Controller
         if ($authError) {
             return response()->json([
                 'ok'       => false,
-                'message'  => 'API Key หรือ Branch ID ไม่ถูกต้อง (' . ($errorCode ?: 'auth failed') . ')',
+                'message'  => 'API Key หรือ API URL ไม่ถูกต้อง (' . ($errorCode ?: 'auth failed') . ')',
                 'category' => 'auth',
                 'error_code' => $errorCode,
                 'response_time_ms' => $elapsed,

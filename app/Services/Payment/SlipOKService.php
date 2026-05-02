@@ -112,9 +112,18 @@ class SlipOKService
 
         $start = microtime(true);
         try {
+            // SlipOK reads $_FILES['files'] directly (not an array) — using
+            // 'files[]' makes PHP parse the field as $_FILES['files'][0],
+            // which SlipOK ignores and then returns code:1000
+            // ("กรุณาใส่ข้อมูล QR Code ให้ครบใน field data, files หรือ url").
+            // The field name MUST be the literal string 'files'.
+            //
+            // Pass the binary content directly (not a resource handle) so
+            // Laravel's HTTP client doesn't accidentally close the stream
+            // before the multipart writer reads it.
             $response = Http::timeout(15)
                 ->withHeaders(['x-authorization' => $apiKey])
-                ->attach('files[]', fopen($imagePath, 'r'), basename($imagePath))
+                ->attach('files', file_get_contents($imagePath), basename($imagePath))
                 ->post($apiUrl);
 
             $elapsed = (int) ((microtime(true) - $start) * 1000);
