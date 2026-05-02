@@ -600,6 +600,19 @@ document.addEventListener('DOMContentLoaded', function() {
       status: 'compressing',
       xhr: null,
       attempts: 0,
+      // Idempotency key — one UUID per file, REUSED on every retry of
+      // this same file. The server's uniq_event_photos_idempotency
+      // partial index turns a retry from "re-upload + race-cleanup" into
+      // an instant 200 lookup, saving R2 bandwidth + the user's quota
+      // when their network blips mid-batch. Modern browsers (Chrome 92+,
+      // Firefox 95+, Safari 15.4+) all support crypto.randomUUID; the
+      // fallback covers older devices without throwing.
+      idempotencyKey: (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : ('xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = Math.random() * 16 | 0;
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+          })),
     }));
     newItems.forEach(item => {
       queue.push(item);
@@ -792,6 +805,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     xhr.open('POST', uploadUrl);
     xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    // Idempotency-Key — RFC 7231-style header. Server's PhotoController
+    // checks this BEFORE doing the SHA-256 hash + R2 upload, so a retry
+    // resolves with an instant DB lookup (200 + replayed:true) instead
+    // of re-uploading the bytes only to be deduped post-hoc.
+    if (item.idempotencyKey) {
+      xhr.setRequestHeader('Idempotency-Key', item.idempotencyKey);
+    }
     xhr.send(formData);
   }
 
