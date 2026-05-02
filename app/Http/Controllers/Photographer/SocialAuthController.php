@@ -237,10 +237,16 @@ class SocialAuthController extends Controller
 
                 // Spawn a photographer profile in pending status so admin
                 // can review. The display_name comes from the OAuth name.
+                // photographer_code is NOT NULL with no default — must
+                // be supplied here. Pattern matches PhotographerOnboarding-
+                // Controller@store: "PG-" + zero-padded user_id (5 digits).
+                // This was the 500 cause for /photographer/auth/line/callback:
+                // without it the INSERT raises 23502 not-null violation.
                 PhotographerProfile::create([
-                    'user_id'      => $u->id,
-                    'display_name' => $name,
-                    'status'       => 'pending',
+                    'user_id'           => $u->id,
+                    'photographer_code' => 'PG-' . str_pad((string) $u->id, 5, '0', STR_PAD_LEFT),
+                    'display_name'      => $name,
+                    'status'            => 'pending',
                 ]);
 
                 SocialLogin::create([
