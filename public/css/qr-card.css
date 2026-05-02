@@ -1,0 +1,252 @@
+/* ──────────────────────────────────────────────────────────────────
+   QR Card — shareable, print-ready event QR card.
+
+   Design rationale:
+   - Card stays LIGHT even in dark mode. The card is the "shareable
+     artifact" — it ends up in screenshots, prints, social shares —
+     where a dark background photographs/prints poorly. The surrounding
+     stage adapts to the theme so the rest of the page still feels
+     coherent in dark mode.
+   - All layout uses fixed pixel sizes (not rem) inside the card so
+     html2canvas renders identically regardless of root font size.
+   - Aspect ratio ~4:5 (target ~420×560 at desktop) so the saved PNG
+     is naturally Instagram-portrait friendly without extra cropping.
+   ────────────────────────────────────────────────────────────────── */
+
+/* The stage = ambient page background behind the card. Inherits the
+   page's pg-page-bg gradient on photographer, and admin's neutral on
+   admin pages — but adds a subtle pink→indigo glow that puts the card
+   in spotlight without competing with it. */
+.pg-qr-stage {
+    position: relative;
+    padding: 32px 16px 64px;
+    display: flex; flex-direction: column; align-items: center; gap: 24px;
+}
+.pg-qr-stage::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+        radial-gradient(600px 320px at 50% 0%, rgba(124, 58, 237, .12), transparent 60%),
+        radial-gradient(800px 400px at 50% 100%, rgba(236, 72, 153, .08), transparent 60%);
+    z-index: 0;
+}
+.pg-qr-stage > * { position: relative; z-index: 1; }
+
+/* The card itself — the thing html2canvas will rasterise.
+   Hard-coded width keeps the saved PNG dimensionally predictable. */
+.pg-qr-card {
+    width: 100%; max-width: 420px;
+    background: #ffffff;
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow:
+        0 24px 60px -12px rgba(79, 70, 229, .25),
+        0 8px 20px -8px rgba(0, 0, 0, .08),
+        0 0 0 1px rgba(99, 102, 241, .06);
+    /* font set explicitly so html2canvas doesn't fall back to
+       system font when it can't probe the inherited Sarabun. */
+    font-family: 'Sarabun', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: #0f172a;
+}
+
+/* ── Top brand band — gradient strip with site name + scan callout ── */
+.pg-qr-card-header {
+    position: relative;
+    padding: 22px 24px 20px;
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #ec4899 100%);
+    color: #fff;
+    overflow: hidden;
+}
+/* Subtle texture: diagonal sheen + dot pattern overlay so the gradient
+   doesn't feel flat in screenshots. */
+.pg-qr-card-header::before {
+    content: ""; position: absolute; inset: 0;
+    background:
+        radial-gradient(circle at 20% 20%, rgba(255,255,255,.18), transparent 40%),
+        radial-gradient(circle at 80% 80%, rgba(255,255,255,.10), transparent 50%);
+    pointer-events: none;
+}
+.pg-qr-brand {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 800; font-size: 1.15rem; letter-spacing: -.01em;
+    margin: 0;
+}
+.pg-qr-brand-mark {
+    width: 32px; height: 32px; border-radius: 9px;
+    background: rgba(255,255,255,.18);
+    border: 1.5px solid rgba(255,255,255,.35);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 1rem; backdrop-filter: blur(8px);
+}
+/* When admin uploads a logo, the <img> takes over the brand-mark. */
+.pg-qr-brand-mark img {
+    width: 100%; height: 100%; object-fit: contain;
+    border-radius: 7px; padding: 3px; background: #fff;
+}
+.pg-qr-brand-tag {
+    margin-top: 8px; font-size: .65rem;
+    font-weight: 800; letter-spacing: .22em; text-transform: uppercase;
+    opacity: .85;
+}
+
+/* ── Body — QR + event info ── */
+.pg-qr-card-body {
+    padding: 28px 24px 24px;
+    background: #ffffff;
+    /* gentle radial accent so the QR feels "stage-lit" */
+    background-image: radial-gradient(360px 200px at 50% 0%, rgba(99, 102, 241, .06), transparent 70%);
+}
+
+/* QR frame with corner brackets — adds professional polish without
+   interfering with QR scanability. Brackets sit OUTSIDE the QR padding
+   so they never overlap the modules. */
+.pg-qr-frame {
+    position: relative;
+    width: fit-content; margin: 0 auto 22px;
+    padding: 14px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #f8fafc 0%, #ede9fe 100%);
+    box-shadow:
+        inset 0 0 0 1px rgba(99, 102, 241, .08),
+        0 12px 30px -12px rgba(99, 102, 241, .25);
+}
+.pg-qr-frame img {
+    display: block; max-width: 280px; height: auto;
+    border-radius: 12px; background: #fff;
+}
+.pg-qr-frame-corner {
+    position: absolute; width: 22px; height: 22px;
+    border-color: #7c3aed; border-style: solid; border-width: 0;
+}
+.pg-qr-frame-corner.tl { top: -2px;    left:  -2px;  border-top-width: 3px;    border-left-width: 3px;    border-top-left-radius: 14px; }
+.pg-qr-frame-corner.tr { top: -2px;    right: -2px;  border-top-width: 3px;    border-right-width: 3px;   border-top-right-radius: 14px; }
+.pg-qr-frame-corner.bl { bottom: -2px; left:  -2px;  border-bottom-width: 3px; border-left-width: 3px;    border-bottom-left-radius: 14px; }
+.pg-qr-frame-corner.br { bottom: -2px; right: -2px;  border-bottom-width: 3px; border-right-width: 3px;   border-bottom-right-radius: 14px; }
+
+/* Event meta + name + cta */
+.pg-qr-meta {
+    text-align: center;
+    margin-bottom: 16px;
+}
+.pg-qr-eyebrow {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: .7rem; font-weight: 700;
+    letter-spacing: .14em; text-transform: uppercase;
+    color: #7c3aed;
+    background: rgba(124, 58, 237, .08);
+    padding: 5px 11px; border-radius: 999px;
+    margin-bottom: 10px;
+}
+.pg-qr-event-name {
+    font-size: 1.35rem; font-weight: 800;
+    line-height: 1.25; letter-spacing: -.02em;
+    margin: 0 0 8px;
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #ec4899 100%);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    /* Ensure html2canvas renders gradient text. We layer the
+       gradient with -webkit-background-clip; html2canvas v1.4+
+       supports this. Older versions need a fallback solid colour. */
+}
+/* Plain-color fallback used when @supports doesn't catch the gradient
+   (older Safari, older html2canvas). */
+@supports not (background-clip: text) {
+    .pg-qr-event-name { color: #4f46e5; background: none; }
+}
+.pg-qr-cta {
+    font-size: .82rem; color: #475569;
+    margin: 0; line-height: 1.4;
+}
+
+/* ── Footer ribbon — brand domain ── */
+.pg-qr-card-footer {
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+    color: #fff;
+    padding: 14px 20px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-size: .9rem; font-weight: 600; letter-spacing: .02em;
+}
+.pg-qr-card-footer i {
+    font-size: .95rem; color: #c4b5fd;
+}
+
+/* ── Action row (sits OUTSIDE the card so html2canvas doesn't capture it) ── */
+.pg-qr-actions {
+    display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+    width: 100%; max-width: 420px;
+}
+.pg-qr-action-btn {
+    flex: 1 1 130px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-weight: 600; font-size: .9rem;
+    border: 0; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    transition: transform .15s, box-shadow .15s, opacity .2s;
+}
+.pg-qr-action-btn.is-primary {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    color: #fff;
+    box-shadow: 0 8px 18px -6px rgba(124, 58, 237, .45);
+}
+.pg-qr-action-btn.is-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -6px rgba(124, 58, 237, .55); }
+.pg-qr-action-btn.is-ghost {
+    background: rgba(99, 102, 241, .08);
+    color: #4f46e5;
+}
+.pg-qr-action-btn.is-ghost:hover { background: rgba(99, 102, 241, .14); }
+.pg-qr-action-btn:disabled { opacity: .55; cursor: wait; }
+
+html.dark .pg-qr-action-btn.is-ghost {
+    background: rgba(124, 58, 237, .15); color: #c4b5fd;
+}
+html.dark .pg-qr-action-btn.is-ghost:hover { background: rgba(124, 58, 237, .25); }
+
+/* ── URL chip — a tiny inline pill that shows the encoded URL so user
+   can copy it without scanning. Sits below the card. ── */
+.pg-qr-url-chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(255, 255, 255, .85);
+    border: 1px solid rgba(99, 102, 241, .15);
+    backdrop-filter: blur(8px);
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: .78rem;
+    color: #475569;
+    max-width: 100%;
+}
+.pg-qr-url-chip code {
+    font-family: inherit;
+    color: #4f46e5; font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis;
+    max-width: 240px; white-space: nowrap;
+}
+.pg-qr-url-chip button {
+    background: none; border: 0; cursor: pointer;
+    color: #7c3aed; font-size: .9rem; padding: 0; margin-left: 4px;
+}
+html.dark .pg-qr-url-chip {
+    background: rgba(15, 23, 42, .7);
+    border-color: rgba(124, 58, 237, .25);
+    color: #cbd5e1;
+}
+html.dark .pg-qr-url-chip code { color: #c4b5fd; }
+
+/* ── Print rules — hide everything except the card itself ── */
+@media print {
+    body { background: #fff !important; }
+    .no-print, .pg-qr-actions, .pg-qr-url-chip { display: none !important; }
+    .pg-qr-stage::before { display: none; }
+    .pg-qr-card {
+        box-shadow: none;
+        border: 1px solid #e5e7eb;
+        page-break-inside: avoid;
+    }
+}
+
+/* ── Mobile tightening — keep the card readable on narrow screens ── */
+@media (max-width: 380px) {
+    .pg-qr-event-name { font-size: 1.15rem; }
+    .pg-qr-frame img  { max-width: 240px; }
+    .pg-qr-card-header { padding: 18px 18px 16px; }
+    .pg-qr-card-body   { padding: 22px 18px 18px; }
+}
