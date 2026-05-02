@@ -179,7 +179,142 @@ class PhotographerController extends Controller
     public function edit(PhotographerProfile $photographer)
     {
         $photographer->load('user');
-        return view('admin.photographers.edit', compact('photographer'));
+
+        // Subscription context — let admin see the photographer's
+        // current plan + usage on the same page they edit other
+        // profile data, and grant/cancel/extend without bouncing
+        // through the photographer-facing screens.
+        $subs = app(\App\Services\SubscriptionService::class);
+        $subSummary = $subs->dashboardSummary($photographer);
+        $availablePlans = \App\Models\SubscriptionPlan::where('is_active', true)
+            ->orderBy('sort_order')
+            ->get(['id', 'code', 'name', 'price_thb', 'price_annual_thb', 'storage_bytes', 'commission_pct']);
+
+        return view('admin.photographers.edit', compact(
+            'photographer', 'subSummary', 'availablePlans'
+        ));
+    }
+
+    /* ════════════════════════════════════════════════════════════════
+     * Admin subscription management — comp/cancel/extend a plan
+     * directly from the photographer edit page. Bypasses the buyer-
+     * facing payment flow because these are administrative actions
+     * (make-good, partnership comp, dispute resolution).
+     *
+     * Each action writes to the activity log via ActivityLogger so we
+     * have a forensic trail of which admin granted what to whom and
+     * why.
+     * ════════════════════════════════════════════════════════════════ */
+
+    public function assignPlan(Request $request, PhotographerProfile $photographer)
+    {
+        $validated = $request->validate([
+            'plan_code' => 'required|string|exists:subscription_plans,code',
+            'days'      => 'nullable|integer|min:1|max:3650',
+            'reason'    => 'nullable|string|max:500',
+        ]);
+
+        $plan = \App\Models\SubscriptionPlan::where('code', $validated['plan_code'])
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        $oldPlanName = optional(app(\App\Services\SubscriptionService::class)
+            ->currentSubscription($photographer))->plan?->name ?? 'Free';
+
+        $sub = app(\App\Services\SubscriptionService::class)->adminAssign(
+            $photographer,
+            $plan,
+            $validated['days'] ?? null,
+            $validated['reason'] ?? '',
+            Auth::guard('admin')->id()
+        );
+
+        ActivityLogger::admin(
+            action: 'photographer.plan_assigned',
+            target: $photographer,
+            description: "Granted plan \"{$plan->name}\" to \"{$photographer->display_name}\" (was \"{$oldPlanName}\")"
+                . ($validated['reason'] ?? '' ? ' — ' . $validated['reason'] : ''),
+            oldValues: ['plan' => $oldPlanName],
+            newValues: [
+                'plan'          => $plan->name,
+                'days'          => $validated['days'] ?? 'one cycle',
+                'period_end'    => $sub->current_period_end?->toIso8601String(),
+                'reason'        => $validated['reason'] ?? null,
+            ],
+        );
+
+        return redirect()->route('admin.photographers.edit', $photographer)
+            ->with('success', "เปลี่ยนแผนเป็น \"{$plan->name}\" สำเร็จ"
+                . ($sub->current_period_end ? " (ถึง {$sub->current_period_end->format('d M Y')})" : ''));
+    }
+
+    public function cancelSubscription(Request $request, PhotographerProfile $photographer)
+    {
+        $validated = $request->validate([
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        $sub = app(\App\Services\SubscriptionService::class)->currentSubscription($photographer);
+        $oldPlanName = $sub?->plan?->name ?? '—';
+
+        $cancelled = app(\App\Services\SubscriptionService::class)->adminCancel(
+            $photographer,
+            $validated['reason'] ?? '',
+            Auth::guard('admin')->id()
+        );
+
+        if (!$cancelled) {
+            return back()->with('warning', 'ไม่พบแผนที่กำลังใช้งาน');
+        }
+
+        ActivityLogger::admin(
+            action: 'photographer.plan_cancelled',
+            target: $photographer,
+            description: "Cancelled plan \"{$oldPlanName}\" for \"{$photographer->display_name}\""
+                . ($validated['reason'] ?? '' ? ' — ' . $validated['reason'] : ''),
+            oldValues: ['plan' => $oldPlanName, 'status' => 'active'],
+            newValues: ['plan' => 'Free', 'status' => 'cancelled', 'reason' => $validated['reason'] ?? null],
+        );
+
+        return redirect()->route('admin.photographers.edit', $photographer)
+            ->with('success', "ยกเลิกแผนของ \"{$photographer->display_name}\" แล้ว — ดาวน์เกรดเป็น Free");
+    }
+
+    public function extendPeriod(Request $request, PhotographerProfile $photographer)
+    {
+        $validated = $request->validate([
+            'days'   => 'required|integer|min:1|max:365',
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        $extended = app(\App\Services\SubscriptionService::class)->adminExtend(
+            $photographer,
+            (int) $validated['days'],
+            $validated['reason'] ?? '',
+            Auth::guard('admin')->id()
+        );
+
+        if (!$extended) {
+            return back()->with('warning', 'ไม่พบแผนที่กำลังใช้งาน — กรุณาเปลี่ยนแผนก่อนขยายเวลา');
+        }
+
+        $sub = app(\App\Services\SubscriptionService::class)->currentSubscription($photographer);
+
+        ActivityLogger::admin(
+            action: 'photographer.plan_extended',
+            target: $photographer,
+            description: "Extended plan by {$validated['days']} day(s) for \"{$photographer->display_name}\""
+                . ($validated['reason'] ?? '' ? ' — ' . $validated['reason'] : ''),
+            oldValues: [],
+            newValues: [
+                'days_added'  => $validated['days'],
+                'new_period_end' => $sub?->current_period_end?->toIso8601String(),
+                'reason'      => $validated['reason'] ?? null,
+            ],
+        );
+
+        return redirect()->route('admin.photographers.edit', $photographer)
+            ->with('success', "ขยายเวลาแผน {$validated['days']} วัน — สิ้นสุด {$sub->current_period_end?->format('d M Y')}");
     }
 
     public function update(Request $request, PhotographerProfile $photographer)

@@ -952,6 +952,150 @@ class SubscriptionService
         ];
     }
 
+    /* ═══════════════════════════════════════════════════════════════
+     * Admin overrides — invoked from /admin/photographers/{p}/edit
+     *
+     * These bypass the buyer-facing payment flow so admins can comp
+     * plans, extend periods (refund alternative), or hard-cancel
+     * without invoicing. Every call writes a marker into meta + an
+     * audit log so we can trace WHO comped WHAT and WHY.
+     * ═══════════════════════════════════════════════════════════════ */
+
+    /**
+     * Grant a plan to a photographer immediately without charging —
+     * use case: comped accounts (partners, beta testers, dispute
+     * resolution), bulk migrations, customer-success make-good.
+     *
+     * Cancels any currently active/pending sub atomically + creates
+     * a fresh active subscription that runs for $days (or one full
+     * billing cycle if $days is null). No invoice / no payment_intent
+     * is created — this isn't a sale, it's a grant.
+     */
+    public function adminAssign(
+        PhotographerProfile $profile,
+        SubscriptionPlan $plan,
+        ?int $days = null,
+        string $reason = '',
+        ?int $adminId = null
+    ): PhotographerSubscription {
+        return DB::transaction(function () use ($profile, $plan, $days, $reason, $adminId) {
+            // Tombstone the prior live sub so the photographer never has two.
+            // Cancel reason captured in meta (no dedicated column on schema).
+            PhotographerSubscription::where('photographer_id', $profile->user_id)
+                ->whereIn('status', [
+                    PhotographerSubscription::STATUS_ACTIVE,
+                    PhotographerSubscription::STATUS_PENDING,
+                    PhotographerSubscription::STATUS_GRACE,
+                ])
+                ->lockForUpdate()
+                ->update([
+                    'status'       => PhotographerSubscription::STATUS_CANCELLED,
+                    'cancelled_at' => now(),
+                    'updated_at'   => now(),
+                ]);
+
+            $now      = now();
+            $endsAt   = $days !== null && $days > 0
+                ? $now->copy()->addDays($days)
+                : ($plan->price_annual_thb && $plan->price_annual_thb > 0
+                    ? $now->copy()->addYear()
+                    : $now->copy()->addMonth());
+
+            $sub = PhotographerSubscription::create([
+                'photographer_id'      => $profile->user_id,
+                'plan_id'              => $plan->id,
+                'status'               => PhotographerSubscription::STATUS_ACTIVE,
+                'started_at'           => $now,
+                'current_period_start' => $now,
+                'current_period_end'   => $endsAt,
+                'payment_method_type'  => 'admin_comp',
+                'meta'                 => [
+                    'admin_assigned' => true,
+                    'admin_id'       => $adminId,
+                    'reason'         => mb_substr($reason ?: 'admin grant', 0, 500),
+                    'days'           => $days,
+                    'assigned_at'    => $now->toIso8601String(),
+                ],
+            ]);
+
+            $this->syncProfileCache($profile, $sub);
+            return $sub->fresh('plan');
+        });
+    }
+
+    /**
+     * Hard-cancel the photographer's current subscription immediately
+     * (vs. the buyer-facing cancel() which schedules cancel-at-period-end).
+     *
+     * Drops them to the free plan right now. Used when an admin needs
+     * to revoke access mid-period (TOS violation, refund issued, etc).
+     */
+    public function adminCancel(
+        PhotographerProfile $profile,
+        string $reason = '',
+        ?int $adminId = null
+    ): bool {
+        $sub = $this->currentSubscription($profile);
+        if (!$sub || !$sub->isUsable()) return false;
+
+        DB::transaction(function () use ($sub, $reason, $adminId) {
+            $sub->update([
+                'status'                  => PhotographerSubscription::STATUS_CANCELLED,
+                'cancelled_at'            => now(),
+                'cancel_at_period_end'    => false,
+                // Cancel reason stored in meta — no dedicated column.
+                'meta'                    => array_merge((array) $sub->meta, [
+                    'admin_cancelled_by' => $adminId,
+                    'admin_cancel_reason'=> mb_substr($reason ?: 'admin cancel', 0, 500),
+                    'admin_cancelled_at' => now()->toIso8601String(),
+                ]),
+            ]);
+        });
+
+        // Drop them to free so feature gates re-evaluate against the
+        // free plan immediately (don't leave them in limbo).
+        $this->ensureFreeSubscription($profile);
+        return true;
+    }
+
+    /**
+     * Extend the current period_end by N days. Useful as a refund
+     * alternative — instead of issuing money back, give them more time.
+     *
+     * No-ops if there's no active sub.
+     */
+    public function adminExtend(
+        PhotographerProfile $profile,
+        int $days,
+        string $reason = '',
+        ?int $adminId = null
+    ): bool {
+        if ($days <= 0) return false;
+
+        $sub = $this->currentSubscription($profile);
+        if (!$sub || !$sub->isUsable() || !$sub->current_period_end) return false;
+
+        DB::transaction(function () use ($sub, $days, $reason, $adminId) {
+            $extensionLog = (array) ($sub->meta['extensions'] ?? []);
+            $extensionLog[] = [
+                'days'      => $days,
+                'reason'    => mb_substr($reason ?: 'admin extend', 0, 500),
+                'admin_id'  => $adminId,
+                'old_end'   => $sub->current_period_end?->toIso8601String(),
+                'new_end'   => $sub->current_period_end->copy()->addDays($days)->toIso8601String(),
+                'at'        => now()->toIso8601String(),
+            ];
+
+            $sub->update([
+                'current_period_end' => $sub->current_period_end->copy()->addDays($days),
+                'meta'               => array_merge((array) $sub->meta, [
+                    'extensions' => $extensionLog,
+                ]),
+            ]);
+        });
+        return true;
+    }
+
     public function platformKpis(): array
     {
         $activeSubs     = PhotographerSubscription::activeOrGrace()->count();

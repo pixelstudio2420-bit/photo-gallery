@@ -867,6 +867,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('photographers/{photographer}/adjust-commission', [\App\Http\Controllers\Admin\PhotographerController::class, 'adjustCommission'])->name('photographers.adjust-commission');
         Route::post('photographers/{photographer}/reset-password', [\App\Http\Controllers\Admin\PhotographerController::class, 'resetPassword'])->name('photographers.reset-password');
 
+        // Subscription overrides — admin assigns/cancels/extends a plan
+        // for a photographer directly (no buyer-facing payment flow).
+        // Used for comps, partnerships, dispute resolution, refund-as-extension.
+        Route::post('photographers/{photographer}/assign-plan',         [\App\Http\Controllers\Admin\PhotographerController::class, 'assignPlan'])->name('photographers.assign-plan');
+        Route::post('photographers/{photographer}/cancel-subscription', [\App\Http\Controllers\Admin\PhotographerController::class, 'cancelSubscription'])->name('photographers.cancel-subscription');
+        Route::post('photographers/{photographer}/extend-period',       [\App\Http\Controllers\Admin\PhotographerController::class, 'extendPeriod'])->name('photographers.extend-period');
+
         // Commission Management
         Route::prefix('commission')->name('commission.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\CommissionController::class, 'index'])->name('index');
