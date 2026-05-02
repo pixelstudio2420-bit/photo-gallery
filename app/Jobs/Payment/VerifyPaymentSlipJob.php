@@ -167,7 +167,12 @@ class VerifyPaymentSlipJob implements ShouldQueue, ShouldBeUnique
                 // tagged the slip with the data so admin sees the evidence).
                 'verify_status'    => $shouldApprove ? 'approved' : 'pending',
                 'verified_at'      => $shouldApprove ? now() : null,
-                'verified_by'      => $shouldApprove ? 'slipok_async' : null,
+                // verified_by is an integer column (admin_id reference).
+                // For SlipOK-auto verifications we leave it NULL — the
+                // combination (slipok_trans_ref IS NOT NULL + verified_by
+                // IS NULL + verify_status='approved') is how the admin UI
+                // distinguishes auto vs manual approval.
+                'verified_by'      => null,
                 'updated_at'       => now(),
             ]);
 

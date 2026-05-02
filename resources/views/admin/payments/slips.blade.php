@@ -2,11 +2,46 @@
 
 @section('title', 'สลิปการโอนเงิน')
 
+@php
+  // Compute auto-refresh need ONCE per request — used by both the head
+  // meta tag below and the visible "อัปเดตอัตโนมัติ" pill in the page
+  // header. Only true when SlipOK is enabled AND at least one slip is in
+  // the active retry window (uploaded within last 30min, no transRef yet).
+  // After 30min the async retry job has exhausted its 3 attempts so a
+  // refresh won't change anything — admin can refresh manually if they
+  // want to see late callbacks.
+  $needsRefresh = false;
+  if (!empty($settings['slipok_enabled'])) {
+      $needsRefresh = \App\Models\PaymentSlip::where('verify_status', 'pending')
+          ->whereNull('slipok_trans_ref')
+          ->where('created_at', '>=', now()->subMinutes(30))
+          ->exists();
+  }
+@endphp
+
+@push('styles')
+  {{-- Meta tag pushed through the styles stack because admin layout
+       only stacks `styles` and `scripts` in its head. http-equiv meta
+       is valid head content regardless of the stack name. --}}
+  @if($needsRefresh)
+    <meta http-equiv="refresh" content="15">
+  @endif
+@endpush
+
 @section('content')
 <div class="flex justify-between items-center mb-6">
   <h4 class="font-bold text-xl tracking-tight">
     <i class="bi bi-credit-card-2-front mr-2 text-indigo-500"></i>สลิปการโอนเงิน
   </h4>
+  {{-- Live-refresh chip — only visible while the auto-refresh meta is
+       emitted, so admin knows the page is updating itself and doesn't
+       hammer F5. --}}
+  @if($needsRefresh ?? false)
+    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200">
+      <i class="bi bi-arrow-repeat animate-spin"></i>
+      <span>อัปเดตอัตโนมัติ (15s)</span>
+    </span>
+  @endif
 </div>
 
 {{-- Navigation Tabs --}}
@@ -552,6 +587,64 @@
           $slipUrl = $slipImage
               ? app(\App\Services\StorageManager::class)->resolveUrl($slipImage)
               : '';
+
+          /* ── SlipOK pipeline state (derived per slip) ──────────────────
+             Tells admin AT A GLANCE where this slip is in the verification
+             pipeline. State machine:
+                uploaded → slipok_checking → slipok_done → decision
+                                ↓ (retry exhausted)
+                              slipok_failed (manual review)
+
+             Inputs (all already on the slip row):
+               - $slipokEnabledGlobally — admin's master toggle
+               - $slip->slipok_trans_ref — set when SlipOK successfully verified
+               - $slip->verify_status   — pending/approved/rejected
+               - $slip->verified_by     — 'slipok_async' / admin id / null
+               - $slip->created_at      — when admin/customer uploaded
+          ──────────────────────────────────────────────────────────────── */
+          $slipokEnabledGlobally = !empty($settings['slipok_enabled']);
+          $hasSlipokRef          = !empty($slip->slipok_trans_ref);
+          $secondsSinceUpload    = $slip->created_at
+              ? max(0, now()->diffInSeconds(\Carbon\Carbon::parse($slip->created_at), false) * -1)
+              : null;
+          // verified_by is an INTEGER column (admin_id) — NULL when SlipOK
+          // or the system handled it. We don't compare to a string here.
+          $verifiedByAdminId = $slip->verified_by;
+          $hasAdminVerifier  = !empty($verifiedByAdminId);
+
+          if (!$slipokEnabledGlobally) {
+              $pipelineState = ['key' => 'slipok_off',     'label' => 'SlipOK ปิด',      'icon' => 'bi-slash-circle',     'color' => 'text-gray-500',  'bg' => 'bg-gray-100',     'spin' => false];
+          } elseif ($hasSlipokRef) {
+              $pipelineState = ['key' => 'slipok_done',    'label' => 'SlipOK ตรวจแล้ว','icon' => 'bi-check-circle-fill','color' => 'text-emerald-700','bg' => 'bg-emerald-100',  'spin' => false];
+          } elseif ($isPending && $secondsSinceUpload !== null && $secondsSinceUpload < 60) {
+              $pipelineState = ['key' => 'slipok_checking','label' => 'กำลังตรวจ',     'icon' => 'bi-arrow-repeat',     'color' => 'text-blue-700',  'bg' => 'bg-blue-100',     'spin' => true];
+          } elseif ($isPending && $secondsSinceUpload !== null && $secondsSinceUpload < 1200) {
+              // Within retry window (3 attempts: 60s/5min/15min = ~21min).
+              // Show as "queued for retry" so admin knows to wait, not act.
+              $pipelineState = ['key' => 'slipok_retry',   'label' => 'รอ retry',       'icon' => 'bi-hourglass-split',  'color' => 'text-amber-700', 'bg' => 'bg-amber-100',    'spin' => false];
+          } elseif ($isPending) {
+              // Past retry window without a transRef — admin needs to look.
+              $pipelineState = ['key' => 'slipok_manual',  'label' => 'ต้องตรวจมือ',   'icon' => 'bi-person-raised-hand','color' => 'text-rose-700',  'bg' => 'bg-rose-100',     'spin' => false];
+          } else {
+              // Already decided (approved/rejected). If transRef missing here
+              // it means admin decided manually before SlipOK finished.
+              $pipelineState = ['key' => 'slipok_skipped', 'label' => 'ข้าม SlipOK',    'icon' => 'bi-skip-forward',     'color' => 'text-gray-600',  'bg' => 'bg-gray-100',     'spin' => false];
+          }
+
+          // "Decided by" — derived from the admin_id (NULL = system/auto).
+          // Pairing with $hasSlipokRef tells us SlipOK-auto vs system-other:
+          //   admin_id set        → admin manually approved
+          //   null + slipok ref   → SlipOK auto-approved via the async job
+          //   null + no slipok    → system (gateway webhook, etc.)
+          $isTerminal = !$isPending;
+          $decidedBy = null;
+          if ($isTerminal) {
+              if ($hasAdminVerifier) {
+                  $decidedBy = ['label' => 'แอดมิน',     'icon' => 'bi-person-badge', 'color' => 'text-indigo-700', 'bg' => 'bg-indigo-100'];
+              } elseif ($hasSlipokRef) {
+                  $decidedBy = ['label' => 'อัตโนมัติ',  'icon' => 'bi-robot',         'color' => 'text-violet-700', 'bg' => 'bg-violet-100'];
+              }
+          }
         @endphp
         <tr class="hover:bg-gray-50/50 transition align-middle">
           <td class="px-3 py-3">
@@ -623,13 +716,52 @@
             @endif
           </td>
           <td class="px-4 py-3">
+            {{-- Top: terminal status (pending/approved/rejected) --}}
             <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold" style="background:{{ $sc['bg'] }};color:{{ $sc['color'] }};">
               {{ $sc['label'] }}
             </span>
+
+            {{-- Middle: SlipOK pipeline pill — animated when actively
+                 checking, static badge when done/queued/manual. Tells admin
+                 at-a-glance whether to wait (auto-pipeline running) or
+                 review manually (pipeline finished or skipped). --}}
+            <div class="flex flex-wrap gap-1 mt-1.5">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $pipelineState['bg'] }} {{ $pipelineState['color'] }}"
+                    title="{{ $pipelineState['key'] }}">
+                <i class="bi {{ $pipelineState['icon'] }} {{ $pipelineState['spin'] ? 'animate-spin' : '' }}"></i>
+                {{ $pipelineState['label'] }}
+              </span>
+
+              {{-- Decided-by pill — only when terminal status reached --}}
+              @if($decidedBy)
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $decidedBy['bg'] }} {{ $decidedBy['color'] }}"
+                      title="{{ $hasAdminVerifier ? 'admin_id=' . $verifiedByAdminId : 'auto-verified by SlipOK' }}">
+                  <i class="bi {{ $decidedBy['icon'] }}"></i>{{ $decidedBy['label'] }}
+                </span>
+              @endif
+            </div>
+
+            {{-- Age — when admin sees "กำลังตรวจ" they want to know
+                 "for how long?" so they can spot stuck slips. --}}
+            @if($slip->created_at)
+              <p class="text-[10px] text-gray-400 mt-1">
+                <i class="bi bi-clock"></i>
+                อัปโหลด {{ \Carbon\Carbon::parse($slip->created_at)->diffForHumans() }}
+              </p>
+            @endif
+
             @if(($slip->verify_status ?? '') === 'rejected' && $slip->reject_reason)
             <div class="text-gray-500 mt-1 text-xs" title="{{ $slip->reject_reason }}">
               <i class="bi bi-info-circle mr-1"></i>{{ Str::limit($slip->reject_reason, 30) }}
             </div>
+            @endif
+
+            {{-- SlipOK trans ref — irrefutable proof of bank-side success --}}
+            @if($hasSlipokRef)
+              <p class="text-[9px] text-emerald-600 mt-1 font-mono" title="SlipOK transaction reference">
+                <i class="bi bi-shield-fill-check"></i>
+                {{ Str::limit($slip->slipok_trans_ref, 18) }}
+              </p>
             @endif
           </td>
           <td class="px-4 py-3">
