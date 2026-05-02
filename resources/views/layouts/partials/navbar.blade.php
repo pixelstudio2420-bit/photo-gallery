@@ -713,13 +713,18 @@
 
       init() {
         this.fetchUnreadCount();
-        // Poll every 30 seconds — gated on document.hidden so a tab
+        // Poll every 60 seconds — gated on document.hidden so a tab
         // that's been backgrounded for hours doesn't keep hammering
         // the API. We still re-fetch immediately when the tab becomes
         // visible again so the badge isn't stale on focus.
+        // (Was 30s — bumped to 60s after a cookie-accumulation incident
+        // where polling alone was filling the browser's cookie store
+        // faster than the user could navigate. The actual cookie leak
+        // is fixed by StripStaleCookies middleware; this just reduces
+        // the poll surface area for similar future runtime quirks.)
         this.pollInterval = setInterval(() => {
           if (!document.hidden) this.fetchUnreadCount();
-        }, 30000);
+        }, 60000);
 
         document.addEventListener('visibilitychange', () => {
           if (!document.hidden) this.fetchUnreadCount();

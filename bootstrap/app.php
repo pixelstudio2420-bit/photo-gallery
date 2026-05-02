@@ -33,6 +33,11 @@ return Application::configure(basePath: dirname(__DIR__))
             // Path-aware noindex for admin/photographer/api/profile/etc.
             // Self-applying — checks request path, no per-route wiring.
             \App\Http\Middleware\AdminNoindex::class,
+            // Strip random-named cookies that some platform layer leaks
+            // into responses — see class docblock for the full saga.
+            // MUST run last so it sees the final cookie list after every
+            // upstream middleware has had a chance to add its own.
+            \App\Http\Middleware\StripStaleCookies::class,
         ]);
 
         // ─── CSRF exclusions ────────────────────────────────────────
