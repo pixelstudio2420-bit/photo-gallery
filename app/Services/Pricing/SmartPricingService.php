@@ -127,6 +127,17 @@ class SmartPricingService
     /**
      * Compute the discount % to apply for a given (count, per_photo)
      * combination, with optional featured boost.
+     *
+     * Note: this returns the FINE-grained curve discount (with featured
+     * bonus added) — no 5%-snap here. Snapping the curve target broke
+     * per-photo monotonicity: adjacent counts could land on the same
+     * round step (e.g. n=11 and n=12 both become "30%") while their
+     * raw prices differed by less than the snap quantum, causing the
+     * smaller-bundle's per-photo cost to look LOWER than the larger's.
+     *
+     * The MARKETING-facing "ลด 30%" badge in the bundle card view
+     * rounds to 5% for display only — internal math stays precise so
+     * "more photos = cheaper per photo" remains a hard guarantee.
      */
     public function computeDiscount(int $photoCount, float $perPhoto, bool $isFeatured = false): float
     {

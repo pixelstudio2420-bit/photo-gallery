@@ -93,8 +93,15 @@ class BundleService
                 'icon'    => 'bi-music-note',
                 'desc'    => 'แฟนเพลงส่วนใหญ่ซื้อแค่ 2-3 รูปโปรด — bundle เล็กพอ',
                 'bundles' => [
-                    ['count' => 3, 'discount' => 15, 'badge' => 'ขายดีที่สุด',  'featured' => true ],
-                    ['count' => 6, 'discount' => 25, 'badge' => 'คุ้มค่า',       'featured' => false],
+                    // 3 count bundles minimum — anchored low / featured
+                    // middle / value high — so the decoy effect can drive
+                    // the buyer toward the middle "ขายดีที่สุด" tier. Two-
+                    // bundle layouts let the buyer compare apples-to-apples
+                    // and they always pick the cheaper one.
+                    ['count' => 2, 'discount' => 10, 'badge' => 'ลองชิม',         'featured' => false],
+                    ['count' => 3, 'discount' => 20, 'badge' => 'ขายดีที่สุด',   'featured' => true ],
+                    ['count' => 6, 'discount' => 30, 'badge' => 'ครบทั้งงาน',   'featured' => false],
+                    ['type'  => 'face_match', 'discount' => 50, 'max' => 1200, 'badge' => 'เหมารูปตัวเอง', 'featured' => false],
                 ],
             ],
             'corporate' => [

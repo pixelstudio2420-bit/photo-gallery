@@ -131,6 +131,46 @@
       </div>
     @endif
 
+    {{-- ── Social proof strip ───────────────────────────────────
+         Two-stat bar: total views (from event_events.view_count)
+         and unique buyer count (DISTINCT orders touching this
+         event via order_items.event_id). Both numbers are cached
+         for 10 minutes so we don't hit the DB on every page view.
+
+         Threshold-gated rendering: each pill only appears once
+         the count crosses a "looks meaningful" threshold (20 views
+         / 1 sale) — showing "ดูแล้ว 3 ครั้ง" reads as anti-social-
+         proof and discourages buyers more than no number at all.
+         ──────────────────────────────────────────────────────── --}}
+    @php
+      $viewCount = (int) ($event->view_count ?? 0);
+      $salesCount = \Illuminate\Support\Facades\Cache::remember(
+          'event.bundle.sales_count.' . $event->id,
+          600,
+          fn () => (int) \Illuminate\Support\Facades\DB::table('order_items')
+              ->where('event_id', $event->id)
+              ->distinct('order_id')
+              ->count('order_id')
+      );
+      $showSocialProof = $viewCount >= 20 || $salesCount >= 1;
+    @endphp
+    @if($showSocialProof)
+      <div class="flex items-center justify-center gap-2 mb-4 flex-wrap text-xs">
+        @if($viewCount >= 20)
+          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-400/20 font-semibold">
+            <i class="bi bi-eye-fill"></i>
+            <span>มีคนดูแล้ว {{ number_format($viewCount) }} ครั้ง</span>
+          </span>
+        @endif
+        @if($salesCount >= 1)
+          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-400/20 font-semibold">
+            <i class="bi bi-cart-check-fill"></i>
+            <span>ลูกค้าซื้อไปแล้ว {{ number_format($salesCount) }} คน</span>
+          </span>
+        @endif
+      </div>
+    @endif
+
     {{-- ── Cards container.
          Mobile: x-show toggled by `open`, x-collapse animates the slide.
          Desktop (md+): `open` initializes to true via matchMedia in
@@ -181,15 +221,32 @@
 
           {{-- Featured ribbon — corner badge that doesn't compete with price --}}
           @if($pkg->is_featured)
-            <div class="absolute top-0 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-400 to-yellow-300 text-amber-900 text-[10px] font-bold px-3 py-1 rounded-b-lg shadow-md whitespace-nowrap">
+            <div class="absolute top-0 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-400 to-yellow-300 text-amber-900 text-[10px] font-bold px-3 py-1 rounded-b-lg shadow-md whitespace-nowrap z-10">
               <i class="bi bi-star-fill mr-0.5"></i> ขายดีที่สุด
             </div>
           @endif
 
-          {{-- Badge (top-right corner, doesn't overlap featured ribbon) --}}
-          @if($pkg->badge && !$pkg->is_featured)
-            <div class="absolute top-2 right-2 bg-indigo-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+          {{-- Badge (top-right corner — admin-set custom label).
+               Skipped when this card already has a featured ribbon
+               (would compete) or a savings % badge (top-left, more
+               valuable real estate). --}}
+          @if($pkg->badge && !$pkg->is_featured && $savingsPct === 0)
+            <div class="absolute top-2 right-2 bg-indigo-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm z-10">
               {{ $pkg->badge }}
+            </div>
+          @endif
+
+          {{-- Prominent % discount badge (top-LEFT corner).
+               Anchors the loss-aversion frame at the top-of-card —
+               eye lands on "ลด 30%" before reading anything else. The
+               percentage is rounded to the nearest 5% to match Thai
+               retail convention (no buyer responds to "ลด 27%" the
+               way they do to "ลด 30%"). face_match cards use a
+               ceiling-discount label since their actual % is variable
+               at click-time. --}}
+          @if($savingsPct > 0)
+            <div class="absolute top-2 left-2 z-10 bg-gradient-to-br from-rose-500 to-red-600 text-white text-[11px] font-extrabold px-2.5 py-1 rounded-lg shadow-md leading-none">
+              ลด {{ (int) (round($savingsPct / 5) * 5) }}%
             </div>
           @endif
 
