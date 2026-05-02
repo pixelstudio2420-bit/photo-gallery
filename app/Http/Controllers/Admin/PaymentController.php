@@ -842,12 +842,19 @@ class PaymentController extends Controller
             'slipok_webhook_secret'         => 'nullable|string|max:200',
         ]);
 
+        // Detect first-time SlipOK enablement so we can apply sensible
+        // defaults — admin shouldn't have to know that "auto + require
+        // SlipOK + receiver match" is the safest combination on first run.
+        $wasSlipOkEnabled = AppSetting::get('slipok_enabled', '0') === '1';
+        $isNowSlipOkEnabled = $request->boolean('slipok_enabled');
+        $firstTimeEnable = !$wasSlipOkEnabled && $isNowSlipOkEnabled;
+
         AppSetting::set('slip_verify_mode',              $request->slip_verify_mode);
         AppSetting::set('slip_auto_approve_threshold',   (string) $request->slip_auto_approve_threshold);
         AppSetting::set('slip_amount_tolerance_percent', (string) $request->slip_amount_tolerance_percent);
         AppSetting::set('slip_require_slipok_for_auto',  $request->boolean('slip_require_slipok_for_auto') ? '1' : '0');
         AppSetting::set('slip_require_receiver_match',   $request->boolean('slip_require_receiver_match') ? '1' : '0');
-        AppSetting::set('slipok_enabled',                $request->boolean('slipok_enabled') ? '1' : '0');
+        AppSetting::set('slipok_enabled',                $isNowSlipOkEnabled ? '1' : '0');
 
         if ($request->filled('slipok_api_key')) {
             AppSetting::set('slipok_api_key', $request->slipok_api_key);
@@ -863,7 +870,125 @@ class PaymentController extends Controller
             AppSetting::set('slipok_webhook_secret', (string) $request->slipok_webhook_secret);
         }
 
-        return back()->with('success', 'บันทึกการตั้งค่าตรวจสลิปสำเร็จ');
+        // First-time enable — auto-generate the webhook secret if missing
+        // and surface a helpful nudge so admin knows to copy it into
+        // SlipOK's dashboard. Skips if admin already has a secret set
+        // (don't rotate someone's working integration accidentally).
+        $extraNotes = [];
+        if ($firstTimeEnable) {
+            if (empty(AppSetting::get('slipok_webhook_secret', ''))) {
+                AppSetting::set('slipok_webhook_secret', bin2hex(random_bytes(32)));
+                $extraNotes[] = 'สร้าง webhook secret อัตโนมัติแล้ว — กรุณาคัดลอกไปวางใน SlipOK dashboard';
+            }
+        }
+
+        $message = 'บันทึกการตั้งค่าตรวจสลิปสำเร็จ';
+        if (!empty($extraNotes)) {
+            $message .= ' · ' . implode(' · ', $extraNotes);
+        }
+        return back()->with('success', $message);
+    }
+
+    /*--------------------------------------------------------------------------
+    | SlipOK Connection Test
+    |--------------------------------------------------------------------------
+    | Lets the admin verify their API key + branch ID without uploading a
+    | real customer slip. Posts a minimal 1x1 transparent PNG to the SlipOK
+    | endpoint and reports whether auth succeeded — the API will reject our
+    | dummy file with a "not a slip" error if credentials are valid (which
+    | is the success signal here), or fail with HTTP 401/403 if creds are
+    | wrong. Either response confirms the network path + auth state.
+    */
+    public function testSlipOK(Request $request)
+    {
+        $svc = new \App\Services\Payment\SlipOKService();
+
+        if (!$svc->isConfigured()) {
+            return response()->json([
+                'ok'       => false,
+                'message'  => 'ยังไม่ได้ตั้งค่า API key หรือ Branch ID — กรุณากรอกแล้วบันทึกก่อนทดสอบ',
+                'category' => 'config',
+            ], 400);
+        }
+
+        // 1×1 transparent PNG — smallest valid image we can ship to SlipOK.
+        // SlipOK will reject it as "not a slip", but the rejection comes from
+        // the OCR layer AFTER auth has succeeded — so a 200 with a
+        // recognised-but-invalid response = creds OK, network OK.
+        $tinyPng = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=');
+        $temp = tempnam(sys_get_temp_dir(), 'slipok_test_');
+        file_put_contents($temp, $tinyPng);
+
+        $start = microtime(true);
+        try {
+            $result = $svc->verify($temp);
+        } finally {
+            @unlink($temp);
+        }
+        $elapsed = (int) ((microtime(true) - $start) * 1000);
+
+        // Map SlipOK error codes to human-readable Thai status. The API
+        // returns codes like 1004 (not a slip), 1012 (api key invalid), etc.
+        // We treat a non-auth error as "credentials are working but the
+        // test image was rejected (expected)".
+        $errorCode  = $result['error_code'] ?? null;
+        $rawCode    = (string) ($errorCode ?? '');
+        $authError  = in_array($rawCode, ['401', '403', '1012', 'MISSING_CREDENTIALS', 'EXCEPTION'], true);
+        $networkOk  = !in_array($rawCode, ['EXCEPTION', 'FILE_NOT_FOUND'], true);
+
+        if ($result['success']) {
+            // Genuinely succeeded — odd for a dummy image but means everything works.
+            return response()->json([
+                'ok'              => true,
+                'message'         => "การเชื่อมต่อสำเร็จ — SlipOK ตอบกลับใน {$elapsed}ms",
+                'response_time_ms'=> $elapsed,
+            ]);
+        }
+
+        if ($authError) {
+            return response()->json([
+                'ok'       => false,
+                'message'  => 'API Key หรือ Branch ID ไม่ถูกต้อง (' . ($errorCode ?: 'auth failed') . ')',
+                'category' => 'auth',
+                'error_code' => $errorCode,
+                'response_time_ms' => $elapsed,
+            ]);
+        }
+
+        // Non-auth failure — auth probably worked, the dummy image was
+        // rejected as not a real slip. That's expected and proves the
+        // integration is live.
+        return response()->json([
+            'ok'              => true,
+            'message'         => "เชื่อมต่อ SlipOK สำเร็จ — credentials ใช้งานได้ (รหัสตอบกลับ: " . ($errorCode ?: 'rejected_test_image') . ')',
+            'response_time_ms'=> $elapsed,
+            'note'            => 'ภาพทดสอบถูกปฏิเสธเพราะไม่ใช่สลิปจริง — ปกติ',
+        ]);
+    }
+
+    /*--------------------------------------------------------------------------
+    | Generate SlipOK Webhook Secret
+    |--------------------------------------------------------------------------
+    | One-click generates a 32-byte random hex string + saves to AppSetting.
+    | Admin then copies it into the SlipOK dashboard's webhook config.
+    | Returns the new secret in JSON so the page can update without reload.
+    */
+    public function generateSlipOKSecret(Request $request)
+    {
+        $secret = bin2hex(random_bytes(32));   // 64-char hex
+        AppSetting::set('slipok_webhook_secret', $secret);
+
+        \App\Services\ActivityLogger::admin(
+            action:      'slipok.webhook_secret_rotated',
+            target:      null,
+            description: 'Rotated SlipOK webhook secret',
+        );
+
+        return response()->json([
+            'ok'     => true,
+            'secret' => $secret,
+            'message'=> 'สร้าง webhook secret ใหม่สำเร็จ — กรุณาคัดลอกไปวางใน SlipOK dashboard',
+        ]);
     }
 
     /*--------------------------------------------------------------------------

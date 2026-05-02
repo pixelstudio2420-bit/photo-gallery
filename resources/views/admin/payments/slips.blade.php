@@ -200,6 +200,154 @@
                 placeholder="เช่น 12345"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
             </div>
+
+            {{--
+              Test Connection — calls our test-slipok endpoint which posts a
+              dummy 1x1 image to SlipOK to verify auth + network reachability
+              without touching a real customer slip. JS handles the response
+              inline (no page reload) so admin sees the result immediately.
+            --}}
+            <div x-data="{ testing: false, lastResult: null }" class="border-t border-amber-200 pt-3 mt-3">
+              <button type="button"
+                      :disabled="testing || !{{ $settings['slipok_api_key'] ? 'true' : 'false' }}"
+                      @click="
+                        testing = true; lastResult = null;
+                        fetch('{{ route('admin.payments.slips.test-slipok') }}', {
+                          method: 'POST',
+                          headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
+                        })
+                        .then(r => r.json().then(j => ({ status: r.status, body: j })))
+                        .then(({ status, body }) => { lastResult = { ...body, http_status: status }; })
+                        .catch(e => { lastResult = { ok: false, message: 'เชื่อมต่อล้มเหลว: ' + e.message, category: 'network' }; })
+                        .finally(() => { testing = false; });
+                      "
+                      class="w-full inline-flex items-center justify-center gap-2 py-2 rounded-lg bg-white border-2 border-indigo-300 text-indigo-700 text-sm font-semibold hover:bg-indigo-50 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="bi bi-plug" :class="testing ? 'animate-pulse' : ''"></i>
+                <span x-show="!testing">ทดสอบการเชื่อมต่อ SlipOK</span>
+                <span x-show="testing" x-cloak>กำลังทดสอบ...</span>
+              </button>
+
+              <div x-show="lastResult" x-cloak x-transition class="mt-2 rounded-lg p-3 text-xs"
+                   :class="lastResult?.ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-900' : 'bg-rose-50 border border-rose-200 text-rose-900'">
+                <div class="flex items-start gap-2">
+                  <i class="bi" :class="lastResult?.ok ? 'bi-check-circle-fill text-emerald-600' : 'bi-x-circle-fill text-rose-600'"></i>
+                  <div class="flex-1 min-w-0">
+                    <p class="font-semibold leading-tight" x-text="lastResult?.message"></p>
+                    <p x-show="lastResult?.response_time_ms" class="opacity-70 mt-0.5">
+                      ตอบกลับใน <span x-text="lastResult?.response_time_ms"></span>ms
+                    </p>
+                    <p x-show="lastResult?.note" class="opacity-70 mt-0.5" x-text="lastResult?.note"></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {{--
+        ── SlipOK Webhook Setup ──────────────────────────────────────
+        Shown only when SlipOK is enabled. Admin needs to copy the
+        webhook URL into SlipOK's dashboard so the third-party can
+        push verification results back to us. The HMAC secret is the
+        shared key SlipOK uses to sign callbacks — without it, anyone
+        could spoof a "slip approved" callback. We let admin generate
+        a strong random secret with one click.
+      --}}
+      <div x-show="slipokEnabled" x-transition class="mt-5 pt-5 border-t border-gray-100">
+        <div class="flex items-center gap-2 mb-3">
+          <i class="bi bi-link-45deg text-violet-500"></i>
+          <h6 class="font-semibold text-sm">Webhook Setup</h6>
+          <span class="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">callback URL</span>
+        </div>
+
+        <div class="bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-200 rounded-xl p-4 space-y-3">
+
+          {{-- Step 1: webhook URL (read-only, copy button) --}}
+          <div x-data="{ copied: false }">
+            <label class="block text-xs font-semibold text-gray-700 mb-1">
+              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-violet-500 text-white text-[10px] font-bold mr-1">1</span>
+              Webhook URL
+              <span class="font-normal text-gray-500">— วางในช่อง Webhook URL ของ SlipOK dashboard</span>
+            </label>
+            <div class="flex gap-2">
+              <input type="text" readonly
+                     value="{{ url('/api/webhooks/slipok') }}"
+                     class="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-mono text-slate-800 focus:ring-2 focus:ring-violet-500"
+                     onfocus="this.select()">
+              <button type="button"
+                      @click="navigator.clipboard.writeText('{{ url('/api/webhooks/slipok') }}'); copied = true; setTimeout(() => copied = false, 1500)"
+                      class="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-white border border-gray-200 text-xs font-semibold text-slate-700 hover:bg-violet-50 transition">
+                <i class="bi" :class="copied ? 'bi-check-lg text-emerald-600' : 'bi-clipboard'"></i>
+                <span x-text="copied ? 'คัดลอกแล้ว' : 'คัดลอก'"></span>
+              </button>
+            </div>
+          </div>
+
+          {{-- Step 2: webhook secret (generate + copy) --}}
+          <div x-data="{
+                  copied: false,
+                  generating: false,
+                  secret: @js($settings['slipok_webhook_secret'] ?? ''),
+                  generate() {
+                    if (!confirm('สร้าง webhook secret ใหม่จะแทนที่ของเก่า\nต้องอัปเดตใน SlipOK dashboard ด้วย — ดำเนินการต่อ?')) return;
+                    this.generating = true;
+                    fetch('{{ route('admin.payments.slips.generate-slipok-secret') }}', {
+                      method: 'POST',
+                      headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
+                    })
+                    .then(r => r.json())
+                    .then(j => { if (j.ok) this.secret = j.secret; })
+                    .finally(() => { this.generating = false; });
+                  }
+               }">
+            <label class="block text-xs font-semibold text-gray-700 mb-1">
+              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-violet-500 text-white text-[10px] font-bold mr-1">2</span>
+              Webhook Secret
+              <span class="font-normal text-gray-500">— HMAC key สำหรับยืนยัน callback ว่ามาจาก SlipOK จริง</span>
+            </label>
+            <div class="flex gap-2">
+              <input type="text" readonly
+                     :value="secret || 'ยังไม่ได้สร้าง — กดปุ่ม Generate'"
+                     :class="secret ? 'font-mono text-slate-800' : 'italic text-gray-400'"
+                     class="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-violet-500"
+                     onfocus="this.select()">
+              <button type="button"
+                      @click="navigator.clipboard.writeText(secret); copied = true; setTimeout(() => copied = false, 1500)"
+                      :disabled="!secret"
+                      class="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-white border border-gray-200 text-xs font-semibold text-slate-700 hover:bg-violet-50 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                <i class="bi" :class="copied ? 'bi-check-lg text-emerald-600' : 'bi-clipboard'"></i>
+                <span x-text="copied ? 'คัดลอก' : 'คัดลอก'"></span>
+              </button>
+              <button type="button"
+                      @click="generate()"
+                      :disabled="generating"
+                      class="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-violet-500 text-white text-xs font-semibold hover:bg-violet-600 transition disabled:opacity-50">
+                <i class="bi" :class="generating ? 'bi-arrow-repeat animate-spin' : 'bi-shuffle'"></i>
+                <span x-text="secret ? 'Regenerate' : 'Generate'"></span>
+              </button>
+            </div>
+            <p class="text-[10px] text-violet-700 mt-1.5 leading-relaxed">
+              <i class="bi bi-shield-lock"></i>
+              ระบบจะใช้ secret นี้ตรวจ HMAC ของทุก callback — ถ้า signature ไม่ match จะปฏิเสธทันที (กัน fake "slip approved" จาก attacker)
+            </p>
+          </div>
+
+          {{-- Step 3: Status pills --}}
+          <div class="flex items-center gap-2 flex-wrap pt-2 border-t border-violet-200/50">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-gray-500">สถานะ:</span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $settings['slipok_api_key'] ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-500' }}">
+              <i class="bi {{ $settings['slipok_api_key'] ? 'bi-check-circle-fill' : 'bi-circle' }}"></i>
+              API Key
+            </span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $settings['slipok_branch_id'] ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-500' }}">
+              <i class="bi {{ $settings['slipok_branch_id'] ? 'bi-check-circle-fill' : 'bi-circle' }}"></i>
+              Branch ID
+            </span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $settings['slipok_webhook_secret'] ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' }}">
+              <i class="bi {{ $settings['slipok_webhook_secret'] ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill' }}"></i>
+              Webhook Secret {{ $settings['slipok_webhook_secret'] ? '' : '(แนะนำให้ตั้ง)' }}
+            </span>
           </div>
         </div>
       </div>

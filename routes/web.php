@@ -906,6 +906,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::put('/banks/{id}', [\App\Http\Controllers\Admin\PaymentController::class, 'updateBank'])->name('banks.update');
             Route::delete('/banks/{id}', [\App\Http\Controllers\Admin\PaymentController::class, 'destroyBank'])->name('banks.destroy');
             Route::post('/slips/settings', [\App\Http\Controllers\Admin\PaymentController::class, 'updateSlipSettings'])->name('slips.settings');
+            // SlipOK integration utilities — let admin verify their API
+            // setup + rotate the webhook secret without leaving the
+            // settings page. JSON responses for inline UI feedback.
+            Route::post('/slips/test-slipok',         [\App\Http\Controllers\Admin\PaymentController::class, 'testSlipOK'])->name('slips.test-slipok');
+            Route::post('/slips/generate-slipok-secret', [\App\Http\Controllers\Admin\PaymentController::class, 'generateSlipOKSecret'])->name('slips.generate-slipok-secret');
             Route::get('/payouts', [\App\Http\Controllers\Admin\PaymentController::class, 'payouts'])->name('payouts');
             // Bulk route before parameterized route to avoid conflicts
             Route::post('/payouts/bulk-mark-paid', [\App\Http\Controllers\Admin\PaymentController::class, 'bulkMarkPaid'])->name('payouts.bulk-mark-paid');
