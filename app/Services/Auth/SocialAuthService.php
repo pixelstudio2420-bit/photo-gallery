@@ -96,7 +96,19 @@ class SocialAuthService
         }
 
         $key = 'auth_social_' . $provider . '_enabled';
-        return AppSetting::get($key, self::DEFAULTS[$key] ?? '0') === '1';
+        if (AppSetting::get($key, self::DEFAULTS[$key] ?? '0') !== '1') {
+            return false;
+        }
+
+        // LINE login is also gated by the global feature_line_login_enabled
+        // umbrella flag (admin can kill-switch all LINE flows from
+        // /admin/features without editing each provider's settings row).
+        if ($provider === 'line'
+            && (string) AppSetting::get('feature_line_login_enabled', '1') !== '1') {
+            return false;
+        }
+
+        return true;
     }
 
     /**

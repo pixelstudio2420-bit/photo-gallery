@@ -41,27 +41,54 @@ class FeatureFlagController extends Controller
      * in defaultFor() below.
      */
     public const FEATURES = [
-        // AI features
+        // ── AI features ────────────────────────────────────────────
         'face_search'         => ['ค้นหาด้วยใบหน้า (Face Search)', 'ai'],
         'quality_filter'      => ['คัดรูปเสียด้วย AI', 'ai'],
         'duplicate_detection' => ['ตรวจจับรูปซ้ำ', 'ai'],
         'auto_tagging'        => ['ติดแท็กอัตโนมัติ', 'ai'],
         'best_shot'           => ['เลือกช็อตเด็ด', 'ai'],
+        'ai_preview_limited'  => ['AI Preview (จำกัด — Free tier)', 'ai'],
         'color_enhance'       => ['ปรับสีอัตโนมัติ (deprecated)', 'ai'],
         'smart_captions'      => ['Smart Captions / LLM (deprecated)', 'ai'],
         'video_thumbnails'    => ['Video Thumbnails / FFmpeg (deprecated)', 'ai'],
-        // Workflow features
+
+        // ── LINE Integration ──────────────────────────────────────
+        // The LINE Messaging API connection itself is configured under
+        // /admin/marketing → LINE channel access token + secret. These
+        // flags gate which OUTBOUND flows are allowed once the
+        // channel is connected. Each flag corresponds to a method
+        // family on LineNotifyService:
+        //   line_delivery          → pushDownloadLink / pushPhotos
+        //   line_notify_admin      → notifyAdmin / notifyNewOrder etc.
+        //   line_notify_customer   → pushOrderApproved / pushOrderRejected
+        //   line_broadcast         → broadcastNewEvent (LINE OA push)
+        //   line_lifecycle         → pushLifecycleMessage (welcome / cart-abandon)
+        //   line_login             → LINE social login (also gated by
+        //                            auth_social_line_enabled at the
+        //                            SocialAuthService layer)
+        'line_delivery'       => ['ส่งรูป/ลิงก์ดาวน์โหลดเข้า LINE หลังจ่ายเงิน', 'line'],
+        'line_notify_admin'   => ['แจ้งยอด/ออเดอร์/สลิปเข้า LINE (admin)', 'line'],
+        'line_notify_customer'=> ['แจ้งสถานะออเดอร์ให้ลูกค้าทาง LINE', 'line'],
+        'line_broadcast'      => ['Broadcast อีเวนต์ใหม่ผ่าน LINE OA', 'line'],
+        'line_lifecycle'      => ['Lifecycle messages (welcome / cart-abandon)', 'line'],
+        'line_login'          => ['LINE Login (เข้าระบบด้วย LINE)', 'line'],
+
+        // ── Workflow & Performance ────────────────────────────────
         'priority_upload'     => ['Priority Upload (Pro+ queue lane)', 'workflow'],
         'customer_analytics'  => ['Customer Analytics (Business+)', 'workflow'],
         'presets'             => ['Lightroom Presets (Starter+)', 'workflow'],
-        // Branding features
+
+        // ── Branding & White-label ────────────────────────────────
         'custom_branding'     => ['Custom Branding (logo/สี/ลายน้ำ)', 'branding'],
         'white_label'         => ['White-label (ซ่อน "Powered by")', 'branding'],
-        // Platform features
+
+        // ── Platform Features ─────────────────────────────────────
+        'chat'                => ['ระบบแชทระหว่างลูกค้า ↔ ช่างภาพ', 'platform'],
+        'sla_99_99'           => ['SLA 99.99% uptime (Studio plan)', 'platform'],
+        'dedicated_csm'       => ['Dedicated CSM (Studio plan)', 'platform'],
         'team_seats'          => ['Team Members / Business 3 · Studio 10 (deprecated)', 'platform'],
         'api_access'          => ['Public API / Studio plan (deprecated)', 'platform'],
         'chatbot'             => ['AI Chatbot widget (deprecated)', 'platform'],
-        'chat'                => ['ระบบแชทระหว่างลูกค้า ↔ ช่างภาพ', 'platform'],
     ];
 
     /**
@@ -116,6 +143,7 @@ class FeatureFlagController extends Controller
             'grouped' => $grouped,
             'groupLabels' => [
                 'ai'        => 'AI Features',
+                'line'      => 'LINE Integration',
                 'workflow'  => 'Workflow & Performance',
                 'branding'  => 'Branding & White-label',
                 'platform'  => 'Platform Features',

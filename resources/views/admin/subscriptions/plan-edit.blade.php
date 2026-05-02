@@ -3,6 +3,11 @@
 
 @php
   $aiFeatures       = collect($allFeatures)->filter(fn ($v) => $v[1] === 'ai');
+  // LINE features get their own section because they're a distinct
+  // axis (delivery channel + customer touchpoint) that admin will
+  // typically configure as a unit rather than mixing in with
+  // workflow/branding chips.
+  $lineFeatures     = collect($allFeatures)->filter(fn ($v) => $v[1] === 'line');
   $platformFeatures = collect($allFeatures)->filter(fn ($v) => in_array($v[1], ['workflow','branding','platform']));
   $currentFeatures  = old('ai_features', $plan->ai_features ?? []);
   $accent           = old('color_hex', $plan->color_hex ?? '#6366f1');
@@ -330,6 +335,33 @@
             </label>
           @endforeach
         </div>
+
+        {{-- ── LINE Integration sub-section ───────────────────────
+             Distinct visual treatment (green border + LINE-brand
+             icon) so admin can grant/deny LINE flows as a unit
+             without scrolling through generic platform chips. --}}
+        @if($lineFeatures->count() > 0)
+          <div class="px-5 py-3 bg-emerald-50 dark:bg-emerald-500/5 border-t border-emerald-100 dark:border-emerald-500/20 flex items-center gap-2">
+            <i class="bi bi-line text-[#06C755]"></i>
+            <h3 class="text-sm font-semibold text-emerald-800 dark:text-emerald-300">LINE Integration</h3>
+            <span class="ml-auto text-[10px] text-emerald-700/70 dark:text-emerald-300/70">
+              ต้องเปิด <code class="font-mono">line_messaging_enabled</code> ใน /admin/marketing ก่อน
+            </span>
+          </div>
+          <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-2">
+            @foreach($lineFeatures as $key => [$label, $group])
+              <label class="group flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 hover:border-emerald-300 dark:hover:border-emerald-500/30 hover:bg-emerald-50/50 dark:hover:bg-emerald-500/5 has-[:checked]:bg-emerald-50 dark:has-[:checked]:bg-emerald-500/10 has-[:checked]:border-emerald-300 dark:has-[:checked]:border-emerald-500/30 cursor-pointer transition-colors">
+                <input type="checkbox" name="ai_features[]" value="{{ $key }}"
+                       @checked(in_array($key, $currentFeatures, true))
+                       x-on:change="dirty=true"
+                       class="rounded text-emerald-600 focus:ring-emerald-300">
+                <i class="bi bi-line text-[#06C755]"></i>
+                <span class="text-sm text-slate-700 dark:text-gray-200">{{ $label }}</span>
+                <code class="ml-auto hidden xl:inline-block text-[10px] font-mono text-gray-400 dark:text-gray-500 group-hover:text-gray-500 truncate max-w-[140px]" title="{{ $key }}">{{ $key }}</code>
+              </label>
+            @endforeach
+          </div>
+        @endif
 
         <div class="px-5 py-3 bg-gray-50 dark:bg-slate-900/40 border-t border-gray-100 dark:border-white/5 flex items-center gap-2">
           <i class="bi bi-toggles text-gray-400"></i>

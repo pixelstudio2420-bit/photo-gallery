@@ -40,6 +40,27 @@ class LineNotifyService
         return $this->isToggleOn('line_messaging_enabled');
     }
 
+    /**
+     * Umbrella feature gate — the SAME key admin can toggle from
+     * /admin/features. Layers on top of isMessagingEnabled() and the
+     * existing per-trigger line_admin_notify_* / line_user_push_*
+     * toggles to give the admin a single kill-switch per category.
+     *
+     * Categories used here:
+     *   line_delivery          → photo + download link push to BUYER
+     *   line_notify_admin      → admin alerts (new order / slip / event)
+     *   line_notify_customer   → buyer-facing order status messages
+     *   line_broadcast         → LINE OA broadcast to followers
+     *   line_lifecycle         → automated welcome / abandoned-cart
+     *
+     * Defaults to ON when no setting row exists so deployments that
+     * upgrade from older schema don't silently lose their LINE flows.
+     */
+    public function umbrellaAllows(string $featureKey): bool
+    {
+        return (string) AppSetting::get('feature_' . $featureKey . '_enabled', '1') === '1';
+    }
+
     // -------------------------------------------------------------------------
     // Admin push (replaces dead LINE Notify) — multicast to admin userIds via
     // LINE Messaging API. Falls back to no-op if no admin ids are configured.
@@ -51,7 +72,7 @@ class LineNotifyService
      */
     public function notifyAdmin(string $message): bool
     {
-        if (!$this->isMessagingEnabled()) return false;
+        if (!$this->isMessagingEnabled() || !$this->umbrellaAllows('line_notify_admin')) return false;
 
         $userIds = $this->getAdminLineUserIds();
         if (empty($userIds)) return false;
@@ -67,7 +88,7 @@ class LineNotifyService
      */
     public function notifyAdminWithImage(string $message, string $imageUrl): bool
     {
-        if (!$this->isMessagingEnabled()) return false;
+        if (!$this->isMessagingEnabled() || !$this->umbrellaAllows('line_notify_admin')) return false;
 
         $userIds = $this->getAdminLineUserIds();
         if (empty($userIds)) return false;
@@ -89,7 +110,7 @@ class LineNotifyService
 
     public function notifyNewEvent(array $event, string $createdBy = 'admin'): bool
     {
-        if (!$this->isMessagingEnabled() || !$this->isToggleOn('line_admin_notify_events')) {
+        if (!$this->isMessagingEnabled() || !$this->umbrellaAllows('line_notify_admin') || !$this->isToggleOn('line_admin_notify_events')) {
             return false;
         }
 
@@ -102,7 +123,7 @@ class LineNotifyService
 
     public function notifyNewOrder(array $order, string $type = 'photo'): bool
     {
-        if (!$this->isMessagingEnabled() || !$this->isToggleOn('line_admin_notify_orders')) {
+        if (!$this->isMessagingEnabled() || !$this->umbrellaAllows('line_notify_admin') || !$this->isToggleOn('line_admin_notify_orders')) {
             return false;
         }
 
@@ -115,7 +136,7 @@ class LineNotifyService
 
     public function notifyNewSlip(array $order, string $type = 'photo'): bool
     {
-        if (!$this->isMessagingEnabled() || !$this->isToggleOn('line_admin_notify_orders')) {
+        if (!$this->isMessagingEnabled() || !$this->umbrellaAllows('line_notify_admin') || !$this->isToggleOn('line_admin_notify_orders')) {
             return false;
         }
 
@@ -133,7 +154,7 @@ class LineNotifyService
 
     public function notifyNewRegistration(array $user, string $type = 'user'): bool
     {
-        if (!$this->isMessagingEnabled() || !$this->isToggleOn('line_admin_notify_registration')) {
+        if (!$this->isMessagingEnabled() || !$this->umbrellaAllows('line_notify_admin') || !$this->isToggleOn('line_admin_notify_registration')) {
             return false;
         }
 
@@ -146,7 +167,7 @@ class LineNotifyService
 
     public function notifyNewWithdrawal(array $payout): bool
     {
-        if (!$this->isMessagingEnabled() || !$this->isToggleOn('line_admin_notify_payouts')) {
+        if (!$this->isMessagingEnabled() || !$this->umbrellaAllows('line_notify_admin') || !$this->isToggleOn('line_admin_notify_payouts')) {
             return false;
         }
 
@@ -159,7 +180,7 @@ class LineNotifyService
 
     public function notifyNewContact(array $contact): bool
     {
-        if (!$this->isMessagingEnabled() || !$this->isToggleOn('line_admin_notify_contact')) {
+        if (!$this->isMessagingEnabled() || !$this->umbrellaAllows('line_notify_admin') || !$this->isToggleOn('line_admin_notify_contact')) {
             return false;
         }
 
@@ -173,7 +194,7 @@ class LineNotifyService
 
     public function notifyOrderCancelled(array $order, string $action = 'cancelled'): bool
     {
-        if (!$this->isMessagingEnabled() || !$this->isToggleOn('line_admin_notify_cancellation')) {
+        if (!$this->isMessagingEnabled() || !$this->umbrellaAllows('line_notify_admin') || !$this->isToggleOn('line_admin_notify_cancellation')) {
             return false;
         }
 
@@ -286,7 +307,7 @@ class LineNotifyService
      */
     public function queuePushPhotos(int $userId, array $images, ?string $caption, string $idempotencyPrefix): bool
     {
-        if (!$this->isMessagingEnabled() || !$this->isToggleOn('line_user_push_enabled')) {
+        if (!$this->isMessagingEnabled() || !$this->umbrellaAllows('line_delivery') || !$this->isToggleOn('line_user_push_enabled')) {
             return false;
         }
         $lineUserId = $this->getLineUserId($userId);
@@ -338,6 +359,7 @@ class LineNotifyService
     public function queuePushDownloadLink(int $userId, array $order, string $url, array $meta = [], ?string $idempotencyKey = null): bool
     {
         if (!$this->isMessagingEnabled()
+            || !$this->umbrellaAllows('line_delivery')
             || !$this->isToggleOn('line_user_push_enabled')
             || !$this->isToggleOn('line_user_push_download')) {
             return false;
@@ -434,7 +456,7 @@ class LineNotifyService
      */
     public function pushPhotos(int $userId, array $images, ?string $caption = null): bool
     {
-        if (!$this->isMessagingEnabled() || !$this->isToggleOn('line_user_push_enabled')) {
+        if (!$this->isMessagingEnabled() || !$this->umbrellaAllows('line_delivery') || !$this->isToggleOn('line_user_push_enabled')) {
             return false;
         }
         $lineUserId = $this->getLineUserId($userId);
@@ -483,7 +505,7 @@ class LineNotifyService
 
     public function pushOrderApproved(int $userId, array $order): bool
     {
-        if (!$this->isMessagingEnabled() || !$this->isToggleOn('line_user_push_enabled')) {
+        if (!$this->isMessagingEnabled() || !$this->umbrellaAllows('line_notify_customer') || !$this->isToggleOn('line_user_push_enabled')) {
             return false;
         }
 
@@ -497,7 +519,7 @@ class LineNotifyService
 
     public function pushOrderRejected(int $userId, array $order, string $reason = ''): bool
     {
-        if (!$this->isMessagingEnabled() || !$this->isToggleOn('line_user_push_enabled')) {
+        if (!$this->isMessagingEnabled() || !$this->umbrellaAllows('line_notify_customer') || !$this->isToggleOn('line_user_push_enabled')) {
             return false;
         }
 
@@ -512,6 +534,7 @@ class LineNotifyService
     public function pushDownloadReady(int $userId, array $order): bool
     {
         if (!$this->isMessagingEnabled()
+            || !$this->umbrellaAllows('line_delivery')
             || !$this->isToggleOn('line_user_push_enabled')
             || !$this->isToggleOn('line_user_push_download')) {
             return false;
@@ -542,6 +565,7 @@ class LineNotifyService
     public function pushDownloadLink(int $userId, array $order, string $url, array $meta = []): bool
     {
         if (!$this->isMessagingEnabled()
+            || !$this->umbrellaAllows('line_delivery')
             || !$this->isToggleOn('line_user_push_enabled')
             || !$this->isToggleOn('line_user_push_download')) {
             return false;
@@ -650,7 +674,10 @@ class LineNotifyService
 
     public function pushPayoutCompleted(int $userId, array $payout): bool
     {
+        // Photographer-facing payout notification — gated by line_notify_admin
+        // (it's a platform-internal notification, not a buyer-facing one).
         if (!$this->isMessagingEnabled()
+            || !$this->umbrellaAllows('line_notify_admin')
             || !$this->isToggleOn('line_user_push_enabled')
             || !$this->isToggleOn('line_user_push_payout')) {
             return false;
@@ -680,6 +707,7 @@ class LineNotifyService
     public function pushLifecycleMessage(int $userId, \App\Services\Notifications\LifecycleMessage $message): bool
     {
         if (!$this->isMessagingEnabled()
+            || !$this->umbrellaAllows('line_lifecycle')
             || !$this->isToggleOn('line_user_push_enabled')
             || !$this->isToggleOn('line_user_push_payout')) {
             return false;
@@ -713,6 +741,7 @@ class LineNotifyService
     public function pushPayoutMessage(int $userId, \App\Services\Notifications\PayoutMessage $message): bool
     {
         if (!$this->isMessagingEnabled()
+            || !$this->umbrellaAllows('line_notify_admin')
             || !$this->isToggleOn('line_user_push_enabled')
             || !$this->isToggleOn('line_user_push_payout')) {
             return false;
@@ -740,6 +769,7 @@ class LineNotifyService
     public function broadcastNewEvent(array $event): bool
     {
         if (!$this->isMessagingEnabled()
+            || !$this->umbrellaAllows('line_broadcast')
             || !$this->isToggleOn('line_user_push_enabled')
             || !$this->isToggleOn('line_user_push_events')) {
             return false;
