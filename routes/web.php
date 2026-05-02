@@ -205,6 +205,13 @@ Route::get('/robots.txt', [App\Http\Controllers\Public\SeoController::class, 'ro
 // need pristine, unbranded payloads).
 Route::get('/qr/branded', [App\Http\Controllers\Public\QrController::class, 'branded'])->name('qr.branded')->middleware('edge.cache:86400,604800');
 
+// Unread notification count — PUBLIC endpoint (no auth gate) so the
+// navbar's 30s poll doesn't 401-spam the console when a logged-in
+// session expires mid-page. The controller already returns
+// {unread_count: 0} for unauthenticated callers, so the public route
+// is functionally correct + console stays clean.
+Route::get('/api/notifications/unread-count', [\App\Http\Controllers\Api\NotificationApiController::class, 'unreadCount']);
+
 // Homepage + static public pages
 // edge.cache:{s-maxage},{stale-while-revalidate} — served by Cloudflare/CDN
 // for unauthenticated visitors, so the Laravel app only handles ~5% of these
@@ -678,9 +685,14 @@ Route::middleware(['auth', 'no.back'])->group(function () {
 
     // User API (session-based, shared with web)
     Route::prefix('api')->group(function () {
-        // Notifications
+        // Notifications — index/markRead/presence stay auth-gated (admin
+        // actions on the user's own data). unread-count is intentionally
+        // moved OUT of the auth gate below — the navbar polls it every
+        // 30s, and an expired session would 401 the polling and spam the
+        // browser console with red errors. The controller method already
+        // returns {unread_count: 0} for unauthenticated callers, so the
+        // public route is functionally correct + avoids console noise.
         Route::get('/notifications', [\App\Http\Controllers\Api\NotificationApiController::class, 'index']);
-        Route::get('/notifications/unread-count', [\App\Http\Controllers\Api\NotificationApiController::class, 'unreadCount']);
         Route::post('/notifications/{id}/read', [\App\Http\Controllers\Api\NotificationApiController::class, 'markRead']);
         Route::post('/notifications/read-all', [\App\Http\Controllers\Api\NotificationApiController::class, 'markAllRead']);
         Route::post('/presence', [\App\Http\Controllers\Api\NotificationApiController::class, 'presence']);

@@ -35,6 +35,22 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\AdminNoindex::class,
         ]);
 
+        // ─── CSRF exclusions ────────────────────────────────────────
+        // Endpoints that JS triggers WITHOUT a fresh CSRF token in hand.
+        // Each is independently safe because:
+        //   payment/check-expiry/*  — auth-gated + idempotent state
+        //                             check (cancel-if-expired). Token
+        //                             is baked into the page at render
+        //                             time, so a long-running countdown
+        //                             can outlive the session and ship
+        //                             a stale token → 419 spam in
+        //                             console. Exempting is safe — the
+        //                             route still requires session auth
+        //                             and the order ID is in the URL.
+        $middleware->validateCsrfTokens(except: [
+            'payment/check-expiry/*',
+        ]);
+
         $middleware->alias([
             'admin'           => \App\Http\Middleware\AdminAuth::class,
             'admin.2fa'       => \App\Http\Middleware\RequireTwoFactor::class,
