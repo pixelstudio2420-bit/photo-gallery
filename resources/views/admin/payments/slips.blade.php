@@ -182,8 +182,43 @@
           </div>
 
           <div x-show="slipokEnabled" x-transition class="space-y-3">
+            {{--
+              SlipOK dashboard hands users TWO things only:
+                1. API URL — the full endpoint to POST slips at, branch
+                   information is already embedded in this URL by SlipOK.
+                2. API Key — sent as `x-authorization` header.
+              Earlier UIs asked for a separate "Branch ID" but SlipOK
+              never exposes that as a standalone field — admin only sees
+              the full URL with the branch baked in. Field 1 below
+              accepts the URL exactly as SlipOK gives it.
+            --}}
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                API URL <span class="text-red-500">*</span>
+                <span class="text-[11px] font-normal text-gray-500">— วาง URL จาก SlipOK dashboard ตรงนี้</span>
+              </label>
+              <input type="url" name="slipok_api_url"
+                value="{{ $settings['slipok_api_url'] ?? '' }}"
+                placeholder="https://api.slipok.com/api/line/apikey/XXXXX"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+              @if(!empty($settings['slipok_api_url']))
+                <p class="text-xs text-emerald-600 mt-1"><i class="bi bi-check-circle mr-1"></i>ตั้งค่า API URL แล้ว</p>
+              @elseif(!empty($settings['slipok_branch_id']))
+                <p class="text-xs text-amber-600 mt-1">
+                  <i class="bi bi-info-circle mr-1"></i>
+                  พบค่าเก่า Branch ID = <code>{{ $settings['slipok_branch_id'] }}</code> —
+                  ระบบจะใช้ค่าเก่าจนกว่าจะกรอก API URL ใหม่
+                </p>
+              @endif
+              <p class="text-[11px] text-gray-500 mt-1.5 leading-relaxed">
+                <i class="bi bi-lightbulb"></i>
+                คัดลอก URL จากหน้า "API" หรือ "Settings" ใน SlipOK dashboard ตรงๆ — มี branch ID อยู่ในนี้แล้ว
+              </p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                API Key <span class="text-red-500">*</span>
+              </label>
               <input type="password" name="slipok_api_key"
                 value="{{ $settings['slipok_api_key'] }}"
                 placeholder="ใส่ API Key ใหม่เพื่อเปลี่ยน..."
@@ -192,13 +227,10 @@
               @if($settings['slipok_api_key'])
               <p class="text-xs text-emerald-600 mt-1"><i class="bi bi-check-circle mr-1"></i>ตั้งค่า API Key แล้ว</p>
               @endif
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Branch ID</label>
-              <input type="text" name="slipok_branch_id"
-                value="{{ $settings['slipok_branch_id'] }}"
-                placeholder="เช่น 12345"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+              <p class="text-[11px] text-gray-500 mt-1.5">
+                <i class="bi bi-shield-lock"></i>
+                ส่งใน header <code>x-authorization</code> — เก็บลับเสมอ
+              </p>
             </div>
 
             {{--
@@ -333,16 +365,22 @@
             </p>
           </div>
 
-          {{-- Step 3: Status pills --}}
+          {{-- Step 3: Status pills.
+               URL pill is green when EITHER slipok_api_url is set OR the
+               legacy slipok_branch_id is — the service auto-falls back to
+               the latter via resolveApiUrl(). --}}
+          @php
+            $hasUrl = !empty($settings['slipok_api_url']) || !empty($settings['slipok_branch_id']);
+          @endphp
           <div class="flex items-center gap-2 flex-wrap pt-2 border-t border-violet-200/50">
             <span class="text-[10px] font-bold uppercase tracking-wider text-gray-500">สถานะ:</span>
             <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $settings['slipok_api_key'] ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-500' }}">
               <i class="bi {{ $settings['slipok_api_key'] ? 'bi-check-circle-fill' : 'bi-circle' }}"></i>
               API Key
             </span>
-            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $settings['slipok_branch_id'] ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-500' }}">
-              <i class="bi {{ $settings['slipok_branch_id'] ? 'bi-check-circle-fill' : 'bi-circle' }}"></i>
-              Branch ID
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $hasUrl ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-500' }}">
+              <i class="bi {{ $hasUrl ? 'bi-check-circle-fill' : 'bi-circle' }}"></i>
+              API URL
             </span>
             <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $settings['slipok_webhook_secret'] ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' }}">
               <i class="bi {{ $settings['slipok_webhook_secret'] ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill' }}"></i>

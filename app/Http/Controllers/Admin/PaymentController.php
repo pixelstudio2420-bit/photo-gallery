@@ -164,6 +164,12 @@ class PaymentController extends Controller
             'slip_require_receiver_match'  => AppSetting::get('slip_require_receiver_match', '0') === '1',
             'slipok_enabled'               => AppSetting::get('slipok_enabled', '0') === '1',
             'slipok_api_key'               => AppSetting::get('slipok_api_key', ''),
+            // SlipOK only hands users two things: a full API URL and an API
+            // Key. Older installs may have a separate `slipok_branch_id` row
+            // — we still read it but the primary config field is the URL
+            // now. The settings save path migrates branch_id → URL on first
+            // edit so we eventually only depend on slipok_api_url.
+            'slipok_api_url'               => AppSetting::get('slipok_api_url', ''),
             'slipok_branch_id'             => AppSetting::get('slipok_branch_id', ''),
             // Optional HMAC secret for SlipOK callback signature validation.
             // When empty, the callback handler logs the unsigned attempt
@@ -838,7 +844,10 @@ class PaymentController extends Controller
             'slip_require_receiver_match'   => 'nullable|boolean',
             'slipok_enabled'                => 'nullable|boolean',
             'slipok_api_key'                => 'nullable|string|max:200',
-            'slipok_branch_id'              => 'nullable|string|max:50',
+            // Full URL from SlipOK dashboard (the only thing SlipOK gives
+            // alongside the API Key — no separate "Branch ID" exists in
+            // their UI). Must be https for security.
+            'slipok_api_url'                => 'nullable|url|starts_with:https://|max:500',
             'slipok_webhook_secret'         => 'nullable|string|max:200',
         ]);
 
@@ -859,8 +868,11 @@ class PaymentController extends Controller
         if ($request->filled('slipok_api_key')) {
             AppSetting::set('slipok_api_key', $request->slipok_api_key);
         }
-        if ($request->filled('slipok_branch_id')) {
-            AppSetting::set('slipok_branch_id', $request->slipok_branch_id);
+        // Save the full API URL admin pasted from SlipOK dashboard. Empty
+        // string is allowed — admin might want to clear it to fall back to
+        // the legacy branch_id constructor (mostly for local testing).
+        if ($request->has('slipok_api_url')) {
+            AppSetting::set('slipok_api_url', trim((string) $request->slipok_api_url));
         }
         // The webhook secret is the HMAC key SlipOK uses to sign callbacks.
         // Empty string means signature validation is OFF (we still log every

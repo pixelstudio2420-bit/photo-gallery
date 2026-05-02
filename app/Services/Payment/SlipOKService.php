@@ -26,6 +26,10 @@ use Illuminate\Support\Facades\Log;
  */
 class SlipOKService
 {
+    /**
+     * Default URL pattern when admin only saved the legacy branch_id.
+     * The full URL admin pastes from the SlipOK dashboard takes precedence.
+     */
     private const API_BASE = 'https://api.slipok.com/api/line/apikey';
 
     /**
@@ -37,18 +41,46 @@ class SlipOKService
     }
 
     /**
+     * Resolve the SlipOK endpoint URL, honouring (in order):
+     *   1. `slipok_api_url` — the FULL endpoint admin pasted from the SlipOK
+     *      dashboard. This is the canonical config — SlipOK only gives users
+     *      a URL + an API key, no separate "Branch ID" concept exists in
+     *      their UI.
+     *   2. `slipok_branch_id` — legacy field, kept for installs that set
+     *      this before we switched to URL-only. We auto-build the full URL
+     *      by appending it to API_BASE.
+     *
+     * Returns null when neither is set.
+     */
+    public function resolveApiUrl(): ?string
+    {
+        $url = trim((string) AppSetting::get('slipok_api_url', ''));
+        if ($url !== '' && preg_match('#^https?://#i', $url)) {
+            return rtrim($url, '/');
+        }
+
+        // Legacy fallback — admin saved branch_id back when the UI asked for it.
+        $branchId = trim((string) AppSetting::get('slipok_branch_id', ''));
+        if ($branchId !== '') {
+            return self::API_BASE . '/' . $branchId;
+        }
+        return null;
+    }
+
+    /**
      * Are credentials configured (so we can actually call the API)?
+     * Need an API key + a resolvable endpoint URL.
      */
     public function isConfigured(): bool
     {
         return !empty(AppSetting::get('slipok_api_key', ''))
-            && !empty(AppSetting::get('slipok_branch_id', ''));
+            && $this->resolveApiUrl() !== null;
     }
 
     /**
      * Verify slip via SlipOK external API.
      *
-     * POST https://api.slipok.com/api/line/apikey/{branch_id}
+     * POST {slipok_api_url}     ← full URL from SlipOK dashboard
      * Headers: x-authorization: {api_key}
      * Body:    multipart file upload (files[])
      *
@@ -56,10 +88,10 @@ class SlipOKService
      */
     public function verify(string $imagePath): array
     {
-        $apiKey   = AppSetting::get('slipok_api_key', '');
-        $branchId = AppSetting::get('slipok_branch_id', '');
+        $apiKey = AppSetting::get('slipok_api_key', '');
+        $apiUrl = $this->resolveApiUrl();
 
-        if (empty($apiKey) || empty($branchId)) {
+        if (empty($apiKey) || $apiUrl === null) {
             return ['success' => false, 'data' => [], 'error_code' => 'MISSING_CREDENTIALS', 'raw' => []];
         }
 
@@ -71,7 +103,7 @@ class SlipOKService
             $response = Http::timeout(15)
                 ->withHeaders(['x-authorization' => $apiKey])
                 ->attach('files[]', fopen($imagePath, 'r'), basename($imagePath))
-                ->post(self::API_BASE . '/' . $branchId);
+                ->post($apiUrl);
 
             $body = $response->json() ?? [];
 
