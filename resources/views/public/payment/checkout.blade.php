@@ -419,7 +419,8 @@ document.addEventListener('DOMContentLoaded', function() {
      Loads only on this page (not via app.js). Capture region is
      #promptpay-card; action buttons are deliberately outside it so
      they don't appear in the saved image. ────────────────────────── --}}
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+{{-- html2canvas-pro: fork supporting oklch/lab/lch (Tailwind v4 colors). --}}
+<script src="https://cdn.jsdelivr.net/npm/html2canvas-pro@1.5.8/dist/html2canvas-pro.min.js" defer></script>
 <script>
 (function () {
   // Show the iPhone "long-press" hint only on iOS — Android/desktop

@@ -212,6 +212,18 @@ Route::get('/qr/branded', [App\Http\Controllers\Public\QrController::class, 'bra
 // is functionally correct + console stays clean.
 Route::get('/api/notifications/unread-count', [\App\Http\Controllers\Api\NotificationApiController::class, 'unreadCount']);
 
+// CSRF token refresh — issues a fresh token + cookie pair on demand.
+// Used by the 419 error page to auto-recover stale tokens without
+// requiring a full page reload (the old code referenced
+// /sanctum/csrf-cookie which 404s because we don't ship Sanctum).
+// Side-effect: regenerating the session forces the browser to receive
+// a new XSRF-TOKEN cookie via Set-Cookie on the response.
+Route::get('/csrf-token', function () {
+    return response()->json([
+        'token' => csrf_token(),
+    ])->header('Cache-Control', 'no-store, max-age=0');
+})->name('csrf.token');
+
 // Homepage + static public pages
 // edge.cache:{s-maxage},{stale-while-revalidate} — served by Cloudflare/CDN
 // for unauthenticated visitors, so the Laravel app only handles ~5% of these

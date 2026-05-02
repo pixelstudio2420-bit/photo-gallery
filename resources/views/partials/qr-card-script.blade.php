@@ -8,7 +8,11 @@
      Required global: a slug variable for the saved filename, set by
      the calling view via window.QR_FILE_SLUG before this partial runs.
      ────────────────────────────────────────────────────────────── */
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+{{-- html2canvas-pro is a maintained fork that supports modern CSS color
+     functions (oklch, lab, lch). Tailwind v4 uses oklch() by default,
+     so the original html2canvas v1.4 throws "unsupported color function".
+     Same API surface — drop-in replacement, no JS changes needed. --}}
+<script src="https://cdn.jsdelivr.net/npm/html2canvas-pro@1.5.8/dist/html2canvas-pro.min.js" defer></script>
 <script>
 (function() {
   // Wait until the QR image has actually loaded — html2canvas would
