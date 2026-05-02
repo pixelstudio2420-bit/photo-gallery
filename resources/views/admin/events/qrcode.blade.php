@@ -13,22 +13,19 @@
 
 @section('content')
 {{-- QR Code for admin event page.
-     Previously displayed only a placeholder icon — now renders a real QR
-     image via api.qrserver.com with quickchart.io as a client-side fallback. --}}
+     Branded — renders via /qr/branded with site logo + "loadroop.com"
+     caption baked in. Falls back to the unbranded api.qrserver.com URL
+     only if our endpoint errors out, so the admin always sees something
+     scannable even during deployments. --}}
 @php
   $eventUrl = route('events.show', $event->slug ?: $event->id);
-  $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?' . http_build_query([
+  $qrUrl    = route('qr.branded', ['data' => $eventUrl, 'size' => 300]);
+  $qrUrlFallback = 'https://api.qrserver.com/v1/create-qr-code/?' . http_build_query([
     'size'   => '300x300',
     'data'   => $eventUrl,
     'ecc'    => 'M',
     'margin' => '10',
     'format' => 'png',
-  ]);
-  $qrUrlFallback = 'https://quickchart.io/qr?' . http_build_query([
-    'text'    => $eventUrl,
-    'size'    => 300,
-    'ecLevel' => 'M',
-    'margin'  => 2,
   ]);
 @endphp
 
@@ -60,10 +57,9 @@
             <img id="qr-image"
                  src="{{ $qrUrl }}"
                  data-fallback="{{ $qrUrlFallback }}"
-                 alt="QR Code สำหรับ {{ $event->name }}"
-                 width="300"
-                 height="300"
+                 alt="QR Code สำหรับ {{ $event->name }} — loadroop.com"
                  class="block rounded"
+                 style="max-width:340px;height:auto;"
                  onerror="if(!this.dataset.triedFallback){this.dataset.triedFallback='1';this.src=this.dataset.fallback;}else{this.style.display='none';document.getElementById('qr-fallback').style.display='flex';}">
             <div id="qr-fallback" style="display:none;width:300px;height:300px;" class="items-center justify-center flex-col text-gray-400">
               <i class="bi bi-qr-code text-5xl"></i>
@@ -106,13 +102,15 @@
 function downloadQR(e, link) {
   e.preventDefault();
   const qrSrc = document.getElementById('qr-image').src;
-  const canvas = document.createElement('canvas');
-  canvas.width = 300;
-  canvas.height = 300;
-  const ctx = canvas.getContext('2d');
   const img = new Image();
   img.crossOrigin = 'anonymous';
   img.onload = function() {
+    // Branded QR is taller than wide (label adds height) — use natural
+    // dimensions so the brand caption isn't cropped out of the download.
+    const canvas = document.createElement('canvas');
+    canvas.width  = img.naturalWidth  || 300;
+    canvas.height = img.naturalHeight || 300;
+    const ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0);
     const a = document.createElement('a');
     a.href   = canvas.toDataURL('image/png');

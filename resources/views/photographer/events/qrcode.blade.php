@@ -38,24 +38,24 @@
           <div class="mb-6"></div>
         @endif
 
-        {{-- QR Code Image --}}
-        {{-- Google Chart API (chart.googleapis.com) was shut down on 14 Mar 2019.
-             We now use api.qrserver.com as the primary provider, with
-             quickchart.io as a client-side fallback on load error. --}}
+        {{-- Branded QR Code — streams from /qr/branded with the site logo
+             embedded in the centre + "loadroop.com" caption below. The
+             endpoint caches its output (24h public + edge cache), so this
+             is effectively free after the first hit. Width/height in the
+             <img> are set to the actual canvas size returned by the
+             generator (label adds ~50px below the QR square) so the layout
+             doesn't reflow when the image loads. --}}
         @php
           $eventUrl = route('events.show', $event->slug ?: $event->id);
-          $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?' . http_build_query([
+          $qrUrl    = route('qr.branded', ['data' => $eventUrl, 'size' => 300]);
+          // Legacy unbranded fallback — used only if our endpoint 500s.
+          // Keeps the page useful even if QR generation breaks.
+          $qrUrlFallback = 'https://api.qrserver.com/v1/create-qr-code/?' . http_build_query([
             'size'   => '300x300',
             'data'   => $eventUrl,
             'ecc'    => 'M',
             'margin' => '10',
             'format' => 'png',
-          ]);
-          $qrUrlFallback = 'https://quickchart.io/qr?' . http_build_query([
-            'text'    => $eventUrl,
-            'size'    => 300,
-            'ecLevel' => 'M',
-            'margin'  => 2,
           ]);
         @endphp
 
@@ -64,10 +64,9 @@
             <img id="qr-image"
                src="{{ $qrUrl }}"
                data-fallback="{{ $qrUrlFallback }}"
-               alt="QR Code สำหรับ {{ $event->name }}"
-               width="300"
-               height="300"
+               alt="QR Code สำหรับ {{ $event->name }} — loadroop.com"
                class="block rounded"
+               style="max-width:340px;height:auto;"
                onerror="if(!this.dataset.triedFallback){this.dataset.triedFallback='1';this.src=this.dataset.fallback;}else{this.style.display='none';document.getElementById('qr-fallback').style.display='flex';}">
             <div id="qr-fallback" style="display:none;width:300px;height:300px;" class="items-center justify-center flex-col text-gray-400">
               <i class="bi bi-qr-code text-5xl"></i>
@@ -120,13 +119,18 @@
 function downloadQR(e, link) {
   e.preventDefault();
   const qrSrc = document.getElementById('qr-image').src;
-  const canvas = document.createElement('canvas');
-  canvas.width = 300;
-  canvas.height = 300;
-  const ctx = canvas.getContext('2d');
   const img = new Image();
+  // Same-origin (we serve /qr/branded ourselves) so no CORS issue;
+  // crossOrigin still useful for the fallback case where the legacy
+  // api.qrserver.com URL kicks in.
   img.crossOrigin = 'anonymous';
   img.onload = function() {
+    // Size canvas to the natural image — branded QR is ~324×350 (label
+    // adds height); using a fixed 300×300 would crop the brand caption.
+    const canvas = document.createElement('canvas');
+    canvas.width  = img.naturalWidth  || 300;
+    canvas.height = img.naturalHeight || 300;
+    const ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0);
     const a = document.createElement('a');
     a.href   = canvas.toDataURL('image/png');

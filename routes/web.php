@@ -198,6 +198,13 @@ require __DIR__ . '/announcements.php';
 Route::get('/sitemap.xml', [App\Http\Controllers\Public\SeoController::class, 'sitemap'])->name('sitemap')->middleware('edge.cache:3600,86400');
 Route::get('/robots.txt', [App\Http\Controllers\Public\SeoController::class, 'robots'])->name('robots')->middleware('edge.cache:3600,86400');
 
+// Branded QR code generator — used by event QR pages to embed the site
+// logo + "loadroop.com" caption. Output is deterministic per query so
+// edge-cache for a full day; the controller's app-level Cache::remember
+// shaves origin work too. NEVER use this for PromptPay or 2FA QRs (those
+// need pristine, unbranded payloads).
+Route::get('/qr/branded', [App\Http\Controllers\Public\QrController::class, 'branded'])->name('qr.branded')->middleware('edge.cache:86400,604800');
+
 // Homepage + static public pages
 // edge.cache:{s-maxage},{stale-while-revalidate} — served by Cloudflare/CDN
 // for unauthenticated visitors, so the Laravel app only handles ~5% of these
