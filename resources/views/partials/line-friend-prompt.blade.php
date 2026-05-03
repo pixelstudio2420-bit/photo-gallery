@@ -43,13 +43,28 @@
       // mobile, falls back to a web page on desktop.
       $_lineFriendUrl = 'https://line.me/R/ti/p/' . urlencode($_lineOaId);
 
-      // Social proof number — deliberately specific so it reads as
-      // scraped from a real DB. Configurable so admin can tune as
-      // the actual friend-count grows.
-      $_friendCount = (int) \App\Models\AppSetting::get(
-          'line_friend_popup_social_proof_count',
-          1247
+      // ── Social proof ─────────────────────────────────────────────
+      // Use the REAL count from DB — fake numbers break trust the moment
+      // a curious user checks. Admin can override via the setting if
+      // they want to count off-platform friends (LINE OA dashboard
+      // count includes followers from outside our login flow), but the
+      // override is explicit, not the default.
+      $_realFriendCount = \Illuminate\Support\Facades\Cache::remember(
+          'line_friend_count',
+          300, // 5 min cache to avoid hitting DB every page load
+          fn () => \DB::table('auth_users')->where('line_is_friend', true)->count()
       );
+      $_overrideCount = (int) \App\Models\AppSetting::get(
+          'line_friend_popup_social_proof_count',
+          0  // default 0 = "use real count"
+      );
+      $_friendCount = $_overrideCount > 0 ? $_overrideCount : $_realFriendCount;
+
+      // Threshold for showing the social-proof chip — below 50 the
+      // count looks anaemic and HURTS conversion ("only 12 friends?
+      // is this OA dead?"). Below threshold we hide the chip and lean
+      // on incentive + reciprocity copy alone.
+      $_showSocialProof = $_friendCount >= 50;
 
       // Discount carrot — the most clickable hook for Thai consumers
       // per local A/B test data. Configurable so admin can swap it
@@ -132,22 +147,39 @@
 
       {{-- ── Body — social proof + benefits + CTA ─────────────────── --}}
       <div class="px-6 pt-5 pb-6">
-        {{-- Social proof chip (specificity wins over round numbers) --}}
+        {{-- Social proof OR urgency chip — switches based on real count.
+             Below threshold (50) we'd be showing an anaemic-looking
+             "12 friends" which HURTS conversion, so we lead with a
+             different psychological hook (early-adopter / limited-time)
+             instead. Both versions are HONEST — never invent numbers. --}}
         <div class="flex justify-center mb-4">
-          <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full
-                      bg-amber-50 dark:bg-amber-500/10
-                      border border-amber-200/60 dark:border-amber-500/30">
-            {{-- Avatar stack — pure CSS, no images needed --}}
-            <div class="flex -space-x-2">
-              <span class="w-5 h-5 rounded-full bg-gradient-to-br from-rose-400 to-pink-500 border-2 border-amber-50 dark:border-slate-900"></span>
-              <span class="w-5 h-5 rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 border-2 border-amber-50 dark:border-slate-900"></span>
-              <span class="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 border-2 border-amber-50 dark:border-slate-900"></span>
+          @if($_showSocialProof)
+            {{-- Real count is healthy → use the canonical social-proof chip --}}
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full
+                        bg-amber-50 dark:bg-amber-500/10
+                        border border-amber-200/60 dark:border-amber-500/30">
+              <div class="flex -space-x-2">
+                <span class="w-5 h-5 rounded-full bg-gradient-to-br from-rose-400 to-pink-500 border-2 border-amber-50 dark:border-slate-900"></span>
+                <span class="w-5 h-5 rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 border-2 border-amber-50 dark:border-slate-900"></span>
+                <span class="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 border-2 border-amber-50 dark:border-slate-900"></span>
+              </div>
+              <span class="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                {{ number_format($_friendCount) }} คนเพิ่มแล้ว
+              </span>
             </div>
-            <span class="text-xs font-semibold text-amber-800 dark:text-amber-300">
-              {{ number_format($_friendCount) }} คนเพิ่มแล้ว
-              <span class="opacity-70">· วันนี้</span>
-            </span>
-          </div>
+          @else
+            {{-- Early-adopter / scarcity chip — used when friend count is
+                 too low to be a confidence signal. Honest copy: doesn't
+                 imply a population that doesn't exist. --}}
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full
+                        bg-emerald-50 dark:bg-emerald-500/10
+                        border border-emerald-200/60 dark:border-emerald-500/30">
+              <i class="bi bi-stars text-emerald-600 dark:text-emerald-400 text-xs"></i>
+              <span class="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                ลูกค้าใหม่เท่านั้น · รับฟรีวันนี้
+              </span>
+            </div>
+          @endif
         </div>
 
         {{-- Reciprocity stack — 4 concrete benefits BEFORE asking. --}}
