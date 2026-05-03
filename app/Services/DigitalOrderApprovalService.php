@@ -133,11 +133,20 @@ class DigitalOrderApprovalService
         $downloadUrl = url('/products/order/' . $order->id);
         $table = Schema::hasTable('user_notifications') ? 'user_notifications' : 'notifications';
 
+        // Free claims (amount=0, source='free_line_claim') get a
+        // delight-flavoured copy, paid orders get the neutral
+        // "approved" message. Same action_url either way.
+        $isFree = (float) $order->amount <= 0;
+        $title  = $isFree ? '🎁 รับฟรีสำเร็จ!' : '🎉 พร้อมดาวน์โหลดแล้ว!';
+        $msg    = $isFree
+            ? "ขอบคุณที่เพิ่มเพื่อน LINE — สิทธิ์ดาวน์โหลด {$order->product_name} พร้อมใช้งาน"
+            : "คำสั่งซื้อ #{$order->order_number} ({$order->product_name}) ได้รับการอนุมัติ — กดเพื่อดาวน์โหลด";
+
         $row = [
             'user_id'    => $order->user_id,
             'type'       => 'digital_order_approved',
-            'title'      => '🎉 พร้อมดาวน์โหลดแล้ว!',
-            'message'    => "คำสั่งซื้อ #{$order->order_number} ({$order->product_name}) ได้รับการอนุมัติ — กดเพื่อดาวน์โหลด",
+            'title'      => $title,
+            'message'    => $msg,
             'action_url' => $downloadUrl,
             'is_read'    => 0,
             'created_at' => now(),
@@ -172,10 +181,23 @@ class DigitalOrderApprovalService
         }
 
         $orderUrl = url('/products/order/' . $order->id);
-        $msg = "🎉 ออเดอร์พร้อมดาวน์โหลด!\n\n"
-             . "📦 {$order->product_name}\n"
-             . "🔢 #{$order->order_number}\n"
-             . "💰 ฿" . number_format($order->amount, 2) . "\n\n"
+        $isFree   = (float) $order->amount <= 0;
+
+        // Free claims get a celebratory header that thanks them for
+        // adding the friend (the value swap they made), paid orders
+        // get a transactional confirmation. Both share the same
+        // download URL + usage info footer.
+        $header = $isFree
+            ? "🎁 รับฟรีสำเร็จ — ขอบคุณที่เพิ่มเพื่อน!\n\n"
+              . "📦 {$order->product_name}\n"
+              . "🔢 #{$order->order_number}\n"
+              . "💰 ฟรี\n\n"
+            : "🎉 ออเดอร์พร้อมดาวน์โหลด!\n\n"
+              . "📦 {$order->product_name}\n"
+              . "🔢 #{$order->order_number}\n"
+              . "💰 ฿" . number_format($order->amount, 2) . "\n\n";
+
+        $msg = $header
              . "ดาวน์โหลดเลย: {$orderUrl}\n\n"
              . "✨ ดาวน์โหลดได้ {$order->downloads_remaining} ครั้ง · "
              . "หมดอายุ " . \Carbon\Carbon::parse($order->expires_at)->format('d M Y');

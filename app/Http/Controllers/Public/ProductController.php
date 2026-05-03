@@ -103,6 +103,25 @@ class ProductController extends Controller
     public function show($slug) {
         $product = DigitalProduct::where('slug', $slug)->active()->firstOrFail();
 
+        // Auto-resume free-claim flow: user clicked "รับฟรี" while
+        // not a LINE friend → we sent them to the OA add-friend deep
+        // link with their intent stashed in session. When they return
+        // (now line_is_friend=true via LINE webhook), automatically
+        // pick up the claim instead of making them click the gift
+        // button a second time. Massive friction reduction.
+        if (Auth::check()
+            && session('pending_free_claim_product_id') == $product->id
+            && Auth::user()->line_is_friend
+            && (float) $product->current_price <= 0) {
+            // Note: claimFree is POST-only, but session-driven resume
+            // is safe to redirect via GET because the user already
+            // initiated the action with a CSRF-protected POST earlier.
+            // We bridge through a small auto-submit form on the view
+            // (rendered when this session flag exists) instead of
+            // doing a server-side POST simulation.
+            session(['auto_resume_free_claim' => true]);
+        }
+
         $seo = app(\App\Services\SeoService::class);
         $seo->title($product->name)
             ->description($product->description ?? $product->name)
@@ -117,11 +136,129 @@ class ProductController extends Controller
     }
 
     /**
+     * Claim a FREE digital product as a lead-magnet for LINE OA growth.
+     *
+     * Flow (the trade we offer the visitor):
+     *   1. Product price is 0 (admin marks the product free)
+     *   2. Customer must be authenticated
+     *   3. Customer must be a confirmed LINE friend
+     *      (auth_users.line_is_friend = true). Without that flag we
+     *      send them to the LINE add-friend deep link first and let
+     *      them come back — we never auto-create paid status for a
+     *      non-friend, otherwise the value swap is broken.
+     *   4. One claim per user per product (anti-abuse)
+     *
+     * On success we mint a paid digital_order via the same
+     * DigitalOrderApprovalService used by the SlipOK auto-approve
+     * path — same token, same notification, same LINE push. Customer
+     * lands on the order page with the download button already lit.
+     */
+    public function claimFree(Request $request, $product)
+    {
+        $digitalProduct = DigitalProduct::findOrFail($product);
+
+        // Guard 1: only free products go through this path. If admin
+        // priced the product, redirect to the normal purchase flow so
+        // we don't accidentally hand out paid items.
+        if ((float) $digitalProduct->current_price > 0) {
+            return back()->with('error', 'สินค้านี้ไม่ใช่สินค้าฟรี — กรุณาใช้ขั้นตอนการซื้อปกติ');
+        }
+
+        $user = Auth::user();
+
+        // Guard 2: LINE friend check. The whole point of the free
+        // promo is to grow the OA — a non-friend gets sent to the
+        // friend-add deep link, NOT a free download. They land back
+        // here after tapping "Add" in LINE, and we revalidate.
+        if (!$user || empty($user->line_is_friend)) {
+            $oaId = (string) \App\Models\AppSetting::get('line_oa_basic_id', '')
+                 ?: (string) \App\Models\AppSetting::get('marketing_line_oa_id', '');
+
+            if ($oaId === '') {
+                // Admin hasn't configured the OA yet — fail explicit
+                // rather than silently swallowing the click.
+                return back()->with('error',
+                    'ระบบยังไม่ได้ตั้งค่า LINE OA — กรุณาแจ้งแอดมิน');
+            }
+
+            $addFriendUrl = 'https://line.me/R/ti/p/' . urlencode($oaId);
+
+            // Stash the intent so when the user comes back authenticated
+            // + LINE-friended, we auto-resume the claim. Without this the
+            // user has to remember to click the gift again.
+            session(['pending_free_claim_product_id' => $digitalProduct->id]);
+
+            return redirect()->route('products.show', $digitalProduct->slug)
+                ->with('line_friend_required', [
+                    'add_friend_url' => $addFriendUrl,
+                    'product_name'   => $digitalProduct->name,
+                    'oa_id'          => $oaId,
+                ]);
+        }
+
+        // Guard 3: one free claim per user per product. We check both
+        // for an existing paid order AND a pending one so re-clicks
+        // during a half-finished claim don't create dupes.
+        $existing = DigitalOrder::where('user_id', $user->id)
+            ->where('product_id', $digitalProduct->id)
+            ->whereIn('status', ['paid', 'pending_review', 'pending_payment'])
+            ->orderByDesc('id')
+            ->first();
+
+        if ($existing) {
+            // Already claimed — send them to their existing order page
+            // (which has the live download button if it was approved).
+            return redirect()->route('products.order', $existing->id)
+                ->with('info', 'คุณได้รับสินค้านี้ฟรีไปแล้ว — กดดาวน์โหลดได้เลย');
+        }
+
+        // Mint a paid order in one shot. payment_method='free_line'
+        // so admin reports can split free claims from paid sales.
+        $order = DigitalOrder::create([
+            'order_number'   => 'FREE-' . strtoupper(Str::random(8)) . '-' . date('Ymd'),
+            'user_id'        => $user->id,
+            'product_id'     => $digitalProduct->id,
+            'amount'         => 0,
+            'payment_method' => 'free_line',
+            'status'         => 'pending_review', // service will flip to paid
+        ]);
+
+        // Same approval pipeline as the paid flow — generates the
+        // token, creates digital_download_tokens row, increments
+        // total_sales, sends notification with action_url, pushes
+        // LINE message. Idempotent.
+        $approved = app(\App\Services\DigitalOrderApprovalService::class)
+            ->approve($order->id, null, 'free_line_claim');
+
+        if (!$approved) {
+            // Approval pipeline failed — mark cancelled so the user
+            // doesn't see a hung "pending" forever, and surface a
+            // concrete error so we can debug in production logs.
+            DigitalOrder::where('id', $order->id)->update(['status' => 'cancelled']);
+            return back()->with('error',
+                'เกิดข้อผิดพลาดในการสร้างลิงก์ดาวน์โหลด — กรุณาลองใหม่อีกครั้ง');
+        }
+
+        // Clear any stashed pending-claim intent now that we honoured it
+        session()->forget('pending_free_claim_product_id');
+
+        return redirect()->route('products.order', $order->id)
+            ->with('success', '🎉 รับฟรีสำเร็จ! กดปุ่มดาวน์โหลดได้เลย');
+    }
+
+    /**
      * Create a digital order and redirect to payment page.
      */
     public function purchase(Request $request, $product)
     {
         $digitalProduct = DigitalProduct::findOrFail($product);
+
+        // Free products should never enter the slip-upload flow —
+        // route them to the LINE-gated free claim instead. Defends
+        // against any UI that hits products.purchase on a free item.
+        if ((float) $digitalProduct->current_price <= 0) {
+            return redirect()->route('products.claim-free', $digitalProduct->id);
+        }
 
         $orderNumber = 'DIG-' . strtoupper(Str::random(8)) . '-' . date('Ymd');
         $amount      = $digitalProduct->current_price;

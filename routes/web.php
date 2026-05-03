@@ -673,6 +673,11 @@ Route::middleware(['auth', 'no.back'])->group(function () {
 
     // Digital Product Purchase & Orders
     Route::post('/products/{product}/purchase', [ProductController::class, 'purchase'])->name('products.purchase');
+    // Free claim — gated by LINE friend status. Customer adds the OA as
+    // a friend, comes back, clicks gift, and the controller mints a
+    // paid order + download token through the same approval service
+    // used by paid orders. POST so it survives auth redirects + CSRF.
+    Route::post('/products/{product}/claim-free', [ProductController::class, 'claimFree'])->name('products.claim-free');
     Route::get('/products/checkout/{order}', [ProductController::class, 'checkout'])->name('products.checkout');
     Route::post('/products/checkout/{order}/upload-slip', [ProductController::class, 'uploadSlip'])->name('products.upload-slip');
     Route::get('/products/order/{order}', [ProductController::class, 'order'])->name('products.order');
