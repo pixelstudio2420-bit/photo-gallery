@@ -807,8 +807,32 @@ class MarketingController extends Controller
         ];
         $enabled  = $mk->enabled();
 
+        // ─── GA4 + Search Console widgets (Phase A3 + B1 + C1 + C2) ───
+        // Optional admin marketing insights, only fetched when admin
+        // configured Google APIs at /admin/settings/google-apis.
+        // All return empty arrays when unconfigured / API down — view
+        // renders "no data" state.
+        $gaSvc = app(\App\Services\Google\GoogleAnalyticsService::class);
+        $scSvc = app(\App\Services\Google\GoogleSearchConsoleService::class);
+        $gaConfigured = $gaSvc->isConfigured();
+        $scConfigured = $scSvc->isConfigured();
+
+        $startDate = $days . 'daysAgo';
+        $endDate   = 'today';
+
+        $pagePerformance     = $gaConfigured ? $gaSvc->pagePerformance($startDate, $endDate, 10) : [];
+        $deviceBreakdown     = $gaConfigured ? $gaSvc->deviceBreakdown($startDate, $endDate)     : [];
+        $attributionTable    = $gaConfigured ? $gaSvc->attributionTable($startDate, $endDate)    : [];
+
+        $scSummary    = $scConfigured ? $scSvc->summary($days)         : null;
+        $scTopKeywords = $scConfigured ? $scSvc->topKeywords($days, null, 15) : [];
+        $scTopPages    = $scConfigured ? $scSvc->topPages($days, 10)   : [];
+
         return view('admin.marketing.analytics-v2', compact(
-            'overview', 'funnel', 'roas', 'cohort', 'ltv', 'series', 'days', 'enabled'
+            'overview', 'funnel', 'roas', 'cohort', 'ltv', 'series', 'days', 'enabled',
+            'gaConfigured', 'scConfigured',
+            'pagePerformance', 'deviceBreakdown', 'attributionTable',
+            'scSummary', 'scTopKeywords', 'scTopPages'
         ));
     }
 

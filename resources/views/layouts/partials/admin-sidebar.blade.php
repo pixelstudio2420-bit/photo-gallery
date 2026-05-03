@@ -95,6 +95,64 @@
     @endif
 
     {{-- ═══════════════════════════════════════════
+         GA4 Realtime visitors badge — only renders when GA4 is
+         configured. Polls every 60s and shows a soft pulsing
+         green dot if anyone's actively browsing. Lives at the top
+         of the sidebar so admin always sees site activity at a
+         glance without opening any dashboard.
+         ═══════════════════════════════════════════ --}}
+    @php
+      // Cache the configured-check for 60s — avoids re-parsing the
+      // service account JSON + rebuilding the auth token on every
+      // sidebar render (~5-10x per admin page load via partials).
+      $_gaConfigured = \Illuminate\Support\Facades\Cache::remember(
+          'ga_sidebar_configured', 60,
+          fn () => app(\App\Services\Google\GoogleAnalyticsService::class)->isConfigured()
+      );
+    @endphp
+    @if($_gaConfigured)
+    <div x-data="{
+            count: 0,
+            polling: null,
+            async tick() {
+              try {
+                const r = await fetch('{{ route('admin.settings.google-apis.realtime-users') }}', {
+                  credentials: 'same-origin',
+                  headers: { 'Accept': 'application/json' }
+                });
+                const d = await r.json();
+                this.count = d.count || 0;
+              } catch (e) {}
+            },
+            init() {
+              this.tick();
+              this.polling = setInterval(() => this.tick(), 60000);
+            }
+         }"
+         x-init="init()"
+         class="mx-2 mb-2 px-3 py-2 rounded-xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20"
+         :class="{ '!justify-center !px-2 !mx-3': sidebarCollapsed }">
+      <a href="https://analytics.google.com" target="_blank" rel="noopener"
+         class="flex items-center gap-2 text-emerald-300 hover:text-emerald-200 transition"
+         :class="{ '!justify-center': sidebarCollapsed }"
+         :title="'Live visitors: ' + count">
+        <span class="relative flex h-2 w-2 shrink-0">
+          <span x-show="count > 0" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2"
+                :class="count > 0 ? 'bg-emerald-400' : 'bg-slate-500'"></span>
+        </span>
+        <span x-show="!sidebarCollapsed" x-transition.opacity class="text-xs font-semibold flex-1 truncate">
+          <span x-text="count"></span>
+          <span class="text-[10px] font-normal opacity-80">live now</span>
+        </span>
+        <span x-show="!sidebarCollapsed" x-transition.opacity class="text-[10px] opacity-60">
+          <i class="bi bi-arrow-up-right"></i>
+        </span>
+      </a>
+    </div>
+    @endif
+
+    {{-- ═══════════════════════════════════════════
          2. ขายและคำสั่งซื้อ (Sales & Orders)
          ═══════════════════════════════════════════ --}}
     @if($showSales)
@@ -882,6 +940,7 @@
              || request()->routeIs('admin.settings.webhooks')
              || request()->routeIs('admin.settings.delivery')
              || request()->routeIs('admin.settings.analytics')
+             || request()->routeIs('admin.settings.google-apis.*')
              || request()->routeIs('admin.settings.payment-gateways')
              || request()->routeIs('admin.settings.email-logs');
     @endphp
@@ -912,6 +971,9 @@
           <i class="bi bi-send-fill text-indigo-500 text-[0.6rem]"></i> จัดส่งรูปภาพ
         </a>
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.settings.analytics') ? $sublinkActive : '' }}" href="{{ route('admin.settings.analytics') }}">Analytics</a>
+        <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.settings.google-apis.*') ? $sublinkActive : '' }}" href="{{ route('admin.settings.google-apis.index') }}">
+          <i class="bi bi-google text-blue-500 text-[0.6rem]"></i> Google APIs
+        </a>
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.settings.email-logs') ? $sublinkActive : '' }}" href="{{ route('admin.settings.email-logs') }}">อีเมล Log</a>
       </div>
     </div>

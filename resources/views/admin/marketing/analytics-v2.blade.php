@@ -240,5 +240,238 @@
         </table>
     </div>
 
+    {{-- ═══════════════════════════════════════════════════════════════
+         GOOGLE-POWERED INSIGHTS (Phase A3 + B1 + C1 + C2)
+         Renders only when admin configured Google APIs at
+         /admin/settings/google-apis. Each card has its own data check
+         so partial configs (e.g. only GA4) still get partial widgets.
+         ═══════════════════════════════════════════════════════════════ --}}
+    @if($gaConfigured || $scConfigured)
+    <div class="mt-8">
+      <div class="flex items-center gap-2 mb-4">
+        <i class="bi bi-google text-blue-500 text-xl"></i>
+        <h2 class="text-lg font-semibold text-slate-900">Google Analytics + Search Console</h2>
+        <span class="text-[10px] uppercase tracking-wider rounded-full bg-blue-100 text-blue-700 px-2 py-0.5 font-bold">Live data</span>
+        <a href="{{ route('admin.settings.google-apis.index') }}" class="ml-auto text-xs text-slate-500 hover:text-blue-600 transition">
+          <i class="bi bi-gear"></i> ตั้งค่า
+        </a>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+
+        {{-- Search Console Summary KPI --}}
+        @if($scConfigured && $scSummary)
+        <div class="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden lg:col-span-2">
+          <div class="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
+            <i class="bi bi-search text-emerald-500"></i>
+            <h4 class="font-semibold text-sm">Search Console Overview ({{ $days }} วัน)</h4>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-slate-100">
+            <div class="bg-white p-4">
+              <div class="text-xs text-slate-500 uppercase">Clicks</div>
+              <div class="text-2xl font-bold text-emerald-600 mt-1">{{ number_format($scSummary['clicks']) }}</div>
+            </div>
+            <div class="bg-white p-4">
+              <div class="text-xs text-slate-500 uppercase">Impressions</div>
+              <div class="text-2xl font-bold text-slate-900 mt-1">{{ number_format($scSummary['impressions']) }}</div>
+            </div>
+            <div class="bg-white p-4">
+              <div class="text-xs text-slate-500 uppercase">CTR</div>
+              <div class="text-2xl font-bold text-amber-600 mt-1">{{ $scSummary['ctr'] }}%</div>
+            </div>
+            <div class="bg-white p-4">
+              <div class="text-xs text-slate-500 uppercase">Avg Position</div>
+              <div class="text-2xl font-bold text-blue-600 mt-1">#{{ $scSummary['position'] }}</div>
+            </div>
+          </div>
+        </div>
+        @endif
+
+        {{-- Top Search Keywords --}}
+        @if($scConfigured && !empty($scTopKeywords))
+        <div class="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
+            <i class="bi bi-key-fill text-amber-500"></i>
+            <h4 class="font-semibold text-sm">Top Search Keywords</h4>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead class="text-left text-slate-500 uppercase tracking-wider text-[10px] bg-slate-50">
+                <tr>
+                  <th class="py-2 px-3">Query</th>
+                  <th class="py-2 px-2 text-right">Clicks</th>
+                  <th class="py-2 px-2 text-right">CTR</th>
+                  <th class="py-2 px-2 text-right">Pos</th>
+                </tr>
+              </thead>
+              <tbody>
+                @foreach($scTopKeywords as $kw)
+                <tr class="border-b border-slate-100 hover:bg-slate-50">
+                  <td class="py-2 px-3 font-medium truncate max-w-xs">{{ $kw['query'] }}</td>
+                  <td class="py-2 px-2 text-right font-mono font-bold text-amber-600">{{ number_format($kw['clicks']) }}</td>
+                  <td class="py-2 px-2 text-right text-slate-600">{{ $kw['ctr'] }}%</td>
+                  <td class="py-2 px-2 text-right">
+                    <span class="font-mono px-2 py-0.5 rounded-full text-[10px] {{ $kw['position'] <= 3 ? 'bg-emerald-100 text-emerald-700' : ($kw['position'] <= 10 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600') }}">#{{ $kw['position'] }}</span>
+                  </td>
+                </tr>
+                @endforeach
+              </tbody>
+            </table>
+          </div>
+        </div>
+        @endif
+
+        {{-- Top Pages from Search --}}
+        @if($scConfigured && !empty($scTopPages))
+        <div class="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
+            <i class="bi bi-file-earmark-text-fill text-blue-500"></i>
+            <h4 class="font-semibold text-sm">Top Pages (Search)</h4>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead class="text-left text-slate-500 uppercase tracking-wider text-[10px] bg-slate-50">
+                <tr>
+                  <th class="py-2 px-3">Page</th>
+                  <th class="py-2 px-2 text-right">Clicks</th>
+                  <th class="py-2 px-2 text-right">Impr</th>
+                </tr>
+              </thead>
+              <tbody>
+                @foreach($scTopPages as $p)
+                <tr class="border-b border-slate-100 hover:bg-slate-50">
+                  <td class="py-2 px-3 font-mono text-slate-700 truncate max-w-xs" title="{{ $p['page'] }}">{{ \Illuminate\Support\Str::limit(parse_url($p['page'], PHP_URL_PATH) ?: $p['page'], 40) }}</td>
+                  <td class="py-2 px-2 text-right font-mono font-bold text-blue-600">{{ number_format($p['clicks']) }}</td>
+                  <td class="py-2 px-2 text-right font-mono text-slate-600">{{ number_format($p['impressions']) }}</td>
+                </tr>
+                @endforeach
+              </tbody>
+            </table>
+          </div>
+        </div>
+        @endif
+
+        {{-- Page Performance (Bounce + Exit) --}}
+        @if($gaConfigured && !empty($pagePerformance))
+        <div class="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
+            <i class="bi bi-speedometer text-rose-500"></i>
+            <h4 class="font-semibold text-sm">Page Performance</h4>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead class="text-left text-slate-500 uppercase tracking-wider text-[10px] bg-slate-50">
+                <tr>
+                  <th class="py-2 px-3">Page</th>
+                  <th class="py-2 px-2 text-right">Views</th>
+                  <th class="py-2 px-2 text-right">Bounce</th>
+                  <th class="py-2 px-2 text-right">Avg Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                @foreach($pagePerformance as $p)
+                <tr class="border-b border-slate-100 hover:bg-slate-50">
+                  <td class="py-2 px-3 font-mono text-slate-700 truncate max-w-xs" title="{{ $p['page'] }}">{{ \Illuminate\Support\Str::limit($p['page'], 35) }}</td>
+                  <td class="py-2 px-2 text-right font-mono font-bold">{{ number_format($p['views']) }}</td>
+                  <td class="py-2 px-2 text-right">
+                    <span class="font-mono {{ $p['bounce_rate'] > 0.7 ? 'text-rose-600' : ($p['bounce_rate'] > 0.5 ? 'text-amber-600' : 'text-emerald-600') }}">
+                      {{ round($p['bounce_rate'] * 100) }}%
+                    </span>
+                  </td>
+                  <td class="py-2 px-2 text-right font-mono text-slate-600">{{ round($p['avg_duration']) }}s</td>
+                </tr>
+                @endforeach
+              </tbody>
+            </table>
+          </div>
+        </div>
+        @endif
+
+        {{-- Multi-touch Attribution --}}
+        @if($gaConfigured && !empty($attributionTable))
+        <div class="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
+            <i class="bi bi-diagram-3 text-violet-500"></i>
+            <h4 class="font-semibold text-sm">Multi-Touch Attribution (channel)</h4>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead class="text-left text-slate-500 uppercase tracking-wider text-[10px] bg-slate-50">
+                <tr>
+                  <th class="py-2 px-3">Channel</th>
+                  <th class="py-2 px-2 text-right">Sessions</th>
+                  <th class="py-2 px-2 text-right">Conv</th>
+                  <th class="py-2 px-2 text-right">Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                @foreach($attributionTable as $c)
+                <tr class="border-b border-slate-100 hover:bg-slate-50">
+                  <td class="py-2 px-3 font-medium">{{ $c['channel'] ?: '(none)' }}</td>
+                  <td class="py-2 px-2 text-right font-mono">{{ number_format($c['sessions']) }}</td>
+                  <td class="py-2 px-2 text-right font-mono text-emerald-600 font-bold">{{ number_format($c['conversions'], 0) }}</td>
+                  <td class="py-2 px-2 text-right font-mono text-violet-600">฿{{ number_format($c['revenue'], 0) }}</td>
+                </tr>
+                @endforeach
+              </tbody>
+            </table>
+          </div>
+        </div>
+        @endif
+
+        {{-- Device Breakdown --}}
+        @if($gaConfigured && !empty($deviceBreakdown))
+        <div class="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
+            <i class="bi bi-phone text-cyan-500"></i>
+            <h4 class="font-semibold text-sm">Device + Browser Breakdown</h4>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead class="text-left text-slate-500 uppercase tracking-wider text-[10px] bg-slate-50">
+                <tr>
+                  <th class="py-2 px-3">Device</th>
+                  <th class="py-2 px-2">Browser</th>
+                  <th class="py-2 px-2">OS</th>
+                  <th class="py-2 px-2 text-right">Sessions</th>
+                  <th class="py-2 px-2 text-right">Engage</th>
+                </tr>
+              </thead>
+              <tbody>
+                @foreach($deviceBreakdown as $d)
+                <tr class="border-b border-slate-100 hover:bg-slate-50">
+                  <td class="py-2 px-3">
+                    <span class="inline-flex items-center gap-1 rounded-full bg-cyan-100 text-cyan-700 px-2 py-0.5 text-[10px] font-semibold">
+                      <i class="bi bi-{{ $d['device'] === 'mobile' ? 'phone' : ($d['device'] === 'tablet' ? 'tablet' : 'laptop') }}"></i>
+                      {{ $d['device'] }}
+                    </span>
+                  </td>
+                  <td class="py-2 px-2 text-slate-700">{{ $d['browser'] }}</td>
+                  <td class="py-2 px-2 text-slate-600 text-[11px]">{{ $d['os'] }}</td>
+                  <td class="py-2 px-2 text-right font-mono font-bold">{{ number_format($d['sessions']) }}</td>
+                  <td class="py-2 px-2 text-right font-mono text-emerald-600">{{ round($d['engagement_rate'] * 100) }}%</td>
+                </tr>
+                @endforeach
+              </tbody>
+            </table>
+          </div>
+        </div>
+        @endif
+
+      </div>
+    </div>
+    @else
+    <div class="mt-8 rounded-2xl bg-blue-50 border border-blue-200 p-5 text-sm text-blue-900">
+      <p class="font-semibold mb-1">
+        <i class="bi bi-google"></i> เพิ่ม Google Analytics + Search Console เพื่อดู insights ขั้นสูง
+      </p>
+      <p class="text-xs">
+        ตั้งค่าได้ที่
+        <a href="{{ route('admin.settings.google-apis.index') }}" class="font-medium underline">/admin/settings/google-apis</a>
+        — ฟรี ไม่ต้องเสียค่าใช้จ่าย ใช้เวลาตั้งค่า ~10 นาที
+      </p>
+    </div>
+    @endif
+
 </div>
 @endsection

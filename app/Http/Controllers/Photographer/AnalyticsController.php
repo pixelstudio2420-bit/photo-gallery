@@ -152,12 +152,39 @@ class AnalyticsController extends Controller
                 ->keyBy('hour');
         }
 
+        // ─── GA4-powered widgets (optional — only if admin configured) ───
+        // Per-photographer traffic sources + geographic breakdown,
+        // filtered by pages the photographer's content lives on.
+        // We pattern-match `/photographer/{slug}` and `/events/...`
+        // sections — coarse but works as long as photographer slugs
+        // are unique. Empty arrays when unconfigured / API down.
+        $gaService = app(\App\Services\Google\GoogleAnalyticsService::class);
+        $trafficSources = [];
+        $geoBreakdown   = [];
+        if ($gaService->isConfigured() && $profile) {
+            $pageFilter = '/photographer/' . ($profile->slug ?: '');
+            $trafficSources = $gaService->trafficSources('30daysAgo', 'today', $pageFilter, 8);
+            $geoBreakdown   = $gaService->geoBreakdown('30daysAgo', 'today', $pageFilter, 15);
+        }
+        $gaConfigured = $gaService->isConfigured();
+
+        // Search Console — top keywords that brought users to this
+        // photographer's pages. Photographer wants this for SEO.
+        $scService = app(\App\Services\Google\GoogleSearchConsoleService::class);
+        $topKeywords = [];
+        if ($scService->isConfigured() && $profile) {
+            $topKeywords = $scService->topKeywords(28, '/photographer/' . ($profile->slug ?: ''), 15);
+        }
+        $scConfigured = $scService->isConfigured();
+
         return view('photographer.analytics.index', compact(
             'revenueDays', 'revenueMonths',
             'totalEarnings', 'totalGross', 'totalOrders', 'thisMonthEarnings',
             'topEvents', 'orderStatuses',
             'totalPhotos', 'totalViews',
-            'hasCustomerAnalytics', 'topCustomers', 'conversionRate', 'hourlyHeatmap'
+            'hasCustomerAnalytics', 'topCustomers', 'conversionRate', 'hourlyHeatmap',
+            'trafficSources', 'geoBreakdown', 'topKeywords',
+            'gaConfigured', 'scConfigured'
         ));
     }
 }

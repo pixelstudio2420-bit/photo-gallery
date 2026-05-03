@@ -1397,6 +1397,21 @@ Route::prefix('admin')->name('admin.')->group(function () {
             // Analytics & Social Settings
             Route::get('/analytics', [\App\Http\Controllers\Admin\SettingsController::class, 'analytics'])->name('analytics');
             Route::post('/analytics', [\App\Http\Controllers\Admin\SettingsController::class, 'updateAnalytics'])->name('analytics.update');
+
+            // Google APIs — service account upload + GA4 property ID +
+            // Search Console site URL + per-service test connection.
+            // Centralised so admin sets up once for all Google integrations.
+            Route::prefix('google-apis')->name('google-apis.')->group(function () {
+                Route::get('/',                  [\App\Http\Controllers\Admin\GoogleApiController::class, 'index'])->name('index');
+                Route::post('/service-account', [\App\Http\Controllers\Admin\GoogleApiController::class, 'saveServiceAccount'])->name('save-service-account');
+                Route::post('/service-account/clear', [\App\Http\Controllers\Admin\GoogleApiController::class, 'clearServiceAccount'])->name('clear-service-account');
+                Route::post('/ga-property',     [\App\Http\Controllers\Admin\GoogleApiController::class, 'saveGaPropertyId'])->name('save-ga');
+                Route::post('/sc-site',         [\App\Http\Controllers\Admin\GoogleApiController::class, 'saveScSiteUrl'])->name('save-sc');
+                Route::post('/test-ga',         [\App\Http\Controllers\Admin\GoogleApiController::class, 'testGa'])->name('test-ga');
+                Route::post('/test-sc',         [\App\Http\Controllers\Admin\GoogleApiController::class, 'testSc'])->name('test-sc');
+                // Realtime visitor count — polled by admin sidebar badge
+                Route::get('/realtime-users',   [\App\Http\Controllers\Admin\GoogleApiController::class, 'realtimeUsers'])->name('realtime-users');
+            });
         });
 
         // Legal Pages CMS — Privacy / Terms / Refund + version history

@@ -195,6 +195,140 @@
   </p>
 </div>
 @endif
+
+{{-- ═══════════════════════════════════════════════════════════════
+     GA4 + Search Console insights — only render when admin configured.
+     ═══════════════════════════════════════════════════════════════ --}}
+@if($gaConfigured || $scConfigured)
+<div class="mt-6">
+  <div class="flex items-center gap-2 mb-4">
+    <i class="bi bi-google text-blue-500 text-lg"></i>
+    <h3 class="font-semibold text-slate-900 dark:text-slate-100">Insights จาก Google Analytics</h3>
+    <span class="text-[10px] uppercase tracking-wider rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 px-2 py-0.5 font-bold">Live</span>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+    {{-- Traffic sources --}}
+    @if($gaConfigured)
+    <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-200 dark:border-white/10 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i class="bi bi-funnel text-purple-500"></i>
+          <h4 class="font-semibold text-slate-900 dark:text-slate-100 text-sm">ลูกค้ามาจากไหน <span class="text-[10px] text-slate-500 font-normal">(30 วันล่าสุด)</span></h4>
+        </div>
+      </div>
+      <div class="p-5">
+        @if(empty($trafficSources))
+          <p class="text-xs text-slate-500 dark:text-slate-400 text-center py-6">
+            ยังไม่มีข้อมูล — Google ใช้เวลา ~24 ชม. ในการเก็บข้อมูลครั้งแรก
+          </p>
+        @else
+          @php $maxSessions = max(array_column($trafficSources, 'sessions')) ?: 1; @endphp
+          <div class="space-y-2">
+            @foreach($trafficSources as $src)
+              <div>
+                <div class="flex items-center justify-between text-xs mb-1">
+                  <span class="font-medium text-slate-700 dark:text-slate-300 truncate flex-1">
+                    <i class="bi bi-arrow-up-right text-slate-400 text-[10px]"></i>
+                    {{ $src['source'] }} <span class="text-slate-400">·</span> <span class="text-slate-500">{{ $src['medium'] }}</span>
+                  </span>
+                  <span class="ml-2 font-mono font-bold text-purple-600 dark:text-purple-400">{{ number_format($src['sessions']) }}</span>
+                </div>
+                <div class="h-1.5 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden">
+                  <div class="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full" style="width: {{ ($src['sessions'] / $maxSessions) * 100 }}%"></div>
+                </div>
+              </div>
+            @endforeach
+          </div>
+        @endif
+      </div>
+    </div>
+    @endif
+
+    {{-- Geographic breakdown --}}
+    @if($gaConfigured)
+    <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-200 dark:border-white/10 flex items-center gap-2">
+        <i class="bi bi-geo-alt text-emerald-500"></i>
+        <h4 class="font-semibold text-slate-900 dark:text-slate-100 text-sm">ลูกค้าอยู่ที่ไหน <span class="text-[10px] text-slate-500 font-normal">(30 วันล่าสุด)</span></h4>
+      </div>
+      <div class="p-5">
+        @if(empty($geoBreakdown))
+          <p class="text-xs text-slate-500 dark:text-slate-400 text-center py-6">ยังไม่มีข้อมูล</p>
+        @else
+          @php $maxUsers = max(array_column($geoBreakdown, 'users')) ?: 1; @endphp
+          <div class="space-y-1.5 max-h-72 overflow-y-auto">
+            @foreach($geoBreakdown as $loc)
+              <div class="flex items-center gap-2 text-xs">
+                <span class="font-medium text-slate-700 dark:text-slate-300 flex-1 truncate">
+                  <span class="text-slate-400 text-[10px]">{{ $loc['country'] }}</span>
+                  →
+                  <strong>{{ $loc['city'] ?: '(ไม่ระบุเมือง)' }}</strong>
+                </span>
+                <div class="w-24 h-1.5 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden">
+                  <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-500" style="width: {{ ($loc['users'] / $maxUsers) * 100 }}%"></div>
+                </div>
+                <span class="font-mono text-emerald-600 dark:text-emerald-400 w-12 text-right">{{ number_format($loc['users']) }}</span>
+              </div>
+            @endforeach
+          </div>
+        @endif
+      </div>
+    </div>
+    @endif
+
+    {{-- Search keywords (lg:col-span-2 to span both columns) --}}
+    @if($scConfigured)
+    <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-sm overflow-hidden lg:col-span-2">
+      <div class="px-5 py-4 border-b border-slate-200 dark:border-white/10 flex items-center gap-2">
+        <i class="bi bi-search text-amber-500"></i>
+        <h4 class="font-semibold text-slate-900 dark:text-slate-100 text-sm">คำค้นหาที่ทำให้คนเจอแกลเลอรี่ <span class="text-[10px] text-slate-500 font-normal">(28 วันล่าสุด · จาก Google Search)</span></h4>
+      </div>
+      <div class="p-5">
+        @if(empty($topKeywords))
+          <p class="text-xs text-slate-500 dark:text-slate-400 text-center py-6">
+            ยังไม่มี search query — Search Console ใช้เวลา ~3 วันก่อนเริ่มมีข้อมูล
+          </p>
+        @else
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead class="text-left text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[10px]">
+                <tr class="border-b border-slate-200 dark:border-white/10">
+                  <th class="py-2 pr-3">คำค้น</th>
+                  <th class="py-2 px-2 text-right">คลิก</th>
+                  <th class="py-2 px-2 text-right">Impressions</th>
+                  <th class="py-2 px-2 text-right">CTR</th>
+                  <th class="py-2 pl-2 text-right">อันดับ</th>
+                </tr>
+              </thead>
+              <tbody>
+                @foreach($topKeywords as $kw)
+                <tr class="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition">
+                  <td class="py-2 pr-3 font-medium text-slate-900 dark:text-slate-100 truncate max-w-xs">{{ $kw['query'] }}</td>
+                  <td class="py-2 px-2 text-right font-mono font-bold text-amber-600 dark:text-amber-400">{{ number_format($kw['clicks']) }}</td>
+                  <td class="py-2 px-2 text-right font-mono text-slate-700 dark:text-slate-300">{{ number_format($kw['impressions']) }}</td>
+                  <td class="py-2 px-2 text-right font-mono text-slate-600 dark:text-slate-400">{{ $kw['ctr'] }}%</td>
+                  <td class="py-2 pl-2 text-right font-mono">
+                    <span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold
+                                 {{ $kw['position'] <= 3 ? 'bg-emerald-100 text-emerald-700' : ($kw['position'] <= 10 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600') }}">
+                      #{{ $kw['position'] }}
+                    </span>
+                  </td>
+                </tr>
+                @endforeach
+              </tbody>
+            </table>
+          </div>
+        @endif
+      </div>
+    </div>
+    @endif
+
+  </div>
+</div>
+@endif
+
 @endsection
 
 @push('scripts')
