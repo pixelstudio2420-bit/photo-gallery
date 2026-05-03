@@ -66,7 +66,35 @@ class DigitalOrderApprovalService
         }
 
         try {
-            DB::transaction(function () use ($order, $approvedByAdminId, $source) {
+            // Wrap in transaction WITH a row lock to prevent the TOCTOU
+            // race where two concurrent approvals (e.g. admin double-
+            // clicking, or admin click + SlipOK webhook arriving same
+            // moment) would both pass the status check above and both
+            // insert tokens / increment stats. The lock + re-check
+            // inside the transaction makes the second caller see
+            // status='paid' and bail out.
+            $alreadyPaidByOther = false;
+            DB::transaction(function () use ($order, $approvedByAdminId, $source, &$alreadyPaidByOther) {
+                // Re-fetch with row lock — blocks until any sibling
+                // approval transaction commits/rollbacks.
+                $locked = DB::table('digital_orders')
+                    ->where('id', $order->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                // Sibling approval already won the race. We DON'T
+                // increment stats again — they did it. We just refresh
+                // our $order copy so the notification block downstream
+                // uses the winning token.
+                if ($locked && $locked->status === 'paid') {
+                    $alreadyPaidByOther          = true;
+                    $order->status               = 'paid';
+                    $order->download_token       = $locked->download_token;
+                    $order->downloads_remaining  = $locked->downloads_remaining;
+                    $order->expires_at           = $locked->expires_at;
+                    return;
+                }
+
                 $downloadLimit = (int) ($order->download_limit ?? 5);
                 $expiryDays    = (int) ($order->download_expiry_days ?? 30);
                 $token         = Str::uuid()->toString();
@@ -104,6 +132,20 @@ class DigitalOrderApprovalService
                 $order->downloads_remaining = $downloadLimit;
                 $order->expires_at          = $expiresAt;
             });
+
+            // If the other concurrent caller won, we still want to
+            // re-send the notification (idempotent) so the customer
+            // gets at least one delivery, but we DON'T re-push LINE
+            // (the winner did it). Logging clearly shows the race.
+            if ($alreadyPaidByOther) {
+                Log::info('digital_order.approve_race_lost', [
+                    'order_id' => $order->id,
+                    'source'   => $source,
+                    'admin_id' => $approvedByAdminId,
+                ]);
+                $this->sendApprovalNotification($order);
+                return true;
+            }
 
             $this->sendApprovalNotification($order);
             $this->pushLineMessage($order);

@@ -200,25 +200,27 @@ class SendProvinceDigestCommand extends Command
     }
 
     /**
-     * Send the digest as plain HTML email via Mail::raw — keeps
-     * dependencies minimal (no Mailable class) and matches the
-     * pattern used by CheckQueueHeartbeatCommand.
+     * Send the digest as HTML email via the standard Laravel
+     * Mail::send + view template pattern. This is the correct
+     * idiom — Illuminate\Mail\Message in this Laravel version
+     * doesn't expose a public html() method (only Symfony's
+     * underlying Email does), so the legacy `Mail::send([], [],
+     * fn $m => $m->html(...))` pattern would crash with
+     * "method does not exist."
      */
     private function sendDigest(User $user, array $content): void
     {
         $name = trim($user->first_name . ' ' . $user->last_name) ?: 'คุณลูกค้า';
         $subject = "📬 สรุปข่าว {$content['province_name']} ประจำสัปดาห์";
 
-        $html = view('emails.province-digest', [
+        $data = [
             'user'    => $user,
             'name'    => $name,
             'content' => $content,
-        ])->render();
+        ];
 
-        Mail::send([], [], function ($message) use ($user, $subject, $html) {
-            $message->to($user->email, trim($user->first_name . ' ' . $user->last_name))
-                    ->subject($subject)
-                    ->html($html);
+        Mail::send('emails.province-digest', $data, function ($message) use ($user, $name, $subject) {
+            $message->to($user->email, $name)->subject($subject);
         });
     }
 }
