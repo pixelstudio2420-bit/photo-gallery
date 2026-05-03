@@ -569,12 +569,12 @@
       <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/25 mb-4">
         <i class="bi bi-percent text-lg"></i>
       </div>
-      <h3 class="font-bold text-slate-800 dark:text-white mb-2">Commission ถูกที่สุดในไทย</h3>
+      <h3 class="font-bold text-slate-800 dark:text-white mb-2">Commission 0% ใน Pro</h3>
       <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-3">
-        Founding Photographer 50 คนแรก lock commission ที่ <strong class="text-emerald-600 dark:text-emerald-400">5%</strong> ตลอดอายุการใช้งาน — เทียบกับ 30-40% ของแพลตฟอร์มต่างประเทศ
+        Pro plan ฿790/เดือน — commission <strong class="text-emerald-600 dark:text-emerald-400">0%</strong> ได้เต็มทุกบาท เทียบกับ 20-40% ของช่องทางอื่น Free plan ก็เริ่มได้เลย commission แค่ <strong>20%</strong>
       </p>
       <div class="text-xs text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
-        <i class="bi bi-arrow-right"></i>เหลืออีก 50 slot
+        <i class="bi bi-arrow-right"></i>ดูราคาทั้งหมด <a href="{{ route('pricing') }}" class="underline">/pricing</a>
       </div>
     </div>
 

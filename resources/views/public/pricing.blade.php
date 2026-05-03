@@ -3,39 +3,24 @@
 @section('title', 'ราคา & ค่าธรรมเนียม')
 
 {{--
-    PRICING PAGE — DB-driven, single source of truth
+    PRICING PAGE — 3-tier (Free / Pro / Studio)
     ─────────────────────────────────────────────────
-    All plan data is read from `subscription_plans` table via the
-    HomeController::pricing() method. Edit Admin → Subscription Plans
-    to change copy, prices, or features — no code edits required.
+    Plan data read from `subscription_plans` table via HomeController::pricing()
+    which queries WHERE is_public = true ORDER BY sort_order — currently
+    returns 3 rows after migration 2026_05_19_000007. Edit Admin →
+    Subscription Plans to change copy, prices, or features.
 
-    Features still in development (e.g. inline API access) are filtered
-    from display by `$hideUnverifiedFeatures` so we never advertise
-    something the platform can't actually deliver. Once a feature is
-    production-ready, remove the substring from the filter array.
+    The 3-tier structure was chosen for first-time conversion (Hick's
+    Law) — fewer choices = faster decisions = higher conversion. Starter
+    + Business plans were deactivated (is_public=false) on 2026-05-04
+    rather than deleted, so existing logic that references them keeps
+    working and we can re-enable later if data shows they're missed.
 --}}
 @php
-    // List of feature substrings that match "soon-to-ship" copy in
-    // features_json. Filtered out of public rendering so we don't
-    // promise what we can't yet deliver. Keep this list short.
-    $hideUnverifiedFeatures = [
-        'API Access',
-        'API + Webhooks',
-        'API +',
-        'Webhooks',
-    ];
-
-    $shouldHide = function (string $line) use ($hideUnverifiedFeatures): bool {
-        foreach ($hideUnverifiedFeatures as $needle) {
-            if (mb_stripos($line, $needle) !== false) return true;
-        }
-        return false;
-    };
-
-    // Format ฿ — accepts numeric, returns "฿299" or "฿2,490"
+    // Format ฿ — accepts numeric, returns "฿790" or "฿3,990"
     $thb = fn ($n) => '฿' . number_format((float) $n, 0);
 
-    // Compute annual savings %
+    // Compute annual savings % (typically ~17% for 12-month prepay)
     $annualSavingsPct = function ($monthly, $annual): ?int {
         $monthly = (float) $monthly;
         $annual  = (float) $annual;
@@ -115,12 +100,11 @@
         <div class="text-center py-12 text-slate-500">ยังไม่มี plan ใน DB — Admin ต้อง configure ที่ /admin/subscriptions/plans</div>
       @else
 
-      {{-- Plan cards grid (5 plans → responsive 1/2/5 cols) --}}
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-12">
+      {{-- Plan cards grid (3 plans → 1 col mobile, 3 cols desktop) --}}
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-12 max-w-5xl mx-auto">
         @foreach($plans as $plan)
           @php
             $features = json_decode($plan->features_json ?? '[]', true) ?: [];
-            $features = array_values(array_filter($features, fn ($f) => !$shouldHide((string) $f)));
             $isHighlighted = (bool) $plan->badge;
             $monthly = $thb($plan->price_thb);
             $annual  = $thb($plan->price_annual_thb);
@@ -128,44 +112,49 @@
             $accent  = $plan->color_hex ?: '#6366f1';
             $isFree  = ((float) $plan->price_thb) <= 0;
           @endphp
-          <div class="relative rounded-2xl bg-white dark:bg-slate-900 p-5 transition-all duration-200 hover:-translate-y-1 hover:shadow-2xl
+          <div class="relative rounded-3xl bg-white dark:bg-slate-900 p-6 sm:p-7 transition-all duration-200 hover:-translate-y-1 hover:shadow-2xl
                       {{ $isHighlighted
-                          ? 'border-2 border-indigo-500 dark:border-indigo-400 shadow-lg shadow-indigo-500/20'
+                          ? 'border-2 border-indigo-500 dark:border-indigo-400 shadow-xl shadow-indigo-500/20 scale-[1.02]'
                           : 'border border-slate-200 dark:border-white/10' }}">
 
             @if($plan->badge)
-              <span class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-bold text-white shadow-md whitespace-nowrap"
+              <span class="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full text-xs font-bold text-white shadow-lg whitespace-nowrap"
                     style="background:linear-gradient(135deg, {{ $accent }}, #8b5cf6);">
                 <i class="bi bi-stars mr-1"></i>{{ $plan->badge }}
               </span>
             @endif
 
             {{-- Plan name + tagline --}}
-            <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-1 mt-{{ $plan->badge ? '1' : '0' }}">
+            <h3 class="text-xl font-bold text-slate-800 dark:text-white mb-1 mt-{{ $plan->badge ? '2' : '0' }}">
               {{ $plan->name }}
             </h3>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-5 min-h-[32px] leading-snug">
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6 min-h-[40px] leading-snug">
               {{ $plan->tagline ?: '—' }}
             </p>
 
             {{-- Price (cycles between monthly / annual) --}}
-            <div class="mb-1">
+            <div class="mb-1 min-h-[60px]">
               @if($isFree)
-                <div>
-                  <span class="text-3xl font-extrabold text-slate-900 dark:text-white">฿0</span>
-                  <span class="text-xs text-slate-500 dark:text-slate-400 ml-1">ตลอดชีพ</span>
+                <div class="flex items-baseline gap-1.5">
+                  <span class="text-5xl font-extrabold text-slate-900 dark:text-white">฿0</span>
+                  <span class="text-sm text-slate-500 dark:text-slate-400">ตลอดชีพ</span>
                 </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">ไม่ต้องใช้บัตรเครดิต</p>
               @else
                 <div x-show="cycle === 'monthly'">
-                  <span class="text-3xl font-extrabold text-slate-900 dark:text-white">{{ $monthly }}</span>
-                  <span class="text-xs text-slate-500 dark:text-slate-400 ml-1">/เดือน</span>
+                  <div class="flex items-baseline gap-1.5">
+                    <span class="text-5xl font-extrabold text-slate-900 dark:text-white">{{ $monthly }}</span>
+                    <span class="text-sm text-slate-500 dark:text-slate-400">/เดือน</span>
+                  </div>
                 </div>
                 <div x-show="cycle === 'annual'" x-cloak>
-                  <span class="text-3xl font-extrabold text-slate-900 dark:text-white">{{ $thb($plan->price_annual_thb / 12) }}</span>
-                  <span class="text-xs text-slate-500 dark:text-slate-400 ml-1">/เดือน</span>
+                  <div class="flex items-baseline gap-1.5">
+                    <span class="text-5xl font-extrabold text-slate-900 dark:text-white">{{ $thb($plan->price_annual_thb / 12) }}</span>
+                    <span class="text-sm text-slate-500 dark:text-slate-400">/เดือน</span>
+                  </div>
                   @if($savings)
-                    <p class="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5 font-semibold">
-                      ประหยัด {{ $savings }}% (จ่าย {{ $annual }}/ปี)
+                    <p class="text-xs text-emerald-600 dark:text-emerald-400 mt-1 font-semibold">
+                      💰 ประหยัด {{ $savings }}% — จ่าย {{ $annual }}/ปี
                     </p>
                   @endif
                 </div>
@@ -174,24 +163,24 @@
 
             {{-- Commission (vital — display front + center) --}}
             @if((float) $plan->commission_pct > 0)
-              <div class="my-4 p-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200/70 dark:border-amber-400/20">
-                <p class="text-[11px] text-amber-800 dark:text-amber-300">
+              <div class="my-5 p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200/70 dark:border-amber-400/20">
+                <p class="text-sm text-amber-800 dark:text-amber-300">
                   <i class="bi bi-percent"></i> commission <strong>{{ rtrim(rtrim(number_format((float) $plan->commission_pct, 2), '0'), '.') }}%</strong> ต่อยอดขาย
                 </p>
               </div>
             @else
-              <div class="my-4 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/70 dark:border-emerald-400/20">
-                <p class="text-[11px] text-emerald-800 dark:text-emerald-300 font-semibold">
+              <div class="my-5 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/70 dark:border-emerald-400/20">
+                <p class="text-sm text-emerald-800 dark:text-emerald-300 font-semibold">
                   <i class="bi bi-check-circle-fill"></i> commission <strong>0%</strong> — ได้เต็มทุกบาท
                 </p>
               </div>
             @endif
 
             {{-- Features list --}}
-            <ul class="space-y-2 text-xs text-slate-700 dark:text-slate-300 mb-5">
+            <ul class="space-y-2.5 text-sm text-slate-700 dark:text-slate-300 mb-7">
               @foreach($features as $feature)
-                <li class="flex items-start gap-1.5">
-                  <i class="bi bi-check-circle-fill text-emerald-500 mt-0.5 shrink-0 text-[11px]"></i>
+                <li class="flex items-start gap-2">
+                  <i class="bi bi-check-circle-fill text-emerald-500 mt-1 shrink-0 text-xs"></i>
                   <span class="leading-snug">{{ $feature }}</span>
                 </li>
               @endforeach
@@ -199,13 +188,14 @@
 
             {{-- CTA --}}
             <a href="{{ route('photographer-onboarding.quick') }}"
-               class="block w-full text-center px-4 py-2.5 rounded-xl text-xs font-bold transition-all
+               class="block w-full text-center px-5 py-3 rounded-xl text-sm font-bold transition-all
                       {{ $isHighlighted
-                          ? 'text-white bg-gradient-to-br from-indigo-500 to-violet-600 shadow-md shadow-indigo-500/30 hover:shadow-lg hover:-translate-y-0.5'
+                          ? 'text-white bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:-translate-y-0.5'
                           : ($isFree
                               ? 'border-2 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-indigo-400 dark:hover:border-indigo-400/50'
                               : 'border-2 border-indigo-200 dark:border-indigo-400/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-500/10') }}">
               {{ $isFree ? 'เริ่มฟรีเลย' : 'เลือก ' . $plan->name }}
+              <i class="bi bi-arrow-right ml-1"></i>
             </a>
           </div>
         @endforeach
@@ -341,7 +331,7 @@
                 ['ใบเสร็จ/e-Tax อัตโนมัติ', true, false, false],
                 ['SEO Profile (ติด Google)', true, false, true],
                 ['Boost / โปรโมต', true, true, true],
-                ['ค่าธรรมเนียม', '0-30%', 'ฟรี', 'ฟรี'],
+                ['ค่าธรรมเนียม', '0% (Pro/Studio)', 'ฟรี', 'ฟรี'],
                 ['ลูกค้าใหม่จากระบบ', '✅ จัดให้', '❌ หาเอง', '❌ หาเอง'],
               ];
             @endphp
@@ -377,12 +367,13 @@
       @php
         $faqs = [
           ['q' => 'มีค่าซ่อนหรือเปล่า?', 'a' => 'ไม่มี — ค่าใช้จ่ายทั้งหมดที่เห็นบนหน้านี้คือทั้งหมด ไม่มีค่าธรรมเนียมแฝง ไม่มีค่า set up ไม่มีค่า cancellation Plan ฟรีไม่ตัดบัตรเครดิต'],
-          ['q' => 'commission คิดยังไง?', 'a' => 'คิดจากยอดขายเท่านั้น — ขายไม่ได้ = ไม่จ่าย ตัวอย่าง Free plan commission 30% ขายรูป ฿100 = ได้ ฿70 / Starter 5% = ได้ ฿95 / Pro/Business/Studio 0% = ได้ ฿100 เต็มจำนวน'],
+          ['q' => 'commission คิดยังไง?', 'a' => 'คิดจากยอดขายเท่านั้น — ขายไม่ได้ = ไม่จ่าย ตัวอย่าง Free plan commission 20% ขายรูป ฿100 = ได้ ฿80 / Pro และ Studio commission 0% = ได้ ฿100 เต็มจำนวน'],
+          ['q' => 'breakeven Free → Pro คือเท่าไหร่?', 'a' => 'ขายเดือนละ ≥ ฿3,950 ขึ้นไป Pro คุ้มกว่า Free — เพราะ Pro ฿790 sub แต่ commission 0% / Free ฿0 sub แต่ commission 20% ดังนั้น (790 / 0.20) = ฿3,950 / เดือน'],
           ['q' => 'อัพเกรด/ดาวน์เกรด plan ได้ไหม?', 'a' => 'ได้ทุกเมื่อในหน้า /photographer/subscription — อัพเกรดเริ่มใช้ทันที + คิดเงินตามสัดส่วนวันที่เหลือ / ดาวน์เกรดมีผลในรอบบิลถัดไป ข้อมูลทั้งหมด (รูป, อีเวนต์, ลูกค้า) ไม่หาย'],
           ['q' => 'ยกเลิกได้เมื่อไหร่?', 'a' => 'ทุกเมื่อ ในหน้า Subscription กดยกเลิกแล้วใช้งานได้ครบวันสุดท้ายของรอบบิลปัจจุบัน — ไม่ตัดเงินรอบถัดไป Account จะกลับเป็น Free plan อัตโนมัติ ไฟล์ + ลูกค้าอยู่ครบ'],
-          ['q' => 'จ่ายรายปีคุ้มกว่ารายเดือนเท่าไหร่?', 'a' => 'ประหยัดประมาณ 17% (จ่าย 10 เดือนได้ 12 เดือน) — ในหน้านี้กดสลับ "รายเดือน/รายปี" ดูราคาเทียบได้'],
+          ['q' => 'จ่ายรายปีคุ้มกว่ารายเดือนเท่าไหร่?', 'a' => 'ประหยัดประมาณ 17% (จ่าย 10 เดือนได้ 12 เดือน) — Pro รายปี ฿7,900 vs ฿9,480 รายเดือน × 12 = ประหยัด ฿1,580/ปี / Studio รายปี ฿39,900 vs ฿47,880 = ประหยัด ฿7,980/ปี'],
           ['q' => 'ลูกค้าจ่ายแล้วช่างภาพไม่ส่งรูป รับเงินคืนยังไง?', 'a' => 'ระบบส่งรูปเข้า LINE อัตโนมัติทันทีหลังตรวจสลิปผ่าน — ช่างภาพไม่ต้องส่งเอง หากเกิดปัญหาทางเทคนิค ติดต่อ support ผ่าน LINE หรืออีเมลเพื่อขอคืนเงิน'],
-          ['q' => 'Money-back 30 วัน คืออะไร?', 'a' => 'Plan ที่จ่ายเงินทุก plan (Starter ขึ้นไป) มี policy ใช้แล้วไม่พอใจ ภายใน 30 วันแรกของการสมัครครั้งแรก ขอคืนเงินเต็มจำนวนได้ ไม่ถามคำถาม — ติดต่อทาง LINE OA หรือ email'],
+          ['q' => 'Money-back 30 วัน คืออะไร?', 'a' => 'Pro และ Studio plan มี policy ใช้แล้วไม่พอใจภายใน 30 วันแรกของการสมัครครั้งแรก ขอคืนเงินเต็มจำนวนได้ ไม่ถามคำถาม — ติดต่อทาง LINE OA หรือ email'],
           ['q' => 'ใช้กับงานประเภทไหนได้?', 'a' => 'ทุกประเภทงาน — งานวิ่ง, รับปริญญา, แต่งงาน, อีเวนต์บริษัท, คอนเสิร์ต, งานเทศกาล (สงกรานต์/ลอยกระทง) ตั้ง pricing ต่อรูป + เปิด AI Face Search ได้ทันทีหลังอัพโหลด'],
         ];
       @endphp
