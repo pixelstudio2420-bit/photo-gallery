@@ -546,6 +546,12 @@ MD,
                 // Preserve any admin edits to price + total_sales by not
                 // overwriting them on reseed. Description / features /
                 // marketing copy refresh through every reseed though.
+                // status is reset to 'active' so a soft-rollback (down
+                // migration flips them inactive) auto-heals on next
+                // run — admin who actually wants something hidden
+                // should change status to 'archived' or remove from
+                // this seeder, not flip to 'inactive' (which we keep
+                // overwriting).
                 $existing->update([
                     'name'              => $p['name'],
                     'short_description' => $p['short_description'],
@@ -554,6 +560,7 @@ MD,
                     'requirements'      => $p['requirements'],
                     'is_featured'       => $p['is_featured'],
                     'sort_order'        => $p['sort_order'],
+                    'status'            => 'active',
                 ]);
                 $updated++;
             } else {
