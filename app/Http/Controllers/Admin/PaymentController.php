@@ -176,6 +176,17 @@ class PaymentController extends Controller
             // but still processes — set this in production to make the
             // /api/webhooks/slipok endpoint reject unsigned requests.
             'slipok_webhook_secret'        => AppSetting::get('slipok_webhook_secret', ''),
+
+            // ─── Digital products auto-verify (mirrors photo flow) ───
+            // Independent toggle so admin can enable SlipOK auto-approve
+            // for digital orders without affecting photo orders (or
+            // vice versa). Threshold is the minimum SlipVerifier score
+            // (0–100) required to auto-approve. require_slipok forces
+            // SlipOK confirmation in addition to score — without this
+            // a high local-OCR score alone could bypass the API check.
+            'digital_slip_auto_verify_enabled'    => AppSetting::get('digital_slip_auto_verify_enabled', '0') === '1',
+            'digital_slip_auto_approve_threshold' => (int) AppSetting::get('digital_slip_auto_approve_threshold', 80),
+            'digital_slip_require_slipok'         => AppSetting::get('digital_slip_require_slipok', '1') === '1',
         ];
 
         return view('admin.payments.slips', compact('slips', 'stats', 'settings'));
@@ -849,6 +860,12 @@ class PaymentController extends Controller
             // their UI). Must be https for security.
             'slipok_api_url'                => 'nullable|url|starts_with:https://|max:500',
             'slipok_webhook_secret'         => 'nullable|string|max:200',
+            // Digital order auto-verify (mirrors photo flow but on a
+            // separate toggle so admin can run digital products in auto
+            // mode while keeping photo orders manual, or vice versa).
+            'digital_slip_auto_verify_enabled'    => 'nullable|boolean',
+            'digital_slip_auto_approve_threshold' => 'nullable|integer|min:50|max:100',
+            'digital_slip_require_slipok'         => 'nullable|boolean',
         ]);
 
         // Detect first-time SlipOK enablement so we can apply sensible
@@ -881,6 +898,13 @@ class PaymentController extends Controller
         if ($request->has('slipok_webhook_secret')) {
             AppSetting::set('slipok_webhook_secret', (string) $request->slipok_webhook_secret);
         }
+
+        // ─── Digital-order auto-verify settings ────────────────────────
+        // Independent toggles so admin can run digital products in auto
+        // mode while keeping photo orders on manual review, or vice versa.
+        AppSetting::set('digital_slip_auto_verify_enabled',    $request->boolean('digital_slip_auto_verify_enabled') ? '1' : '0');
+        AppSetting::set('digital_slip_auto_approve_threshold', (string) ($request->input('digital_slip_auto_approve_threshold', 80)));
+        AppSetting::set('digital_slip_require_slipok',         $request->boolean('digital_slip_require_slipok') ? '1' : '0');
 
         // First-time enable — auto-generate the webhook secret if missing
         // and surface a helpful nudge so admin knows to copy it into

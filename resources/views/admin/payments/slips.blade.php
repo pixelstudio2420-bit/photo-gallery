@@ -86,7 +86,10 @@
   tolerance: {{ $settings['slip_amount_tolerance_percent'] }},
   requireSlipok: {{ $settings['slip_require_slipok_for_auto'] ? 'true' : 'false' }},
   requireReceiver: {{ $settings['slip_require_receiver_match'] ? 'true' : 'false' }},
-  slipokEnabled: {{ $settings['slipok_enabled'] ? 'true' : 'false' }}
+  slipokEnabled: {{ $settings['slipok_enabled'] ? 'true' : 'false' }},
+  digitalAuto: {{ $settings['digital_slip_auto_verify_enabled'] ? 'true' : 'false' }},
+  digitalThreshold: {{ $settings['digital_slip_auto_approve_threshold'] }},
+  digitalRequireSlipok: {{ $settings['digital_slip_require_slipok'] ? 'true' : 'false' }}
 }" class="bg-white rounded-xl shadow-sm border border-gray-100 mb-3">
   <button type="button" @click="showSettings = !showSettings"
     class="w-full flex items-center justify-between py-3 px-4 text-left hover:bg-gray-50/50 transition rounded-xl">
@@ -421,6 +424,130 @@
               <i class="bi {{ $settings['slipok_webhook_secret'] ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill' }}"></i>
               Webhook Secret {{ $settings['slipok_webhook_secret'] ? '' : '(แนะนำให้ตั้ง)' }}
             </span>
+          </div>
+        </div>
+      </div>
+
+      {{--
+        ── Digital Order Auto-Verify ────────────────────────────────
+        Mirror of the photo slip auto-verify but for digital products
+        (e.g. preset packs, Lightroom downloads). Same SlipOK pipeline
+        — once a customer uploads their PromptPay slip on the digital
+        order page, SlipVerifier scores it and if score >= threshold
+        (and SlipOK confirmed when required), DigitalOrderApprovalService
+        marks the order paid + generates the download token + pushes
+        the LINE notification, all in real time.
+
+        Independent toggle: admin can run digital orders in auto-mode
+        even when photo orders are still manual (or vice versa). Built
+        as its own setting block to avoid coupling the two flows.
+      --}}
+      <div class="mt-5 pt-5 border-t border-gray-100">
+        <div class="flex items-center gap-2 mb-3">
+          <i class="bi bi-cloud-download text-cyan-500"></i>
+          <h6 class="font-semibold text-sm">ตรวจสลิปอัตโนมัติ — สินค้าดิจิตอล</h6>
+          <span class="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-700">digital products</span>
+        </div>
+
+        <div class="bg-gradient-to-br from-cyan-50 to-sky-50 border border-cyan-200 rounded-xl p-4 space-y-4">
+
+          {{-- Master toggle --}}
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex-1 min-w-0">
+              <div class="font-semibold text-sm text-slate-800">เปิดโหมดตรวจอัตโนมัติ</div>
+              <p class="text-xs text-slate-600 mt-1 leading-relaxed">
+                เมื่อเปิดใช้: ลูกค้าอัพสลิปบนหน้าออเดอร์ดิจิตอล → SlipOK ตรวจสอบ → ถ้าผ่านเกณฑ์ ระบบจะ <strong>อนุมัติทันที</strong>
+                + สร้างลิงก์ดาวน์โหลด + ส่ง LINE/Notification ให้ลูกค้าโหลดได้เลย <em>(เรียลไทม์)</em>
+              </p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
+              <input type="hidden" name="digital_slip_auto_verify_enabled" value="0">
+              <input type="checkbox" name="digital_slip_auto_verify_enabled" value="1" x-model="digitalAuto"
+                class="sr-only peer">
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+              <span class="ml-2 text-xs font-bold" :class="digitalAuto ? 'text-cyan-600' : 'text-gray-400'" x-text="digitalAuto ? 'เปิด' : 'ปิด'"></span>
+            </label>
+          </div>
+
+          {{-- Threshold + require-SlipOK (only show when toggle on) --}}
+          <div x-show="digitalAuto" x-transition x-cloak class="space-y-3 pt-3 border-t border-cyan-200/60">
+
+            {{-- Threshold slider --}}
+            <div class="bg-white/60 rounded-lg p-3">
+              <label class="block text-sm font-medium text-slate-700 mb-2">
+                คะแนนขั้นต่ำสำหรับอนุมัติอัตโนมัติ:
+                <span class="text-cyan-700 font-bold" x-text="digitalThreshold + '%'"></span>
+              </label>
+              <input type="range" name="digital_slip_auto_approve_threshold" min="50" max="100" step="5"
+                x-model="digitalThreshold"
+                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-cyan-500">
+              <div class="flex justify-between text-[10px] text-gray-400 mt-1">
+                <span>50% (หลวม)</span>
+                <span>80% (แนะนำ)</span>
+                <span>100% (เข้มสุด)</span>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                <i class="bi bi-info-circle mr-1"></i>
+                สลิปที่ SlipVerifier ให้คะแนน >= <span x-text="digitalThreshold"></span>% จะถูกอนุมัติอัตโนมัติ —
+                ต่ำกว่านี้จะถูกส่งเข้าคิวรอแอดมินตรวจตามปกติ
+              </p>
+            </div>
+
+            {{-- Require SlipOK confirmation --}}
+            <label class="flex items-start gap-2 cursor-pointer bg-amber-50/70 border border-amber-200 rounded-lg p-3">
+              <input type="hidden" name="digital_slip_require_slipok" value="0">
+              <input type="checkbox" name="digital_slip_require_slipok" value="1" x-model="digitalRequireSlipok"
+                class="mt-0.5 rounded border-gray-300 text-amber-500 focus:ring-amber-500">
+              <div class="text-xs flex-1">
+                <div class="font-medium text-slate-700">
+                  ต้องผ่าน SlipOK API ก่อนอนุมัติอัตโนมัติ
+                  <span class="ml-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">แนะนำ</span>
+                </div>
+                <div class="text-slate-500 mt-0.5">
+                  ป้องกันสลิปปลอมที่ผ่านเกณฑ์คะแนน OCR แต่ไม่มีอยู่จริงในระบบธนาคาร
+                  — ต้องเปิด <strong>SlipOK API</strong> ด้านบนด้วย
+                </div>
+              </div>
+            </label>
+
+            {{-- Warning when SlipOK is OFF but require_slipok is ON --}}
+            <div x-show="digitalRequireSlipok && !slipokEnabled" x-transition x-cloak
+                 class="bg-rose-50 border border-rose-200 rounded-lg p-3 flex items-start gap-2">
+              <i class="bi bi-exclamation-triangle-fill text-rose-500 mt-0.5"></i>
+              <div class="text-xs text-rose-800">
+                <div class="font-semibold">SlipOK ถูกปิดอยู่</div>
+                <div class="opacity-80 mt-0.5">
+                  คุณตั้ง "ต้องผ่าน SlipOK" แต่ SlipOK API ปิดอยู่ —
+                  ระบบจะ <strong>ไม่อนุมัติอัตโนมัติเลย</strong> เพราะไม่มี API คอยยืนยัน
+                  (เปิดสวิตช์ SlipOK API ด้านบน หรือเอาเครื่องหมายถูกออกจากช่องนี้)
+                </div>
+              </div>
+            </div>
+
+            {{-- Status pill summary --}}
+            <div class="flex items-center gap-2 flex-wrap pt-2 border-t border-cyan-200/60">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">สรุป:</span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-100 text-cyan-700">
+                <i class="bi bi-robot"></i>
+                Auto-mode เปิด
+              </span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-100 text-cyan-700">
+                <i class="bi bi-speedometer2"></i>
+                ขั้นต่ำ <span x-text="digitalThreshold"></span>%
+              </span>
+              <span x-show="digitalRequireSlipok" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700">
+                <i class="bi bi-shield-check"></i>
+                ต้อง SlipOK ยืนยัน
+              </span>
+            </div>
+          </div>
+
+          {{-- Off state — explainer for safety --}}
+          <div x-show="!digitalAuto" x-transition class="text-[11px] text-slate-500 bg-white/50 rounded-lg p-2 border border-cyan-200/40">
+            <i class="bi bi-info-circle mr-1 text-slate-400"></i>
+            ปิดโหมดอัตโนมัติอยู่ — ทุกออเดอร์ดิจิตอลจะถูกส่งเข้า
+            <a href="{{ route('admin.digital-orders.index') }}" class="text-cyan-700 underline hover:text-cyan-800">คิวรอตรวจ</a>
+            เพื่อให้แอดมินกดอนุมัติเอง
           </div>
         </div>
       </div>

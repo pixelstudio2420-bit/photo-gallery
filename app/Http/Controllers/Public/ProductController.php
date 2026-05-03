@@ -218,31 +218,109 @@ class ProductController extends Controller
             'status'         => 'pending_review',
         ]);
 
-        // ─── Notifications ───
-        try {
-            // Admin: new slip to review
-            AdminNotification::notify(
-                'digital_slip',
-                "สลิปชำระเงิน (ดิจิทัล) {$order->order_number}",
-                "ยอด ฿" . number_format($order->amount, 2) . " · รอตรวจสอบ",
-                "admin/digital-orders",
-                (string) $order->id
-            );
+        // ─── Auto-verify via SlipOK (if admin enabled it) ─────────────
+        //
+        // Mirrors the photo-purchase flow at PaymentController::uploadSlip
+        // — runs SlipVerifier on the freshly-uploaded slip, and if score
+        // crosses the configured threshold AND auto mode is on, calls
+        // DigitalOrderApprovalService::approve() to mark paid + generate
+        // token + push notification immediately. Customer skips the
+        // manual review queue entirely + lands on the download page in
+        // real-time.
+        //
+        // Three admin toggles control behaviour:
+        //   digital_slip_auto_verify_enabled    — master switch (default off)
+        //   digital_slip_auto_approve_threshold — score 0-100 (default 80)
+        //   digital_slip_require_slipok         — require SlipOK confirmation
+        //                                         (default '1' — strongest signal)
+        //
+        // A failed SlipOK or below-threshold score keeps the order in
+        // pending_review for admin to handle — never wrongly approves.
+        $autoMode    = \App\Models\AppSetting::get('digital_slip_auto_verify_enabled', '0') === '1';
+        $autoApproved = false;
 
-            // User: acknowledgement
-            UserNotification::notify(
-                (int) Auth::id(),
-                'digital_slip_uploaded',
-                'อัปโหลดสลิปสำเร็จ',
-                "คำสั่งซื้อ {$order->order_number} กำลังรอแอดมินตรวจสอบ (ภายใน 24 ชม.)",
-                "products/order/{$order->id}"
-            );
-        } catch (\Throwable $e) {
-            \Log::warning('Digital slip notification failed: ' . $e->getMessage());
+        if ($autoMode) {
+            try {
+                $verifier = new \App\Services\Payment\SlipVerifier();
+                $verifyResult = $verifier->verify($request->file('slip_image'), [
+                    'transfer_amount'  => $order->amount,
+                    'order_amount'     => (float) $order->amount,
+                    'transfer_date'    => now()->format('Y-m-d'),
+                    'order_created_at' => $order->created_at,
+                ]);
+
+                $score = (int) ($verifyResult['score'] ?? 0);
+                $threshold = (int) \App\Models\AppSetting::get('digital_slip_auto_approve_threshold', 80);
+                $requireSlipOk = \App\Models\AppSetting::get('digital_slip_require_slipok', '1') === '1';
+
+                // SlipVerifier returns:
+                //   ['slipok'      => raw SlipOK result with 'success' flag,
+                //    'slipok_data' => normalised payment fields (no 'success'),
+                //    'fraud_flags' => array of fraud rule violations]
+                // The success flag lives on the RAW result, not the normalised one.
+                $slipOkOk    = ($verifyResult['slipok']['success'] ?? false);
+                $hasFraud    = !empty($verifyResult['fraud_flags'] ?? []);
+
+                // Never auto-approve when fraud flags are present — even
+                // with a high score. Mirrors the photo-flow safety net.
+                $shouldAutoApprove = $score >= $threshold
+                    && !$hasFraud
+                    && (!$requireSlipOk || $slipOkOk);
+
+                \Log::info('digital_slip.verify', [
+                    'order_id'  => $order->id,
+                    'score'     => $score,
+                    'threshold' => $threshold,
+                    'slipok_ok' => $slipOkOk,
+                    'fraud'     => $verifyResult['fraud_flags'] ?? [],
+                    'will_auto_approve' => $shouldAutoApprove,
+                ]);
+
+                if ($shouldAutoApprove) {
+                    $approved = app(\App\Services\DigitalOrderApprovalService::class)
+                        ->approve($order->id, null, 'slipok_auto');
+                    if ($approved) {
+                        $autoApproved = true;
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('Digital SlipOK auto-verify failed (falling back to manual): ' . $e->getMessage());
+            }
         }
 
-        return redirect()->route('products.order', $order->id)
-            ->with('success', 'อัพโหลดสลิปสำเร็จ กรุณารอการตรวจสอบจากแอดมิน');
+        // ─── Notifications (only if NOT auto-approved — service handles those) ───
+        if (!$autoApproved) {
+            try {
+                // Admin: new slip to review
+                AdminNotification::notify(
+                    'digital_slip',
+                    "สลิปชำระเงิน (ดิจิทัล) {$order->order_number}",
+                    "ยอด ฿" . number_format($order->amount, 2) . " · รอตรวจสอบ",
+                    "admin/digital-orders",
+                    (string) $order->id
+                );
+
+                // User: acknowledgement
+                UserNotification::notify(
+                    (int) Auth::id(),
+                    'digital_slip_uploaded',
+                    'อัปโหลดสลิปสำเร็จ',
+                    "คำสั่งซื้อ {$order->order_number} กำลังรอแอดมินตรวจสอบ (ภายใน 24 ชม.)",
+                    "products/order/{$order->id}"
+                );
+            } catch (\Throwable $e) {
+                \Log::warning('Digital slip notification failed: ' . $e->getMessage());
+            }
+        }
+
+        // Real-time UX: when auto-approved, customer goes STRAIGHT to the
+        // order page where the download button is already lit up. When
+        // queued for manual, same page but with the "waiting" state.
+        $msg = $autoApproved
+            ? '✅ อัพโหลด + ตรวจสอบสำเร็จอัตโนมัติ — กดปุ่มดาวน์โหลดได้เลย!'
+            : 'อัพโหลดสลิปสำเร็จ กรุณารอการตรวจสอบจากแอดมิน (ภายใน 24 ชม.)';
+
+        return redirect()->route('products.order', $order->id)->with('success', $msg);
     }
 
     /**

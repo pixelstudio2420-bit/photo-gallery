@@ -85,90 +85,34 @@ class DigitalOrderController extends Controller
 
     /**
      * Approve a digital order: mark as paid, create download token, update product stats.
+     *
+     * Implementation delegates to DigitalOrderApprovalService so the same
+     * approval logic is shared with the SlipOK auto-approve path in
+     * Public\ProductController::uploadSlip. Single source of truth for
+     * "this order is now paid".
      */
     public function approve(Request $request, int $id)
     {
-        try {
-            $order = DB::table('digital_orders as do')
-                ->join('digital_products as dp', 'dp.id', '=', 'do.product_id')
-                ->join('auth_users as u', 'u.id', '=', 'do.user_id')
-                ->select([
-                    'do.id',
-                    'do.order_number',
-                    'do.amount',
-                    'do.user_id',
-                    'do.product_id',
-                    'do.status',
-                    'dp.name as product_name',
-                    'dp.download_limit',
-                    'dp.download_expiry_days',
-                ])
-                ->where('do.id', $id)
-                ->first();
-
-            if (!$order) {
-                return back()->with('error', 'ไม่พบคำสั่งซื้อ');
-            }
-
-            if (!in_array($order->status, ['pending_review', 'pending_payment'])) {
-                return back()->with('error', 'คำสั่งซื้อนี้ไม่สามารถอนุมัติได้ (สถานะปัจจุบัน: ' . $order->status . ')');
-            }
-
-            DB::beginTransaction();
-
-            $downloadLimit = (int)($order->download_limit ?? 5);
-            $expiryDays    = (int)($order->download_expiry_days ?? 30);
-            $token         = Str::uuid()->toString();
-            $expiresAt     = now()->addDays($expiryDays);
-
-            // Update order status + download fields
-            DB::table('digital_orders')->where('id', $id)->update([
-                'status'              => 'paid',
-                'paid_at'             => now(),
-                'download_token'      => $token,
-                'downloads_remaining' => $downloadLimit,
-                'expires_at'          => $expiresAt,
-                'updated_at'          => now(),
-            ]);
-
-            // Also create download token record if table exists
-            if (Schema::hasTable('digital_download_tokens')) {
-                DB::table('digital_download_tokens')->insert([
-                    'token'          => $token,
-                    'order_id'       => $order->id,
-                    'user_id'        => $order->user_id,
-                    'product_id'     => $order->product_id,
-                    'max_downloads'  => $downloadLimit,
-                    'download_count' => 0,
-                    'expires_at'     => $expiresAt,
-                    'created_at'     => now(),
-                ]);
-            }
-
-            // Update product stats (only on approval, not on purchase)
-            $product = DB::table('digital_products')->where('id', $order->product_id);
-            $product->increment('total_sales', 1);
-            $product->increment('total_revenue', (float) $order->amount);
-
-            // Create notification for user
-            $this->createNotification(
-                $order->user_id,
-                'order_approved',
-                'คำสั่งซื้อได้รับการอนุมัติ',
-                'คำสั่งซื้อ #' . $order->order_number . ' (' . $order->product_name . ') ได้รับการยืนยันแล้ว สามารถดาวน์โหลดได้'
-            );
-
-            // Auto-dismiss admin notifications for this order (bell count in realtime)
-            $this->dismissAdminNotifs(['digital_order', 'digital_slip'], (string) $order->id);
-
-            DB::commit();
-
-            return back()->with('success', 'อนุมัติคำสั่งซื้อ #' . $order->order_number . ' สำเร็จ — ลิงก์ดาวน์โหลดถูกสร้างแล้ว');
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            \Log::error('DigitalOrderController@approve error: ' . $e->getMessage());
-            return back()->with('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
+        $orderRow = DB::table('digital_orders')->where('id', $id)
+            ->select('id', 'order_number', 'status')->first();
+        if (!$orderRow) {
+            return back()->with('error', 'ไม่พบคำสั่งซื้อ');
         }
+        if (!in_array($orderRow->status, ['pending_review', 'pending_payment'], true)) {
+            return back()->with('error', 'คำสั่งซื้อนี้ไม่สามารถอนุมัติได้ (สถานะปัจจุบัน: ' . $orderRow->status . ')');
+        }
+
+        $ok = app(\App\Services\DigitalOrderApprovalService::class)
+            ->approve($id, \Illuminate\Support\Facades\Auth::guard('admin')->id(), 'admin_manual');
+
+        if (!$ok) {
+            return back()->with('error', 'เกิดข้อผิดพลาดในการอนุมัติคำสั่งซื้อ');
+        }
+
+        // Auto-dismiss admin notifications for this order (bell count in realtime)
+        $this->dismissAdminNotifs(['digital_order', 'digital_slip'], (string) $id);
+
+        return back()->with('success', 'อนุมัติคำสั่งซื้อ #' . $orderRow->order_number . ' สำเร็จ — ลิงก์ดาวน์โหลดถูกสร้างและส่งให้ลูกค้าแล้ว');
     }
 
     /**
