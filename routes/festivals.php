@@ -34,4 +34,6 @@ Route::prefix('admin/festivals')
         // Google Calendar integration
         Route::post('/google-config',   [AdminFestivalController::class, 'saveGoogleConfig'])->name('google-config');
         Route::post('/google-test',     [AdminFestivalController::class, 'testGoogleConnection'])->name('google-test');
+        Route::get('/google-preview',   [AdminFestivalController::class, 'googlePreview'])->name('google-preview');
+        Route::post('/google-import',   [AdminFestivalController::class, 'importFromGoogle'])->name('google-import');
     });

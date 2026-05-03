@@ -359,4 +359,113 @@ class GoogleCalendarService
             return false;
         });
     }
+
+    /**
+     * Fetch all Google holidays for the next ~12 months and tag each
+     * one with its match status against existing festivals + a smart
+     * theme/emoji guess so the import UI can pre-fill sensible defaults.
+     *
+     * Returns a Collection of ['name', 'start_date', 'end_date',
+     * 'match_status' (matched|importable|already-imported|skip),
+     * 'matched_slug', 'suggested_slug', 'suggested_theme',
+     * 'suggested_emoji'].
+     */
+    public function previewWithStatus(): Collection
+    {
+        $year   = (int) now()->year;
+        $cutoff = now()->endOfDay();
+
+        // Combine current + next year so admin sees stuff coming up
+        $holidays = $this->getThaiHolidays($year)
+            ->merge($this->getThaiHolidays($year + 1))
+            ->filter(fn ($h) => \Carbon\Carbon::parse($h['end_date'])->endOfDay()->isAfter($cutoff))
+            ->sortBy('start_date')
+            ->values();
+
+        // Pre-load existing festivals for match lookup
+        $existingSlugs = \App\Models\Festival::pluck('slug')->toArray();
+        $existingByGoogleId = \App\Models\Festival::whereNotNull('cta_url')   // best-effort marker
+            ->pluck('slug', 'cta_url')->toArray();
+
+        return $holidays->map(function (array $h) use ($existingSlugs) {
+            $name = $h['name'] ?? '';
+
+            // 1. Try to match against canonical MAPPING (= already covered)
+            $matchedSlug = null;
+            foreach (self::MAPPING as $slug => $config) {
+                foreach ($config['keywords'] as $kw) {
+                    if (stripos($name, $kw) !== false) {
+                        $matchedSlug = $slug;
+                        break 2;
+                    }
+                }
+            }
+
+            // 2. Compute suggested slug for "importable" rows
+            $suggestedSlug = \Illuminate\Support\Str::slug($name) ?: 'event-' . substr(md5($name), 0, 6);
+
+            // 3. Determine status
+            if ($matchedSlug) {
+                $status = 'matched';   // Google already provides date for our existing canonical festival
+            } elseif (in_array($suggestedSlug, $existingSlugs, true)) {
+                $status = 'already-imported';
+            } else {
+                $status = 'importable';
+            }
+
+            // 4. Smart theme + emoji guess from name keywords
+            [$theme, $emoji] = self::guessThemeAndEmoji($name);
+
+            return array_merge($h, [
+                'match_status'    => $status,
+                'matched_slug'    => $matchedSlug,
+                'suggested_slug'  => $suggestedSlug,
+                'suggested_theme' => $theme,
+                'suggested_emoji' => $emoji,
+            ]);
+        });
+    }
+
+    /**
+     * Heuristic: guess the most appropriate theme + emoji from the
+     * holiday's name. Buddhist days → lantern-gold + 🏮, royal days →
+     * lantern-gold + 🌷, fixed default → water-blue + ✨.
+     *
+     * Admin can override both at import time, but having a sensible
+     * default makes one-click import feel less like blank guessing.
+     *
+     * @return array{0: string, 1: string}  [theme_variant, emoji]
+     */
+    public static function guessThemeAndEmoji(string $name): array
+    {
+        $lower = mb_strtolower($name, 'UTF-8');
+
+        // Buddhist holy days (lunar)
+        $buddhistKeywords = ['buddha', 'พุทธ', 'บูชา', 'ปวารณา', 'พรรษา', 'มาฆ', 'วิสาขะ', 'อาสาฬห', 'magha', 'visakha', 'asanha', 'lent'];
+        foreach ($buddhistKeywords as $kw) {
+            if (str_contains($lower, $kw)) return ['lantern-gold', '🏮'];
+        }
+
+        // Royal / monarchy / coronation
+        $royalKeywords = ['king', 'queen', 'royal', 'coronation', 'chakri', 'ราชา', 'ราชินี', 'จักรี', 'พระบรมราช', 'พระราช', 'พระมหา'];
+        foreach ($royalKeywords as $kw) {
+            if (str_contains($lower, $kw)) return ['lantern-gold', '🌷'];
+        }
+
+        // Constitution / political
+        $stateKeywords = ['constitution', 'รัฐธรรมนูญ', 'labour', 'labor', 'แรงงาน'];
+        foreach ($stateKeywords as $kw) {
+            if (str_contains($lower, $kw)) return ['red-firework', '🇹🇭'];
+        }
+
+        // Songkran / new year (water themed)
+        if (str_contains($lower, 'songkran') || str_contains($lower, 'สงกรานต์')) return ['water-blue', '💦'];
+        if (str_contains($lower, 'new year') || str_contains($lower, 'ปีใหม่')) return ['red-firework', '🎆'];
+
+        // Christmas
+        if (str_contains($lower, 'christmas') || str_contains($lower, 'คริสต์มาส')) return ['snow-white', '🎄'];
+
+        // Default — neutral
+        return ['water-blue', '✨'];
+    }
 }

@@ -93,6 +93,121 @@ class FestivalController extends Controller
     }
 
     /**
+     * Preview every holiday Google returns for the next 12 months,
+     * tagged with match status against existing festivals so the admin
+     * import UI can show:
+     *   • "matched"          — Google syncs this festival's dates already
+     *   • "already-imported" — admin previously imported this row
+     *   • "importable"       — Google has it, we don't yet → can import
+     *
+     * Each row also has a suggested theme + emoji + slug so the import
+     * form pre-fills sensible defaults.
+     */
+    public function googlePreview()
+    {
+        $svc = app(\App\Services\GoogleCalendarService::class);
+        if (!$svc->isConfigured()) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'ยังไม่ได้ตั้งค่า API Key',
+            ]);
+        }
+
+        try {
+            $holidays = $svc->previewWithStatus();
+
+            return response()->json([
+                'ok'       => true,
+                'count'    => $holidays->count(),
+                'holidays' => $holidays->values()->all(),
+                'themes'   => array_map(
+                    fn ($k) => ['key' => $k, 'label' => \App\Services\FestivalThemeService::THEMES[$k]['label']],
+                    array_keys(\App\Services\FestivalThemeService::THEMES)
+                ),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'ok'      => false,
+                'message' => 'ดึงข้อมูลล้มเหลว: ' . $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Import selected Google holidays as new festivals. Admin posts
+     * an array of holiday descriptors (name + start + end + theme +
+     * emoji), we create one Festival row per item.
+     *
+     * Default state for imports: enabled=false, popup_lead_days=7,
+     * is_recurring=false, show_priority=20. Admin can promote/configure
+     * after import via the inline edit form.
+     */
+    public function importFromGoogle(Request $request)
+    {
+        $validated = $request->validate([
+            'items'                  => 'required|array|min:1|max:50',
+            'items.*.name'           => 'required|string|max:200',
+            'items.*.start_date'     => 'required|date',
+            'items.*.end_date'       => 'required|date|after_or_equal:items.*.start_date',
+            'items.*.theme_variant'  => 'required|string|max:40',
+            'items.*.emoji'          => 'nullable|string|max:30',
+            'items.*.suggested_slug' => 'required|string|max:80',
+        ]);
+
+        $imported = 0;
+        $skipped  = 0;
+
+        foreach ($validated['items'] as $item) {
+            // Sanity: theme variant must exist in the whitelist
+            if (!isset(\App\Services\FestivalThemeService::THEMES[$item['theme_variant']])) {
+                $skipped++;
+                continue;
+            }
+
+            // Slug uniqueness — append numbers if collision
+            $slug = $item['suggested_slug'];
+            $base = $slug;
+            $i = 1;
+            while (Festival::where('slug', $slug)->exists()) {
+                $slug = $base . '-' . (++$i);
+                if ($i > 20) { break; }
+            }
+
+            Festival::create([
+                'slug'             => $slug,
+                'name'             => $item['name'],
+                'short_name'       => \Illuminate\Support\Str::limit($item['name'], 40, ''),
+                'theme_variant'    => $item['theme_variant'],
+                'emoji'            => $item['emoji'] ?? '✨',
+                'starts_at'        => $item['start_date'],
+                'ends_at'          => $item['end_date'],
+                'popup_lead_days'  => 7,
+                'is_recurring'     => false,    // imports are dated for that specific year
+                'enabled'          => false,    // admin reviews + flips on
+                'show_priority'    => 20,
+                'headline'         => $item['name'],
+                'body_md'          => null,
+                'cta_label'        => null,
+                'cta_url'          => null,
+                'date_source'      => 'google',
+            ]);
+            $imported++;
+        }
+
+        $this->flushFestivalCaches();
+
+        $msg = "✓ Import เรียบร้อย — สร้าง {$imported} เทศกาลใหม่ (ปิดอยู่ — กดเปิดในการ์ดทีละตัว)";
+        if ($skipped > 0) $msg .= " · ข้าม {$skipped} รายการ (theme ไม่ถูกต้อง)";
+
+        return response()->json([
+            'ok'       => true,
+            'imported' => $imported,
+            'skipped'  => $skipped,
+            'message'  => $msg,
+        ]);
+    }
+
+    /**
      * Create a new festival. Admin uses this for one-off custom
      * events that aren't covered by the canonical seeder (e.g. local
      * provincial festivals, brand promotions, anniversary sales).

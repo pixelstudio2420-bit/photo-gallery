@@ -279,7 +279,7 @@
           {{-- Coverage list --}}
           <div class="pt-3 border-t border-slate-200 dark:border-white/10">
             <p class="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">
-              <i class="bi bi-list-check"></i> เทศกาลที่จะใช้ข้อมูลจาก Google เมื่อเปิดใช้:
+              <i class="bi bi-list-check"></i> เทศกาลที่ใช้ข้อมูลจาก Google เมื่อเปิดใช้:
             </p>
             <div class="flex flex-wrap gap-1.5">
               @foreach($googleCal['covered_slugs'] as $slug)
@@ -289,13 +289,196 @@
               @endforeach
             </div>
             <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-              เทศกาลอื่น ๆ (ลอยกระทง, ตรุษจีน, Pride, Halloween, ฯลฯ) จะใช้ตารางจันทรคติ/ตารางวันคงที่ในระบบเหมือนเดิม
+              เทศกาลอื่น ๆ (ลอยกระทง, ตรุษจีน, Pride, Halloween, ฯลฯ) ใช้ตารางจันทรคติ/วันคงที่ในระบบ
             </p>
           </div>
         </div>
       </div>
     </div>
   </div>
+
+  {{-- ═══════════════════════════════════════════════════════════════
+       GOOGLE CALENDAR PREVIEW + IMPORT
+       Visible only when API key is configured. Lets admin:
+         • See ALL holidays Google returns for the next 12 months
+         • Filter by status (matched / importable / already-imported)
+         • Tick rows to import as new festivals
+         • Override theme + emoji per row before importing
+       ═══════════════════════════════════════════════════════════════ --}}
+  @if($googleCal['configured'])
+  <div class="mb-6"
+       x-data="googleImport()"
+       x-init="loadPreview()">
+    <button type="button" @click="showPanel = !showPanel"
+            class="w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-white/5 transition">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white flex items-center justify-center">
+          <i class="bi bi-cloud-download text-lg"></i>
+        </div>
+        <div class="text-left">
+          <h3 class="font-semibold text-slate-900 dark:text-slate-100 text-sm flex items-center gap-2">
+            ดูข้อมูลจาก Google Calendar
+            <span x-show="!loading && holidays.length > 0" x-cloak
+                  class="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 text-[10px] font-bold">
+              <span x-text="holidays.length"></span> รายการ
+            </span>
+          </h3>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400">
+            ดูทุกวันสำคัญที่ Google มี + import เป็นเทศกาลใหม่ในเว็บ
+          </p>
+        </div>
+      </div>
+      <i class="bi text-slate-400 transition-transform" :class="showPanel ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+    </button>
+
+    <div x-show="showPanel" x-cloak x-collapse class="mt-3">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-emerald-200 dark:border-emerald-500/30 shadow-sm overflow-hidden">
+        <div class="h-1.5 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
+
+        {{-- Loading state --}}
+        <div x-show="loading" class="p-10 text-center">
+          <div class="inline-flex items-center gap-2 text-sm text-slate-500">
+            <i class="bi bi-arrow-repeat animate-spin text-lg"></i>
+            กำลังดึงข้อมูลจาก Google...
+          </div>
+        </div>
+
+        {{-- Error state --}}
+        <div x-show="!loading && error" x-cloak class="p-5">
+          <div class="rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-800">
+            <i class="bi bi-x-circle-fill"></i> <span x-text="error"></span>
+          </div>
+        </div>
+
+        {{-- Data state --}}
+        <div x-show="!loading && !error && holidays.length > 0" x-cloak>
+          {{-- Filter + bulk actions row --}}
+          <div class="px-5 py-3 border-b border-slate-200 dark:border-white/10 flex items-center justify-between gap-3 flex-wrap">
+            <div class="flex items-center gap-2">
+              <button type="button" @click="filterStatus = 'all'"
+                      :class="filterStatus === 'all' ? 'bg-slate-200 text-slate-900' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'"
+                      class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition">
+                ทั้งหมด <span class="text-[10px]" x-text="holidays.length"></span>
+              </button>
+              <button type="button" @click="filterStatus = 'importable'"
+                      :class="filterStatus === 'importable' ? 'bg-emerald-200 text-emerald-900' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'"
+                      class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition">
+                ✚ Import ได้ <span class="text-[10px]" x-text="countByStatus.importable"></span>
+              </button>
+              <button type="button" @click="filterStatus = 'matched'"
+                      :class="filterStatus === 'matched' ? 'bg-blue-200 text-blue-900' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'"
+                      class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition">
+                <i class="bi bi-link-45deg"></i> Match แล้ว <span class="text-[10px]" x-text="countByStatus.matched"></span>
+              </button>
+              <button type="button" @click="filterStatus = 'already-imported'"
+                      :class="filterStatus === 'already-imported' ? 'bg-amber-200 text-amber-900' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'"
+                      class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition">
+                <i class="bi bi-check2"></i> Import แล้ว <span class="text-[10px]" x-text="countByStatus['already-imported']"></span>
+              </button>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" @click="selectAllImportable()"
+                      class="text-xs text-slate-500 hover:text-slate-700 transition">
+                เลือกที่ import ได้ทั้งหมด
+              </button>
+              <button type="button" @click="loadPreview(true)"
+                      title="Refresh from Google"
+                      class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition">
+                <i class="bi bi-arrow-clockwise"></i>
+              </button>
+            </div>
+          </div>
+
+          {{-- Holiday list --}}
+          <div class="max-h-[600px] overflow-y-auto">
+            <template x-for="(h, idx) in filteredHolidays" :key="h.start_date + h.name">
+              <div class="px-5 py-3 border-b border-slate-100 dark:border-white/5 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-white/5 transition">
+                {{-- Checkbox (only for importable) --}}
+                <div class="w-5 shrink-0">
+                  <input type="checkbox" x-show="h.match_status === 'importable'"
+                         :checked="selected.has(h.suggested_slug)"
+                         @change="toggleSelect(h.suggested_slug)"
+                         class="rounded border-slate-300 text-emerald-500 focus:ring-emerald-500">
+                </div>
+
+                {{-- Date pill --}}
+                <div class="shrink-0 w-20 text-center">
+                  <div class="text-[10px] text-slate-500 uppercase font-mono" x-text="formatDateMonth(h.start_date)"></div>
+                  <div class="text-base font-bold text-slate-900 dark:text-slate-100" x-text="formatDateDay(h.start_date)"></div>
+                  <div class="text-[10px] text-slate-400" x-show="h.start_date !== h.end_date"
+                       x-text="'– ' + formatDateDay(h.end_date)"></div>
+                </div>
+
+                {{-- Name + meta --}}
+                <div class="flex-1 min-w-0">
+                  <div class="font-medium text-sm text-slate-900 dark:text-slate-100 truncate" x-text="h.name"></div>
+                  <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                    <template x-if="h.match_status === 'matched'">
+                      <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-700 px-2 py-0.5 font-semibold">
+                        <i class="bi bi-link-45deg"></i> ใช้ดึงวันให้ <span x-text="h.matched_slug" class="font-mono"></span>
+                      </span>
+                    </template>
+                    <template x-if="h.match_status === 'already-imported'">
+                      <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-semibold">
+                        <i class="bi bi-check2"></i> Import แล้ว
+                      </span>
+                    </template>
+                    <template x-if="h.match_status === 'importable'">
+                      <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 font-semibold">
+                        <i class="bi bi-plus-lg"></i> ยังไม่มี — Import ได้
+                      </span>
+                    </template>
+                  </div>
+                </div>
+
+                {{-- Theme + emoji selectors (only for importable) --}}
+                <template x-if="h.match_status === 'importable'">
+                  <div class="flex items-center gap-2 shrink-0">
+                    <input type="text" x-model="h.suggested_emoji" maxlength="10"
+                           class="w-12 px-1 py-1 rounded-lg border border-slate-200 bg-white text-center text-base focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <select x-model="h.suggested_theme"
+                            class="px-2 py-1 rounded-lg border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                      <template x-for="t in themes" :key="t.key">
+                        <option :value="t.key" x-text="t.label"></option>
+                      </template>
+                    </select>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+
+          {{-- Bottom action bar — fixed when items are selected --}}
+          <div x-show="selected.size > 0" x-cloak x-transition
+               class="px-5 py-4 bg-emerald-50 dark:bg-emerald-500/10 border-t-2 border-emerald-300 dark:border-emerald-500/30 flex items-center justify-between gap-3 flex-wrap sticky bottom-0">
+            <div class="text-sm text-emerald-900 dark:text-emerald-200">
+              <strong x-text="selected.size"></strong> รายการเลือกแล้ว
+              <span class="text-xs opacity-80">— จะถูก import เป็นเทศกาลใหม่ (ปิดอยู่ — admin ต้องเปิดใช้ทีละตัว)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" @click="selected = new Set()"
+                      class="inline-flex items-center gap-1 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-3 py-1.5 text-xs font-medium transition">
+                ล้างที่เลือก
+              </button>
+              <button type="button" @click="importSelected()" :disabled="importing"
+                      class="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white px-4 py-2 text-sm font-semibold shadow-md disabled:opacity-50 transition">
+                <i class="bi" :class="importing ? 'bi-arrow-repeat animate-spin' : 'bi-cloud-download'"></i>
+                <span x-show="!importing">Import ที่เลือก (<span x-text="selected.size"></span>)</span>
+                <span x-show="importing" x-cloak>กำลัง import...</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {{-- Empty data state --}}
+        <div x-show="!loading && !error && holidays.length === 0" x-cloak class="p-10 text-center text-sm text-slate-500">
+          <i class="bi bi-inbox text-2xl block mb-2 opacity-50"></i>
+          ไม่มีข้อมูลจาก Google ในช่วง 12 เดือนถัดไป
+        </div>
+      </div>
+    </div>
+  </div>
+  @endif
 
   {{-- ═══════════════════════════════════════════════════════════════
        CREATE NEW FESTIVAL — Alpine-collapsed panel toggled by header
@@ -867,4 +1050,123 @@
     </div>
   </div>
 </div>
+
+@push('scripts')
+<script>
+/* Google Calendar Preview + Import — Alpine factory.
+   Holidays returned by /admin/festivals/google-preview have:
+     name, start_date, end_date, match_status, matched_slug,
+     suggested_slug, suggested_theme, suggested_emoji
+   Filter + select + bulk-import flow. */
+window.googleImport = function () {
+  return {
+    showPanel: false,
+    loading: true,
+    error: null,
+    holidays: [],
+    themes: [],
+    filterStatus: 'all',
+    selected: new Set(),
+    importing: false,
+
+    async loadPreview(force = false) {
+      this.loading = true; this.error = null;
+      try {
+        const r = await fetch('{{ route('admin.festivals.google-preview') }}', {
+          credentials: 'same-origin',
+          headers: { 'Accept': 'application/json' }
+        });
+        const data = await r.json();
+        if (!data.ok) {
+          this.error = data.message || 'Unknown error';
+          this.holidays = [];
+        } else {
+          this.holidays = data.holidays || [];
+          this.themes   = data.themes   || [];
+        }
+      } catch (e) {
+        this.error = 'Network error: ' + e.message;
+        this.holidays = [];
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    get filteredHolidays() {
+      if (this.filterStatus === 'all') return this.holidays;
+      return this.holidays.filter(h => h.match_status === this.filterStatus);
+    },
+
+    get countByStatus() {
+      const c = { matched: 0, importable: 0, 'already-imported': 0 };
+      for (const h of this.holidays) c[h.match_status] = (c[h.match_status] || 0) + 1;
+      return c;
+    },
+
+    toggleSelect(slug) {
+      if (this.selected.has(slug)) this.selected.delete(slug);
+      else                          this.selected.add(slug);
+      // Trigger Alpine reactivity (Set isn't proxied)
+      this.selected = new Set(this.selected);
+    },
+
+    selectAllImportable() {
+      const newSet = new Set(this.selected);
+      for (const h of this.holidays) {
+        if (h.match_status === 'importable') newSet.add(h.suggested_slug);
+      }
+      this.selected = newSet;
+    },
+
+    formatDateMonth(iso) {
+      const months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+      return months[new Date(iso).getMonth()];
+    },
+    formatDateDay(iso) {
+      return new Date(iso).getDate();
+    },
+
+    async importSelected() {
+      const items = this.holidays
+        .filter(h => h.match_status === 'importable' && this.selected.has(h.suggested_slug))
+        .map(h => ({
+          name:           h.name,
+          start_date:     h.start_date,
+          end_date:       h.end_date,
+          theme_variant:  h.suggested_theme,
+          emoji:          h.suggested_emoji,
+          suggested_slug: h.suggested_slug,
+        }));
+
+      if (items.length === 0) return;
+
+      this.importing = true;
+      try {
+        const r = await fetch('{{ route('admin.festivals.google-import') }}', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ items }),
+        });
+        const data = await r.json();
+        if (data.ok) {
+          // Reload to show the newly imported festivals in the list
+          window.location.reload();
+        } else {
+          alert('Import failed: ' + (data.message || 'Unknown error'));
+        }
+      } catch (e) {
+        alert('Network error: ' + e.message);
+      } finally {
+        this.importing = false;
+      }
+    },
+  };
+};
+</script>
+@endpush
 @endsection
