@@ -3,9 +3,12 @@
 namespace App\Providers;
 
 use App\Observers\CacheInvalidationObserver;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -147,6 +150,32 @@ class AppServiceProvider extends ServiceProvider
         if (class_exists(\App\Models\SeoPage::class)) {
             \App\Models\SeoPage::observe(\App\Observers\SeoPageObserver::class);
         }
+
+        /* ════════════════════════════════════════════════════════════════
+         * Rate limiters
+         *
+         * `photographer-api` — buckets the Bearer-authed v1 API by API key
+         * (token_prefix), not by IP. Two photographers behind the same
+         * NAT/CGNAT shouldn't share a quota, and the same key shouldn't
+         * be rotatable around a quota by hopping IPs. Falls back to IP
+         * for unauthenticated probes (auth middleware would 401 anyway,
+         * but the limiter runs first in some Laravel versions).
+         *
+         * Quotas:
+         *   60 req/min per key — generous for read-heavy dashboards,
+         *                         strict enough that a runaway script
+         *                         can't accidentally DDoS our DB.
+         *
+         * Apply via route attribute: ->middleware('throttle:photographer-api')
+         * ════════════════════════════════════════════════════════════════ */
+        RateLimiter::for('photographer-api', function (Request $request) {
+            $key = $request->attributes->get('api_key');
+            $token = $key ? $key->token_prefix : ('ip:' . $request->ip());
+            return [
+                Limit::perMinute(60)->by($token),
+                Limit::perDay(20000)->by($token),
+            ];
+        });
 
         // Auto-seed default photo bundles on Event creation. The observer
         // dispatches synchronously after the event row is inserted; bundle

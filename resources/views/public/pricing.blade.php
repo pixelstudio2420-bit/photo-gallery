@@ -2,6 +2,50 @@
 
 @section('title', 'ราคา & ค่าธรรมเนียม')
 
+{{--
+    PRICING PAGE — DB-driven, single source of truth
+    ─────────────────────────────────────────────────
+    All plan data is read from `subscription_plans` table via the
+    HomeController::pricing() method. Edit Admin → Subscription Plans
+    to change copy, prices, or features — no code edits required.
+
+    Features still in development (e.g. inline API access) are filtered
+    from display by `$hideUnverifiedFeatures` so we never advertise
+    something the platform can't actually deliver. Once a feature is
+    production-ready, remove the substring from the filter array.
+--}}
+@php
+    // List of feature substrings that match "soon-to-ship" copy in
+    // features_json. Filtered out of public rendering so we don't
+    // promise what we can't yet deliver. Keep this list short.
+    $hideUnverifiedFeatures = [
+        'API Access',
+        'API + Webhooks',
+        'API +',
+        'Webhooks',
+    ];
+
+    $shouldHide = function (string $line) use ($hideUnverifiedFeatures): bool {
+        foreach ($hideUnverifiedFeatures as $needle) {
+            if (mb_stripos($line, $needle) !== false) return true;
+        }
+        return false;
+    };
+
+    // Format ฿ — accepts numeric, returns "฿299" or "฿2,490"
+    $thb = fn ($n) => '฿' . number_format((float) $n, 0);
+
+    // Compute annual savings %
+    $annualSavingsPct = function ($monthly, $annual): ?int {
+        $monthly = (float) $monthly;
+        $annual  = (float) $annual;
+        if ($monthly <= 0 || $annual <= 0) return null;
+        $expectedAnnual = $monthly * 12;
+        if ($annual >= $expectedAnnual) return null;
+        return (int) round((1 - $annual / $expectedAnnual) * 100);
+    };
+@endphp
+
 @section('hero')
 {{-- ──────────── PRICING HERO ──────────── --}}
 <section class="relative overflow-hidden bg-gradient-to-br from-indigo-50 via-violet-50 to-pink-50 dark:from-slate-900 dark:via-indigo-950 dark:to-purple-950">
@@ -20,7 +64,7 @@
         </span>
       </h1>
       <p class="text-base sm:text-lg text-slate-600 dark:text-slate-300/80 max-w-2xl mx-auto leading-relaxed">
-        ใช้งานพื้นฐานได้ฟรี <strong class="text-slate-800 dark:text-white">ไม่ต้องใช้บัตรเครดิต</strong> ยกเลิกได้ทุกเมื่อ — ดูค่าใช้จ่ายทั้งหมดได้ก่อนสมัคร
+        เริ่มต้นใช้ <strong class="text-slate-800 dark:text-white">ฟรีตลอดชีพ</strong> · ยกเลิกเมื่อใดก็ได้ · ดูค่าใช้จ่ายทั้งหมดก่อนสมัคร
       </p>
     </div>
   </div>
@@ -28,11 +72,12 @@
 @endsection
 
 @section('content')
-<div class="py-10 md:py-14">
+<div class="py-10 md:py-14"
+     x-data="{ tab: 'photographer', cycle: 'monthly' }">
 
   {{-- ─────────────── PERSONA TABS ─────────────── --}}
-  <div class="max-w-5xl mx-auto px-2" x-data="{ tab: 'photographer' }">
-    <div class="flex items-center justify-center gap-2 mb-10">
+  <div class="max-w-6xl mx-auto px-2">
+    <div class="flex items-center justify-center gap-2 mb-8">
       <div class="inline-flex items-center p-1 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-sm">
         <button type="button" @click="tab = 'photographer'"
                 :class="tab === 'photographer' ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'"
@@ -48,99 +93,140 @@
     </div>
 
     {{-- ═══════════════════════════════════════════════════════════
-         PHOTOGRAPHER PRICING
+         PHOTOGRAPHER PRICING — DB-driven from subscription_plans
          ═══════════════════════════════════════════════════════════ --}}
     <div x-show="tab === 'photographer'" x-transition>
 
-      {{-- Founding banner --}}
-      <div class="mb-8 mx-auto max-w-3xl rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-500/10 dark:to-orange-500/10 border-2 border-dashed border-amber-300 dark:border-amber-400/30 p-5 sm:p-6">
-        <div class="flex items-start gap-4">
-          <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/30">
-            <i class="bi bi-rocket-takeoff text-lg"></i>
-          </div>
-          <div class="flex-1">
-            <p class="font-bold text-amber-900 dark:text-amber-200 mb-1">🎉 Founding Photographer Program</p>
-            <p class="text-sm text-amber-800/90 dark:text-amber-300/90 leading-relaxed">
-              ช่างภาพ <strong>50 คนแรก</strong> ที่ลงทะเบียน + ผ่านการอนุมัติ จะได้ commission rate ลด <strong>50% ตลอดอายุการใช้งาน</strong> — ปกติ 15% เหลือ <strong>7.5%</strong> ตลอดไป
-            </p>
-          </div>
-        </div>
+      {{-- Billing cycle toggle (monthly / annual) --}}
+      <div class="flex items-center justify-center gap-3 mb-8">
+        <span class="text-sm font-semibold" :class="cycle === 'monthly' ? 'text-slate-800 dark:text-white' : 'text-slate-400'">รายเดือน</span>
+        <button type="button" role="switch" @click="cycle = cycle === 'monthly' ? 'annual' : 'monthly'"
+                class="relative w-14 h-7 rounded-full transition-colors"
+                :class="cycle === 'annual' ? 'bg-gradient-to-r from-indigo-500 to-violet-600' : 'bg-slate-300 dark:bg-slate-700'">
+          <span class="absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-transform"
+                :class="cycle === 'annual' ? 'translate-x-7' : 'translate-x-0'"></span>
+        </button>
+        <span class="text-sm font-semibold" :class="cycle === 'annual' ? 'text-slate-800 dark:text-white' : 'text-slate-400'">
+          รายปี <span class="text-emerald-600 dark:text-emerald-400 text-xs font-bold ml-1">ประหยัด ~17%</span>
+        </span>
       </div>
 
-      {{-- Plan cards --}}
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
+      @if($plans->isEmpty())
+        <div class="text-center py-12 text-slate-500">ยังไม่มี plan ใน DB — Admin ต้อง configure ที่ /admin/subscriptions/plans</div>
+      @else
 
-        {{-- FREE plan --}}
-        <div class="relative rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-white/10 p-6 hover:shadow-xl hover:-translate-y-1 transition-all">
-          <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-1">เริ่มต้น (Free)</h3>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mb-5">เหมาะสำหรับช่างภาพที่เริ่มต้น</p>
-          <div class="mb-5">
-            <span class="text-4xl font-extrabold text-slate-900 dark:text-white">฿0</span>
-            <span class="text-sm text-slate-500 dark:text-slate-400 ml-1">/เดือน</span>
-          </div>
-          <ul class="space-y-2.5 text-sm text-slate-700 dark:text-slate-300 mb-6">
-            <li class="flex items-start gap-2"><i class="bi bi-check-circle-fill text-emerald-500 mt-0.5 shrink-0"></i><span>ลงงานได้ <strong>3 อีเวนต์</strong>/เดือน</span></li>
-            <li class="flex items-start gap-2"><i class="bi bi-check-circle-fill text-emerald-500 mt-0.5 shrink-0"></i><span>Storage <strong>5 GB</strong></span></li>
-            <li class="flex items-start gap-2"><i class="bi bi-check-circle-fill text-emerald-500 mt-0.5 shrink-0"></i><span>ระบบ booking + LINE reminder</span></li>
-            <li class="flex items-start gap-2"><i class="bi bi-check-circle-fill text-emerald-500 mt-0.5 shrink-0"></i><span>Slip auto-verify (SlipOK)</span></li>
-            <li class="flex items-start gap-2"><i class="bi bi-x-circle text-slate-300 dark:text-slate-600 mt-0.5 shrink-0"></i><span class="text-slate-400 line-through">AI Face Search</span></li>
-            <li class="flex items-start gap-2"><i class="bi bi-x-circle text-slate-300 dark:text-slate-600 mt-0.5 shrink-0"></i><span class="text-slate-400 line-through">Watermark + Source protection</span></li>
-            <li class="flex items-start gap-2"><i class="bi bi-percent text-amber-500 mt-0.5 shrink-0"></i><span>Commission <strong>15%</strong> ต่อยอดขาย</span></li>
-          </ul>
-          <a href="{{ route('photographer-onboarding.quick') }}" class="block w-full text-center px-5 py-2.5 rounded-xl text-sm font-semibold border-2 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-indigo-400 dark:hover:border-indigo-400/50 transition-colors">
-            เริ่มฟรี
-          </a>
-        </div>
+      {{-- Plan cards grid (5 plans → responsive 1/2/5 cols) --}}
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-12">
+        @foreach($plans as $plan)
+          @php
+            $features = json_decode($plan->features_json ?? '[]', true) ?: [];
+            $features = array_values(array_filter($features, fn ($f) => !$shouldHide((string) $f)));
+            $isHighlighted = (bool) $plan->badge;
+            $monthly = $thb($plan->price_thb);
+            $annual  = $thb($plan->price_annual_thb);
+            $savings = $annualSavingsPct($plan->price_thb, $plan->price_annual_thb);
+            $accent  = $plan->color_hex ?: '#6366f1';
+            $isFree  = ((float) $plan->price_thb) <= 0;
+          @endphp
+          <div class="relative rounded-2xl bg-white dark:bg-slate-900 p-5 transition-all duration-200 hover:-translate-y-1 hover:shadow-2xl
+                      {{ $isHighlighted
+                          ? 'border-2 border-indigo-500 dark:border-indigo-400 shadow-lg shadow-indigo-500/20'
+                          : 'border border-slate-200 dark:border-white/10' }}">
 
-        {{-- PRO plan (highlighted) --}}
-        <div class="relative rounded-2xl bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-500/10 dark:to-violet-500/10 border-2 border-indigo-500 dark:border-indigo-400 p-6 hover:shadow-2xl hover:-translate-y-1 transition-all shadow-lg shadow-indigo-500/20">
-          <span class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white text-xs font-bold shadow-md shadow-indigo-500/40">
-            <i class="bi bi-stars mr-1"></i>ยอดนิยม
-          </span>
-          <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-1">Pro</h3>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mb-5">ช่างภาพอาชีพ ทำเงินจริง</p>
-          <div class="mb-5">
-            <span class="text-4xl font-extrabold text-slate-900 dark:text-white">฿299</span>
-            <span class="text-sm text-slate-500 dark:text-slate-400 ml-1">/เดือน</span>
-            <p class="text-[11px] text-amber-600 dark:text-amber-300 mt-1 font-semibold">
-              ฟรี 60 วัน · ไม่ใช้บัตรเครดิต
+            @if($plan->badge)
+              <span class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-bold text-white shadow-md whitespace-nowrap"
+                    style="background:linear-gradient(135deg, {{ $accent }}, #8b5cf6);">
+                <i class="bi bi-stars mr-1"></i>{{ $plan->badge }}
+              </span>
+            @endif
+
+            {{-- Plan name + tagline --}}
+            <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-1 mt-{{ $plan->badge ? '1' : '0' }}">
+              {{ $plan->name }}
+            </h3>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-5 min-h-[32px] leading-snug">
+              {{ $plan->tagline ?: '—' }}
             </p>
-          </div>
-          <ul class="space-y-2.5 text-sm text-slate-700 dark:text-slate-200 mb-6">
-            <li class="flex items-start gap-2"><i class="bi bi-check-circle-fill text-emerald-500 mt-0.5 shrink-0"></i><span><strong>ไม่จำกัด</strong>อีเวนต์</span></li>
-            <li class="flex items-start gap-2"><i class="bi bi-check-circle-fill text-emerald-500 mt-0.5 shrink-0"></i><span>Storage <strong>200 GB</strong></span></li>
-            <li class="flex items-start gap-2"><i class="bi bi-check-circle-fill text-emerald-500 mt-0.5 shrink-0"></i><span>ระบบ booking + LINE reminder</span></li>
-            <li class="flex items-start gap-2"><i class="bi bi-check-circle-fill text-emerald-500 mt-0.5 shrink-0"></i><span><strong>AI Face Search</strong> ทุกอีเวนต์</span></li>
-            <li class="flex items-start gap-2"><i class="bi bi-check-circle-fill text-emerald-500 mt-0.5 shrink-0"></i><span>Watermark + Source protection</span></li>
-            <li class="flex items-start gap-2"><i class="bi bi-check-circle-fill text-emerald-500 mt-0.5 shrink-0"></i><span>Priority support (LINE Direct)</span></li>
-            <li class="flex items-start gap-2"><i class="bi bi-percent text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0"></i><span>Commission <strong class="text-emerald-700 dark:text-emerald-300">10%</strong> · Founding 50% off → <strong>5%</strong></span></li>
-          </ul>
-          <a href="{{ route('photographer-onboarding.quick') }}" class="block w-full text-center px-5 py-3 rounded-xl text-sm font-bold text-white bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:-translate-y-0.5 transition-all">
-            ทดลองใช้ Pro ฟรี 60 วัน
-          </a>
-        </div>
 
-        {{-- ENTERPRISE plan --}}
-        <div class="relative rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-white/10 p-6 hover:shadow-xl hover:-translate-y-1 transition-all">
-          <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-1">Enterprise</h3>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mb-5">Studio · Agency · Event organizer</p>
-          <div class="mb-5">
-            <span class="text-3xl font-extrabold text-slate-900 dark:text-white">ราคาตามตกลง</span>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">เริ่ม ฿2,990/เดือน</p>
+            {{-- Price (cycles between monthly / annual) --}}
+            <div class="mb-1">
+              @if($isFree)
+                <div>
+                  <span class="text-3xl font-extrabold text-slate-900 dark:text-white">฿0</span>
+                  <span class="text-xs text-slate-500 dark:text-slate-400 ml-1">ตลอดชีพ</span>
+                </div>
+              @else
+                <div x-show="cycle === 'monthly'">
+                  <span class="text-3xl font-extrabold text-slate-900 dark:text-white">{{ $monthly }}</span>
+                  <span class="text-xs text-slate-500 dark:text-slate-400 ml-1">/เดือน</span>
+                </div>
+                <div x-show="cycle === 'annual'" x-cloak>
+                  <span class="text-3xl font-extrabold text-slate-900 dark:text-white">{{ $thb($plan->price_annual_thb / 12) }}</span>
+                  <span class="text-xs text-slate-500 dark:text-slate-400 ml-1">/เดือน</span>
+                  @if($savings)
+                    <p class="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5 font-semibold">
+                      ประหยัด {{ $savings }}% (จ่าย {{ $annual }}/ปี)
+                    </p>
+                  @endif
+                </div>
+              @endif
+            </div>
+
+            {{-- Commission (vital — display front + center) --}}
+            @if((float) $plan->commission_pct > 0)
+              <div class="my-4 p-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200/70 dark:border-amber-400/20">
+                <p class="text-[11px] text-amber-800 dark:text-amber-300">
+                  <i class="bi bi-percent"></i> commission <strong>{{ rtrim(rtrim(number_format((float) $plan->commission_pct, 2), '0'), '.') }}%</strong> ต่อยอดขาย
+                </p>
+              </div>
+            @else
+              <div class="my-4 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/70 dark:border-emerald-400/20">
+                <p class="text-[11px] text-emerald-800 dark:text-emerald-300 font-semibold">
+                  <i class="bi bi-check-circle-fill"></i> commission <strong>0%</strong> — ได้เต็มทุกบาท
+                </p>
+              </div>
+            @endif
+
+            {{-- Features list --}}
+            <ul class="space-y-2 text-xs text-slate-700 dark:text-slate-300 mb-5">
+              @foreach($features as $feature)
+                <li class="flex items-start gap-1.5">
+                  <i class="bi bi-check-circle-fill text-emerald-500 mt-0.5 shrink-0 text-[11px]"></i>
+                  <span class="leading-snug">{{ $feature }}</span>
+                </li>
+              @endforeach
+            </ul>
+
+            {{-- CTA --}}
+            <a href="{{ route('photographer-onboarding.quick') }}"
+               class="block w-full text-center px-4 py-2.5 rounded-xl text-xs font-bold transition-all
+                      {{ $isHighlighted
+                          ? 'text-white bg-gradient-to-br from-indigo-500 to-violet-600 shadow-md shadow-indigo-500/30 hover:shadow-lg hover:-translate-y-0.5'
+                          : ($isFree
+                              ? 'border-2 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-indigo-400 dark:hover:border-indigo-400/50'
+                              : 'border-2 border-indigo-200 dark:border-indigo-400/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-500/10') }}">
+              {{ $isFree ? 'เริ่มฟรีเลย' : 'เลือก ' . $plan->name }}
+            </a>
           </div>
-          <ul class="space-y-2.5 text-sm text-slate-700 dark:text-slate-300 mb-6">
-            <li class="flex items-start gap-2"><i class="bi bi-check-circle-fill text-emerald-500 mt-0.5 shrink-0"></i><span><strong>Multi-photographer</strong> account</span></li>
-            <li class="flex items-start gap-2"><i class="bi bi-check-circle-fill text-emerald-500 mt-0.5 shrink-0"></i><span>Storage ตามต้องการ</span></li>
-            <li class="flex items-start gap-2"><i class="bi bi-check-circle-fill text-emerald-500 mt-0.5 shrink-0"></i><span>White-label option</span></li>
-            <li class="flex items-start gap-2"><i class="bi bi-check-circle-fill text-emerald-500 mt-0.5 shrink-0"></i><span>API access</span></li>
-            <li class="flex items-start gap-2"><i class="bi bi-check-circle-fill text-emerald-500 mt-0.5 shrink-0"></i><span>SLA + Dedicated manager</span></li>
-            <li class="flex items-start gap-2"><i class="bi bi-percent text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0"></i><span>Commission ลดเหลือ <strong>5-7%</strong></span></li>
-          </ul>
-          <a href="mailto:hello@loadroop.com?subject=Enterprise%20Inquiry" class="block w-full text-center px-5 py-2.5 rounded-xl text-sm font-semibold border-2 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-indigo-400 dark:hover:border-indigo-400/50 transition-colors">
-            ติดต่อทีมขาย
-          </a>
+        @endforeach
+      </div>
+
+      {{-- Money-back guarantee strip --}}
+      <div class="max-w-3xl mx-auto rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-500/10 dark:to-teal-500/10 border border-emerald-200/70 dark:border-emerald-400/20 p-5 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-500/30">
+          <i class="bi bi-shield-check text-xl"></i>
+        </div>
+        <div class="flex-1">
+          <p class="font-bold text-emerald-900 dark:text-emerald-200 text-sm mb-0.5">
+            <i class="bi bi-cash-coin"></i> Money-back 30 วัน
+          </p>
+          <p class="text-xs text-emerald-800/80 dark:text-emerald-300/80 leading-relaxed">
+            ทุก plan ที่จ่ายเงิน หากใช้แล้วไม่พอใจ ภายใน 30 วันแรก ขอเงินคืนเต็มจำนวนได้ ไม่ถามคำถาม
+          </p>
         </div>
       </div>
+      @endif
+
     </div>
 
     {{-- ═══════════════════════════════════════════════════════════
@@ -175,27 +261,28 @@
                   <i class="bi bi-image-fill text-indigo-500"></i>
                   <p class="font-bold text-slate-800 dark:text-white text-sm">ซื้อรูปดิจิทัล</p>
                 </div>
-                <p class="text-2xl font-extrabold text-slate-900 dark:text-white mb-1">฿49 - ฿299</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400">ต่อรูป — ราคาตั้งโดยช่างภาพ ดูได้ก่อนซื้อ</p>
+                <p class="text-2xl font-extrabold text-slate-900 dark:text-white mb-1">ขึ้นกับงาน</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">ช่างภาพแต่ละคนตั้งราคาเอง — ดูได้ก่อนซื้อ</p>
               </div>
               <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10">
                 <div class="flex items-center gap-2 mb-2">
                   <i class="bi bi-calendar-event-fill text-violet-500"></i>
                   <p class="font-bold text-slate-800 dark:text-white text-sm">จองช่างภาพ</p>
                 </div>
-                <p class="text-2xl font-extrabold text-slate-900 dark:text-white mb-1">฿1,500 - ฿15,000+</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400">ตามงาน — ดูราคา portfolio + คุยตรง</p>
+                <p class="text-2xl font-extrabold text-slate-900 dark:text-white mb-1">ขึ้นกับช่างภาพ</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">ดู portfolio + ราคา ก่อนตัดสินใจ</p>
               </div>
             </div>
 
             <div class="p-4 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
               <p class="font-bold text-blue-900 dark:text-blue-200 mb-2 flex items-center gap-2">
-                <i class="bi bi-shield-check"></i>รับประกันคืนเงิน 100%
+                <i class="bi bi-shield-check"></i>การรับประกันลูกค้า
               </p>
               <ul class="text-sm text-blue-800/80 dark:text-blue-300/80 space-y-1 list-disc list-inside">
-                <li>จ่ายแล้วช่างไม่มา → คืน 100% ภายใน 24 ชม.</li>
-                <li>รูปไม่ตรงตาม preview → คืน 100% ภายใน 7 วัน</li>
-                <li>ไฟล์เสียหาย / ดาวน์โหลดไม่ได้ → ส่งใหม่หรือคืนเงิน</li>
+                <li>ตรวจสลิปอัตโนมัติผ่าน SlipOK — ระบบไม่รับสลิปปลอม</li>
+                <li>ส่งรูปเข้า LINE อัตโนมัติหลังจ่าย — ไม่ต้องรอช่างภาพ</li>
+                <li>แชทกับช่างภาพได้ตรงในระบบก่อนตัดสินใจ</li>
+                <li>Money-back นโยบายตามแต่ละช่างภาพกำหนด — ดูในหน้าจอง</li>
               </ul>
             </div>
 
@@ -248,13 +335,13 @@
                 ['AI Face Search', true, false, false],
                 ['ระบบจองอัตโนมัติ', true, false, false],
                 ['LINE reminder กันลูกค้าลืม', true, false, false],
-                ['ตรวจสลิปอัตโนมัติ', true, false, false],
+                ['ตรวจสลิปอัตโนมัติ (SlipOK)', true, false, false],
                 ['ส่งรูปเข้า LINE หลังจ่าย', true, false, false],
                 ['Watermark + ป้องกันรูปขโมย', true, false, false],
-                ['ใบเสร็จ/e-Tax', true, false, false],
+                ['ใบเสร็จ/e-Tax อัตโนมัติ', true, false, false],
                 ['SEO Profile (ติด Google)', true, false, true],
                 ['Boost / โปรโมต', true, true, true],
-                ['ค่าธรรมเนียม', '5-15%', 'ฟรี', 'ฟรี'],
+                ['ค่าธรรมเนียม', '0-30%', 'ฟรี', 'ฟรี'],
                 ['ลูกค้าใหม่จากระบบ', '✅ จัดให้', '❌ หาเอง', '❌ หาเอง'],
               ];
             @endphp
@@ -289,13 +376,14 @@
     <div class="space-y-3">
       @php
         $faqs = [
-          ['q' => 'มีค่าซ่อนหรือเปล่า?', 'a' => 'ไม่มี — ค่าใช้จ่ายทั้งหมดที่เห็นบนหน้านี้คือทั้งหมด ไม่มีค่าธรรมเนียมแฝง ไม่มีค่า set up ไม่มีค่า cancellation'],
-          ['q' => 'ทดลองใช้ Pro ฟรี 60 วัน — ต้องใส่บัตรเครดิตไหม?', 'a' => 'ไม่ต้อง — ลงทะเบียนด้วย LINE หรือ email ก็เริ่มได้เลย ครบ 60 วันแล้วระบบจะถามว่าจะต่อหรือไม่ ถ้าไม่ตอบก็จะ downgrade เป็น Free อัตโนมัติ ไม่ตัดเงิน'],
-          ['q' => 'commission คิดยังไง?', 'a' => 'คิดจากยอดขายเท่านั้น — ขายไม่ได้ = ไม่จ่าย ขายรูปดิจิทัล ฿100 หัก 10% (Pro) = ได้ ฿90 หัก 15% (Free) = ได้ ฿85'],
-          ['q' => 'Founding Photographer 50% off ตลอดอายุการใช้งาน — จริงเหรอ?', 'a' => 'จริง — เราต้องการช่างภาพ 50 คนแรกที่ช่วยสร้างชุมชนนี้ขึ้นมา commission rate 50% off จะ lock ให้ตลอดที่บัญชีของคุณยัง active โดยไม่ต้องสมัครใหม่'],
-          ['q' => 'ยกเลิกได้เมื่อไหร่?', 'a' => 'ทุกเมื่อ ในหน้า Subscription กดยกเลิกแล้วใช้งานได้ครบวันสุดท้ายของรอบบิลปัจจุบัน — ไม่ปรับ pro-rate, ไม่ตัดเงินรอบถัดไป'],
-          ['q' => 'ลูกค้าจ่ายแล้วช่างไม่มา รับเงินคืนยังไง?', 'a' => 'ระบบจะคืนเงิน 100% เข้าบัญชี/PromptPay ที่จ่ายมา ภายใน 24 ชม. โดยอัตโนมัติ — ช่างภาพต้อง confirm ภายใน 4 ชม.หลังเวลานัด ถ้าไม่ confirm ระบบ refund อัตโนมัติ'],
-          ['q' => 'ใช้กับงาน 1-day event ได้ไหม?', 'a' => 'ได้ — ระบบรองรับงานวิ่ง, รับปริญญา, แต่งงาน, อีเวนต์บริษัท, คอนเสิร์ต, งานเทศกาล (สงกรานต์/ลอยกระทง) ทุกประเภท ตั้ง pricing ต่อรูป + Face Search ได้ทันที'],
+          ['q' => 'มีค่าซ่อนหรือเปล่า?', 'a' => 'ไม่มี — ค่าใช้จ่ายทั้งหมดที่เห็นบนหน้านี้คือทั้งหมด ไม่มีค่าธรรมเนียมแฝง ไม่มีค่า set up ไม่มีค่า cancellation Plan ฟรีไม่ตัดบัตรเครดิต'],
+          ['q' => 'commission คิดยังไง?', 'a' => 'คิดจากยอดขายเท่านั้น — ขายไม่ได้ = ไม่จ่าย ตัวอย่าง Free plan commission 30% ขายรูป ฿100 = ได้ ฿70 / Starter 5% = ได้ ฿95 / Pro/Business/Studio 0% = ได้ ฿100 เต็มจำนวน'],
+          ['q' => 'อัพเกรด/ดาวน์เกรด plan ได้ไหม?', 'a' => 'ได้ทุกเมื่อในหน้า /photographer/subscription — อัพเกรดเริ่มใช้ทันที + คิดเงินตามสัดส่วนวันที่เหลือ / ดาวน์เกรดมีผลในรอบบิลถัดไป ข้อมูลทั้งหมด (รูป, อีเวนต์, ลูกค้า) ไม่หาย'],
+          ['q' => 'ยกเลิกได้เมื่อไหร่?', 'a' => 'ทุกเมื่อ ในหน้า Subscription กดยกเลิกแล้วใช้งานได้ครบวันสุดท้ายของรอบบิลปัจจุบัน — ไม่ตัดเงินรอบถัดไป Account จะกลับเป็น Free plan อัตโนมัติ ไฟล์ + ลูกค้าอยู่ครบ'],
+          ['q' => 'จ่ายรายปีคุ้มกว่ารายเดือนเท่าไหร่?', 'a' => 'ประหยัดประมาณ 17% (จ่าย 10 เดือนได้ 12 เดือน) — ในหน้านี้กดสลับ "รายเดือน/รายปี" ดูราคาเทียบได้'],
+          ['q' => 'ลูกค้าจ่ายแล้วช่างภาพไม่ส่งรูป รับเงินคืนยังไง?', 'a' => 'ระบบส่งรูปเข้า LINE อัตโนมัติทันทีหลังตรวจสลิปผ่าน — ช่างภาพไม่ต้องส่งเอง หากเกิดปัญหาทางเทคนิค ติดต่อ support ผ่าน LINE หรืออีเมลเพื่อขอคืนเงิน'],
+          ['q' => 'Money-back 30 วัน คืออะไร?', 'a' => 'Plan ที่จ่ายเงินทุก plan (Starter ขึ้นไป) มี policy ใช้แล้วไม่พอใจ ภายใน 30 วันแรกของการสมัครครั้งแรก ขอคืนเงินเต็มจำนวนได้ ไม่ถามคำถาม — ติดต่อทาง LINE OA หรือ email'],
+          ['q' => 'ใช้กับงานประเภทไหนได้?', 'a' => 'ทุกประเภทงาน — งานวิ่ง, รับปริญญา, แต่งงาน, อีเวนต์บริษัท, คอนเสิร์ต, งานเทศกาล (สงกรานต์/ลอยกระทง) ตั้ง pricing ต่อรูป + เปิด AI Face Search ได้ทันทีหลังอัพโหลด'],
         ];
       @endphp
       @foreach($faqs as $i => $faq)
@@ -318,7 +406,7 @@
     <div class="rounded-2xl bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 dark:from-indigo-700 dark:via-violet-700 dark:to-fuchsia-700 p-8 sm:p-10 text-center shadow-2xl shadow-indigo-500/30">
       <h2 class="text-2xl sm:text-3xl font-extrabold text-white mb-3">พร้อมเริ่มแล้วใช่ไหม?</h2>
       <p class="text-white/85 mb-6 max-w-xl mx-auto">
-        ลงทะเบียนช่างภาพในไม่ถึง 5 นาที — ฟรี 60 วัน ไม่ต้องใช้บัตรเครดิต
+        ลงทะเบียนช่างภาพในไม่ถึง 5 นาที — เริ่มฟรีตลอดชีพ ไม่ใช้บัตรเครดิต
       </p>
       <div class="flex flex-wrap items-center justify-center gap-3">
         <a href="{{ route('photographer-onboarding.quick') }}" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold text-indigo-700 bg-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all">

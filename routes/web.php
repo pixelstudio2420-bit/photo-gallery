@@ -2057,9 +2057,11 @@ Route::prefix('photographer')->name('photographer.')->group(function () {
             Route::delete('/logo', [\App\Http\Controllers\Photographer\BrandingController::class, 'removeLogo'])->name('logo.remove');
         });
 
-        // API Keys (Studio) — DEPRECATED for MVP.
-        // Gated by `feature.global:api_access`; flip in Admin → Feature
-        // Flags to restore. Underlying ApiKey model + middleware kept.
+        // API Keys (Studio plan) — production-ready as of 2026-05-04.
+        // Photographer can create / list / revoke Bearer tokens scoped
+        // to their own data. Endpoints documented at /api/docs.
+        // Gated by `feature.global:api_access`; admin can flip off at
+        // /admin/features for incident response.
         Route::prefix('api-keys')->name('api-keys.')->middleware('feature.global:api_access')->group(function () {
             Route::get('/',           [\App\Http\Controllers\Photographer\ApiKeyController::class, 'index'])->name('index');
             Route::post('/',          [\App\Http\Controllers\Photographer\ApiKeyController::class, 'create'])->name('create')->middleware('rate.limit:10,1');

@@ -61,57 +61,48 @@ Route::prefix('webhooks')->group(function () {
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// Photographer Public API (Studio plan only)
+// Photographer Public API v1
 // ─────────────────────────────────────────────────────────────────────
 //
-// Bearer-authenticated read API for photographers' own data. Useful for
-// integrating with their own apps, slideshow displays, or external CRMs.
-// Subscription-gated via the photographer.api middleware which checks
-// the api_access feature flag on the photographer's plan.
+// Bearer-authenticated read API for photographers' own data — pulls
+// events, photos, orders, and aggregate stats. Useful for slideshow
+// displays, external CRMs, or studio dashboards.
 //
-// All routes are scoped to the authenticated photographer — they can
-// never see another photographer's events/photos/orders.
+// Auth flow:
+//   1. Photographer creates a key in /photographer/api-keys
+//   2. Token format `pgk_<48 hex chars>` shown ONCE at create time
+//   3. Caller sends `Authorization: Bearer pgk_…` on each request
+//   4. `photographer.api` middleware verifies via bcrypt(token_hash)
+//      and checks the photographer's plan still includes `api_access`
+//
+// Throttling:
+//   - 60 requests per minute per IP at the network edge (`throttle:60,1`)
+//   - Future: per-key bucket via custom RateLimiter::for() — see
+//     AppServiceProvider::boot for the bucket definition
+//
+// All endpoints scoped to the authenticated photographer — cross-tenant
+// data access is impossible because every query filters by
+// `photographer_id = $profile->user_id`.
+//
+// Documented in OpenAPI at /api/docs/spec.json (auto-generated from
+// ApiDocumentationService::build).
 Route::prefix('v1/photographer')
-    ->middleware('photographer.api')
+    ->middleware(['photographer.api', 'throttle:photographer-api'])
     ->name('api.photographer.')
     ->group(function () {
-        Route::get('/me', function (\Illuminate\Http\Request $r) {
-            $profile = $r->attributes->get('photographer_profile');
-            return response()->json([
-                'success' => true,
-                'data'    => [
-                    'photographer_id' => $profile->user_id,
-                    'display_name'    => $profile->display_name,
-                    'plan'            => $profile->subscription_plan_code,
-                    'storage_used_bytes' => (int) $profile->storage_used_bytes,
-                    'storage_quota_bytes' => (int) $profile->storage_quota_bytes,
-                ],
-            ]);
-        })->name('me');
+        $c = \App\Http\Controllers\Api\V1\PhotographerApiController::class;
 
-        Route::get('/events', function (\Illuminate\Http\Request $r) {
-            $profile = $r->attributes->get('photographer_profile');
-            $events = \App\Models\Event::where('photographer_id', $profile->user_id)
-                ->orderByDesc('created_at')
-                ->limit(min(100, (int) $r->query('limit', 50)))
-                ->get(['id','name','slug','status','price_per_photo','shoot_date','view_count','created_at']);
-            return response()->json(['success' => true, 'data' => $events]);
-        })->name('events');
+        Route::get('/me',                       [$c, 'me'])->name('me');
+        Route::get('/stats',                    [$c, 'stats'])->name('stats');
 
-        Route::get('/events/{event}/photos', function (\Illuminate\Http\Request $r, int $event) {
-            $profile = $r->attributes->get('photographer_profile');
-            $ev = \App\Models\Event::where('id', $event)
-                ->where('photographer_id', $profile->user_id)
-                ->first();
-            if (!$ev) {
-                return response()->json(['success' => false, 'message' => 'Event not found'], 404);
-            }
-            $photos = \App\Models\EventPhoto::where('event_id', $event)
-                ->orderBy('sort_order')
-                ->limit(min(500, (int) $r->query('limit', 100)))
-                ->get(['id','filename','file_size','width','height','quality_score','ai_tags','created_at']);
-            return response()->json(['success' => true, 'data' => $photos]);
-        })->name('events.photos');
+        Route::get('/events',                   [$c, 'events'])->name('events');
+        Route::get('/events/{event}',           [$c, 'eventShow'])->where('event', '[0-9]+')->name('events.show');
+        Route::get('/events/{event}/photos',    [$c, 'eventPhotos'])->where('event', '[0-9]+')->name('events.photos');
+
+        Route::get('/photos/{photo}',           [$c, 'photoShow'])->where('photo', '[0-9]+')->name('photos.show');
+
+        Route::get('/orders',                   [$c, 'orders'])->name('orders');
+        Route::get('/orders/{order}',           [$c, 'orderShow'])->where('order', '[0-9]+')->name('orders.show');
     });
 
 // Admin API — notification routes are in web.php (need session for admin guard)

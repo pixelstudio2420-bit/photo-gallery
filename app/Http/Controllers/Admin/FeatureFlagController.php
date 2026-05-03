@@ -87,7 +87,7 @@ class FeatureFlagController extends Controller
         'sla_99_99'           => ['SLA 99.99% uptime (Studio plan)', 'platform'],
         'dedicated_csm'       => ['Dedicated CSM (Studio plan)', 'platform'],
         'team_seats'          => ['Team Members / Business 3 · Studio 10 (deprecated)', 'platform'],
-        'api_access'          => ['Public API / Studio plan (deprecated)', 'platform'],
+        'api_access'          => ['Public API (v1 — Bearer tokens)', 'platform'],
         'chatbot'             => ['AI Chatbot widget (deprecated)', 'platform'],
     ];
 
@@ -103,7 +103,11 @@ class FeatureFlagController extends Controller
         'smart_captions',
         'video_thumbnails',
         'team_seats',
-        'api_access',
+        // 'api_access' was previously in this list (gated for MVP).
+        // Promoted to a regular platform feature on 2026-05-04 once the
+        // /api/v1/photographer/* endpoints landed in V1\PhotographerApiController.
+        // Default is now '1' (on) so fresh installs pick it up; admins
+        // can still flip it off at /admin/features for incident response.
         'chatbot',
         // 'chat' is opt-in (default OFF) but NOT deprecated — admin
         // simply enables it from this page when ready. Listed here so

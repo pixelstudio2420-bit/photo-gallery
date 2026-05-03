@@ -123,6 +123,7 @@ MD;
     private function getTags(): array
     {
         return [
+            ['name' => 'Photographer API v1', 'description' => 'Bearer-authenticated read API for a photographer\'s own events, photos, orders, and stats. 60 req/min per key. Studio plan (or any plan with `api_access` feature flag).'],
             ['name' => 'Authentication',  'description' => 'Login, register, password reset'],
             ['name' => 'Cart',            'description' => 'Shopping cart operations'],
             ['name' => 'Wishlist',        'description' => 'User wishlist management'],
@@ -158,6 +159,12 @@ MD;
                 'in'   => 'header',
                 'name' => 'X-API-Key',
                 'description' => 'Admin-generated API key',
+            ],
+            'photographerBearer' => [
+                'type' => 'http',
+                'scheme' => 'bearer',
+                'bearerFormat' => 'pgk_<48 hex chars>',
+                'description' => 'Photographer-scoped Bearer token. Created at /photographer/api-keys (Studio plan or any plan with `api_access` feature). Send as `Authorization: Bearer pgk_…`.',
             ],
             'csrfToken' => [
                 'type' => 'apiKey',
@@ -360,6 +367,7 @@ MD;
     private function getPaths(): array
     {
         return array_merge(
+            $this->photographerApiPaths(),  // Bearer-authed v1 photographer API
             $this->notificationPaths(),
             $this->cartPaths(),
             $this->wishlistPaths(),
@@ -373,6 +381,196 @@ MD;
             $this->blogPaths(),
             $this->webhookPaths()
         );
+    }
+
+    /**
+     * Photographer API v1 — Bearer token authenticated, scope-gated.
+     *
+     * All endpoints share:
+     *   - Auth: `Authorization: Bearer pgk_<48 hex chars>`
+     *   - Tags: `Photographer API v1`
+     *   - 401 on missing/invalid token, 403 on scope mismatch, 404 on
+     *     entity not owned by the token's photographer, 429 on rate
+     *     limit (60/min per token).
+     */
+    private function photographerApiPaths(): array
+    {
+        $tag       = 'Photographer API v1';
+        $bearer    = [['photographerBearer' => []]];
+        $errors    = [
+            '401' => ['$ref' => '#/components/responses/Unauthorized'],
+            '403' => ['description' => 'Insufficient scope or plan does not include api_access',
+                      'content' => ['application/json' => ['example' => ['success' => false, 'error' => 'insufficient_scope', 'required_scope' => 'orders:read']]]],
+            '404' => ['description' => 'Resource not found or not owned by this photographer',
+                      'content' => ['application/json' => ['example' => ['success' => false, 'error' => 'event_not_found']]]],
+            '429' => ['description' => 'Rate limit exceeded — 60 requests/minute per API key'],
+        ];
+
+        return [
+            '/api/v1/photographer/me' => [
+                'get' => [
+                    'tags' => [$tag],
+                    'summary' => 'Authenticated photographer profile + key metadata',
+                    'description' => 'Returns the photographer that owns the API key, their plan, storage usage, and the API key metadata (label, prefix, scopes).',
+                    'security' => $bearer,
+                    'responses' => array_merge([
+                        '200' => ['description' => 'Photographer profile', 'content' => ['application/json' => ['example' => [
+                            'success' => true,
+                            'data' => [
+                                'photographer_id' => 42,
+                                'display_name'    => 'Rin Photography',
+                                'plan'            => 'pro',
+                                'commission_rate' => 0.0,
+                                'storage_used_bytes'  => 12_500_000_000,
+                                'storage_quota_bytes' => 107_374_182_400,
+                                'storage_used_pct'    => 11.64,
+                                'api_key' => [
+                                    'label'        => 'Slideshow display',
+                                    'token_prefix' => 'pgk_a3b9',
+                                    'scopes'       => ['events:read', 'photos:read'],
+                                    'last_used_at' => '2026-05-04T08:32:00+07:00',
+                                ],
+                            ],
+                        ]]]],
+                    ], $errors),
+                ],
+            ],
+            '/api/v1/photographer/stats' => [
+                'get' => [
+                    'tags' => [$tag],
+                    'summary' => 'Aggregate dashboard stats',
+                    'description' => 'Total events, photo count, paid order count + sum, pending orders, storage usage. Useful for external dashboards / Slack bots / studio displays. Requires `stats:read` scope.',
+                    'security' => $bearer,
+                    'responses' => array_merge([
+                        '200' => ['description' => 'Stats snapshot', 'content' => ['application/json' => ['example' => [
+                            'success' => true,
+                            'data' => [
+                                'photographer_id' => 42,
+                                'events'  => ['total' => 38, 'active' => 12],
+                                'photos'  => ['total' => 18234],
+                                'orders'  => ['paid_count' => 89, 'paid_total_thb' => 47800.0, 'pending_count' => 3],
+                                'storage' => ['used_bytes' => 12_500_000_000, 'quota_bytes' => 107_374_182_400, 'used_pct' => 11.64],
+                                'plan'    => ['code' => 'pro', 'commission_rate' => 0.0],
+                                'generated_at' => '2026-05-04T08:32:00+07:00',
+                            ],
+                        ]]]],
+                    ], $errors),
+                ],
+            ],
+            '/api/v1/photographer/events' => [
+                'get' => [
+                    'tags' => [$tag],
+                    'summary' => 'List events (paginated)',
+                    'description' => 'Returns events owned by the API key\'s photographer. Requires `events:read` scope.',
+                    'security' => $bearer,
+                    'parameters' => [
+                        ['name' => 'limit', 'in' => 'query', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100, 'default' => 50]],
+                        ['name' => 'page', 'in' => 'query', 'schema' => ['type' => 'integer', 'minimum' => 1, 'default' => 1]],
+                        ['name' => 'status', 'in' => 'query', 'schema' => ['type' => 'string', 'enum' => ['draft','active','published','closed']]],
+                        ['name' => 'q', 'in' => 'query', 'description' => 'Substring match on name + slug', 'schema' => ['type' => 'string']],
+                    ],
+                    'responses' => array_merge([
+                        '200' => ['description' => 'Event list', 'content' => ['application/json' => ['example' => [
+                            'success' => true,
+                            'data' => [
+                                ['id' => 101, 'name' => 'Marathon BKK 2026', 'slug' => 'marathon-bkk-2026', 'status' => 'published', 'price_per_photo' => 89, 'shoot_date' => '2026-04-12', 'view_count' => 1284, 'photo_count' => 1245, 'created_at' => '2026-04-10T10:00:00+07:00'],
+                            ],
+                            'meta' => ['page' => 1, 'per_page' => 50, 'total' => 38],
+                        ]]]],
+                    ], $errors),
+                ],
+            ],
+            '/api/v1/photographer/events/{event}' => [
+                'get' => [
+                    'tags' => [$tag],
+                    'summary' => 'Get one event',
+                    'security' => $bearer,
+                    'parameters' => [
+                        ['name' => 'event', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'integer']],
+                    ],
+                    'responses' => array_merge([
+                        '200' => ['description' => 'Event detail', 'content' => ['application/json' => ['example' => [
+                            'success' => true,
+                            'data' => ['id' => 101, 'name' => 'Marathon BKK 2026', 'slug' => 'marathon-bkk-2026', 'description' => '...', 'status' => 'published', 'visibility' => 'public', 'price_per_photo' => 89.0, 'shoot_date' => '2026-04-12T00:00:00+07:00', 'view_count' => 1284, 'photo_count' => 1245],
+                        ]]]],
+                    ], $errors),
+                ],
+            ],
+            '/api/v1/photographer/events/{event}/photos' => [
+                'get' => [
+                    'tags' => [$tag],
+                    'summary' => 'List photos for an event (paginated)',
+                    'description' => 'Photos belonging to one of the photographer\'s events. Requires `photos:read` scope.',
+                    'security' => $bearer,
+                    'parameters' => [
+                        ['name' => 'event', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'integer']],
+                        ['name' => 'limit', 'in' => 'query', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 500, 'default' => 100]],
+                        ['name' => 'page', 'in' => 'query', 'schema' => ['type' => 'integer', 'minimum' => 1, 'default' => 1]],
+                    ],
+                    'responses' => array_merge([
+                        '200' => ['description' => 'Photo list', 'content' => ['application/json' => ['example' => [
+                            'success' => true,
+                            'data' => [
+                                ['id' => 5001, 'event_id' => 101, 'filename' => 'IMG_3421.jpg', 'file_size' => 4_521_600, 'width' => 6000, 'height' => 4000, 'quality_score' => 0.87, 'best_shot_score' => 0.92, 'face_count' => 3, 'caption' => null, 'sort_order' => 0, 'created_at' => '2026-04-12T14:30:00+07:00'],
+                            ],
+                            'meta' => ['page' => 1, 'per_page' => 100, 'total' => 1245],
+                        ]]]],
+                    ], $errors),
+                ],
+            ],
+            '/api/v1/photographer/photos/{photo}' => [
+                'get' => [
+                    'tags' => [$tag],
+                    'summary' => 'Get one photo by ID (with AI metadata)',
+                    'security' => $bearer,
+                    'parameters' => [
+                        ['name' => 'photo', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'integer']],
+                    ],
+                    'responses' => array_merge([
+                        '200' => ['description' => 'Photo detail with AI metadata', 'content' => ['application/json' => ['example' => [
+                            'success' => true,
+                            'data' => ['id' => 5001, 'event_id' => 101, 'filename' => 'IMG_3421.jpg', 'file_size' => 4521600, 'width' => 6000, 'height' => 4000, 'quality_score' => 0.87, 'best_shot_score' => 0.92, 'face_count' => 3, 'caption' => null, 'ai_tags' => ['running', 'outdoor', 'race-bib'], 'sort_order' => 0, 'status' => 'published'],
+                        ]]]],
+                    ], $errors),
+                ],
+            ],
+            '/api/v1/photographer/orders' => [
+                'get' => [
+                    'tags' => [$tag],
+                    'summary' => 'List orders (paginated)',
+                    'description' => 'Orders for events owned by this photographer. Requires `orders:read` scope.',
+                    'security' => $bearer,
+                    'parameters' => [
+                        ['name' => 'limit', 'in' => 'query', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100, 'default' => 50]],
+                        ['name' => 'page', 'in' => 'query', 'schema' => ['type' => 'integer', 'minimum' => 1, 'default' => 1]],
+                        ['name' => 'status', 'in' => 'query', 'schema' => ['type' => 'string', 'enum' => ['paid','pending','cancelled','refunded']]],
+                        ['name' => 'event_id', 'in' => 'query', 'schema' => ['type' => 'integer']],
+                    ],
+                    'responses' => array_merge([
+                        '200' => ['description' => 'Order list', 'content' => ['application/json' => ['example' => [
+                            'success' => true,
+                            'data' => [
+                                ['id' => 9001, 'order_number' => 'ORD-9001', 'event_id' => 101, 'event_name' => 'Marathon BKK 2026', 'user_id' => 12345, 'total' => 178.0, 'subtotal' => 178.0, 'discount_amount' => 0, 'status' => 'paid', 'delivery_method' => 'line', 'delivery_status' => 'delivered', 'paid_at' => '2026-04-15T19:22:00+07:00', 'delivered_at' => '2026-04-15T19:22:31+07:00', 'created_at' => '2026-04-15T19:20:00+07:00'],
+                            ],
+                            'meta' => ['page' => 1, 'per_page' => 50, 'total' => 89],
+                        ]]]],
+                    ], $errors),
+                ],
+            ],
+            '/api/v1/photographer/orders/{order}' => [
+                'get' => [
+                    'tags' => [$tag],
+                    'summary' => 'Get one order with line items',
+                    'security' => $bearer,
+                    'parameters' => [
+                        ['name' => 'order', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'integer']],
+                    ],
+                    'responses' => array_merge([
+                        '200' => ['description' => 'Order detail with up to 50 line items'],
+                    ], $errors),
+                ],
+            ],
+        ];
     }
 
     // ─── Path Groups ─────────────────────────────────────────────────────
