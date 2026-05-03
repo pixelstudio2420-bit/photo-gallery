@@ -155,74 +155,150 @@ document.addEventListener('alpine:init', () => {
                     },
                 },
                 onUpdate: ({ editor }) => {
-                    this.refreshState();
+                    this.scheduleRefresh();
                     this.onChange(editor.getHTML());
                 },
-                onSelectionUpdate: () => this.refreshState(),
-                onTransaction: () => this.refreshState(),
+                onSelectionUpdate: () => this.scheduleRefresh(),
+                onTransaction:     () => this.scheduleRefresh(),
             });
 
             this.refreshState();
         },
 
-        /** Snapshot which marks/nodes are active so toolbar buttons can highlight */
-        refreshState() {
-            if (!this.editor) return;
-            const e = this.editor;
-            this.state = {
-                bold:        e.isActive('bold'),
-                italic:      e.isActive('italic'),
-                underline:   e.isActive('underline'),
-                strike:      e.isActive('strike'),
-                code:        e.isActive('code'),
-                highlight:   e.isActive('highlight'),
-                subscript:   e.isActive('subscript'),
-                superscript: e.isActive('superscript'),
-                h2:          e.isActive('heading', { level: 2 }),
-                h3:          e.isActive('heading', { level: 3 }),
-                h4:          e.isActive('heading', { level: 4 }),
-                paragraph:   e.isActive('paragraph'),
-                bulletList:  e.isActive('bulletList'),
-                orderedList: e.isActive('orderedList'),
-                taskList:    e.isActive('taskList'),
-                blockquote:  e.isActive('blockquote'),
-                codeBlock:   e.isActive('codeBlock'),
-                link:        e.isActive('link'),
-                table:       e.isActive('table'),
-                alignLeft:   e.isActive({ textAlign: 'left' }),
-                alignCenter: e.isActive({ textAlign: 'center' }),
-                alignRight:  e.isActive({ textAlign: 'right' }),
-            };
-            this.chars = e.storage.characterCount?.characters() ?? 0;
-            this.words = e.storage.characterCount?.words() ?? 0;
+        /**
+         * Defer state-refresh by one microtask.
+         *
+         * ProseMirror dispatches transactions synchronously and the editor
+         * fires `onTransaction` *during* the apply phase. If we read
+         * isActive() at that moment we sometimes see the pre-apply state,
+         * which then becomes "stale" the instant the transaction commits —
+         * leading to a UI checkbox that thinks codeBlock=false right when
+         * the user clicks the button to toggle it off again.
+         *
+         * Deferring with queueMicrotask lets the transaction settle, then
+         * we read a clean view of the document. It also collapses bursts
+         * (typing fires onTransaction per keystroke) into one sync.
+         */
+        scheduleRefresh() {
+            if (this._refreshPending) return;
+            this._refreshPending = true;
+            queueMicrotask(() => {
+                this._refreshPending = false;
+                this.refreshState();
+            });
         },
 
-        /* ─── Command runners ──────────────────────────────────────── */
-        toggleBold()        { this.editor?.chain().focus().toggleBold().run(); },
-        toggleItalic()      { this.editor?.chain().focus().toggleItalic().run(); },
-        toggleUnderline()   { this.editor?.chain().focus().toggleUnderline().run(); },
-        toggleStrike()      { this.editor?.chain().focus().toggleStrike().run(); },
-        toggleCode()        { this.editor?.chain().focus().toggleCode().run(); },
-        toggleHighlight()   { this.editor?.chain().focus().toggleHighlight().run(); },
-        toggleSubscript()   { this.editor?.chain().focus().toggleSubscript().run(); },
-        toggleSuperscript() { this.editor?.chain().focus().toggleSuperscript().run(); },
+        /** Snapshot which marks/nodes are active so toolbar buttons can highlight */
+        refreshState() {
+            const e = this.editor;
+            if (!e || e.isDestroyed) return;
+            try {
+                this.state = {
+                    bold:        e.isActive('bold'),
+                    italic:      e.isActive('italic'),
+                    underline:   e.isActive('underline'),
+                    strike:      e.isActive('strike'),
+                    code:        e.isActive('code'),
+                    highlight:   e.isActive('highlight'),
+                    subscript:   e.isActive('subscript'),
+                    superscript: e.isActive('superscript'),
+                    h2:          e.isActive('heading', { level: 2 }),
+                    h3:          e.isActive('heading', { level: 3 }),
+                    h4:          e.isActive('heading', { level: 4 }),
+                    paragraph:   e.isActive('paragraph'),
+                    bulletList:  e.isActive('bulletList'),
+                    orderedList: e.isActive('orderedList'),
+                    taskList:    e.isActive('taskList'),
+                    blockquote:  e.isActive('blockquote'),
+                    codeBlock:   e.isActive('codeBlock'),
+                    link:        e.isActive('link'),
+                    table:       e.isActive('table'),
+                    alignLeft:   e.isActive({ textAlign: 'left' }),
+                    alignCenter: e.isActive({ textAlign: 'center' }),
+                    alignRight:  e.isActive({ textAlign: 'right' }),
+                };
+                this.chars = e.storage.characterCount?.characters() ?? 0;
+                this.words = e.storage.characterCount?.words() ?? 0;
+            } catch (_) {
+                /* swallow — editor may be mid-destroy */
+            }
+        },
 
-        setH(level)         { this.editor?.chain().focus().toggleHeading({ level }).run(); },
-        setParagraph()      { this.editor?.chain().focus().setParagraph().run(); },
+        /**
+         * Defensive command runner.
+         *
+         * ProseMirror sometimes throws "Applying a mismatched transaction"
+         * when:
+         *   - a command runs against a document the schema rejects (e.g.
+         *     toggleCodeBlock from a list item with active marks),
+         *   - Alpine re-renders mid-dispatch and stale handlers fire,
+         *   - the editor was destroyed by HMR/x-show before we got the click.
+         *
+         * Wrapping every command in try/catch + `isDestroyed` + `can()`
+         * guard turns those into a no-op + a console warning instead of
+         * crashing the whole Alpine component (which freezes the UI).
+         */
+        runCommand(builder) {
+            const e = this.editor;
+            if (!e || e.isDestroyed) return false;
+            try {
+                const chain = e.chain().focus();
+                const built = typeof builder === 'function' ? builder(chain) : null;
+                if (!built) return false;
+                return built.run();
+            } catch (err) {
+                console.warn('[Tiptap] command failed:', err?.message || err);
+                this.scheduleRefresh();
+                return false;
+            }
+        },
 
-        toggleBulletList()  { this.editor?.chain().focus().toggleBulletList().run(); },
-        toggleOrderedList() { this.editor?.chain().focus().toggleOrderedList().run(); },
-        toggleTaskList()    { this.editor?.chain().focus().toggleTaskList().run(); },
+        /* ─── Command runners (all routed through runCommand) ────── */
+        toggleBold()        { this.runCommand(c => c.toggleBold()); },
+        toggleItalic()      { this.runCommand(c => c.toggleItalic()); },
+        toggleUnderline()   { this.runCommand(c => c.toggleUnderline()); },
+        toggleStrike()      { this.runCommand(c => c.toggleStrike()); },
+        toggleCode()        { this.runCommand(c => c.toggleCode()); },
+        toggleHighlight()   { this.runCommand(c => c.toggleHighlight()); },
+        toggleSubscript()   { this.runCommand(c => c.toggleSubscript()); },
+        toggleSuperscript() { this.runCommand(c => c.toggleSuperscript()); },
 
-        toggleBlockquote()  { this.editor?.chain().focus().toggleBlockquote().run(); },
-        toggleCodeBlock()   { this.editor?.chain().focus().toggleCodeBlock().run(); },
-        insertHr()          { this.editor?.chain().focus().setHorizontalRule().run(); },
-        clearMarks()        { this.editor?.chain().focus().unsetAllMarks().clearNodes().run(); },
+        setH(level)         { this.runCommand(c => c.toggleHeading({ level })); },
+        setParagraph()      { this.runCommand(c => c.setParagraph()); },
 
-        setAlign(dir)       { this.editor?.chain().focus().setTextAlign(dir).run(); },
+        toggleBulletList()  { this.runCommand(c => c.toggleBulletList()); },
+        toggleOrderedList() { this.runCommand(c => c.toggleOrderedList()); },
+        toggleTaskList()    { this.runCommand(c => c.toggleTaskList()); },
 
-        undo()              { this.editor?.chain().focus().undo().run(); },
-        redo()              { this.editor?.chain().focus().redo().run(); },
+        toggleBlockquote()  { this.runCommand(c => c.toggleBlockquote()); },
+
+        // toggleCodeBlock specifically: the cursor must be in a node that
+        // can transform into code_block. From inside a list item or table
+        // cell ProseMirror's `toggleCodeBlock` builds a transaction that
+        // doesn't match the schema → "mismatched transaction". Strip
+        // marks and lift out of any wrapping nodes first; only attempt
+        // the toggle if the resulting state can host a codeBlock.
+        toggleCodeBlock() {
+            this.runCommand(c => {
+                const e = this.editor;
+                if (!e) return null;
+                // If we're already in a codeBlock, just toggle it off.
+                if (e.isActive('codeBlock')) {
+                    return c.toggleCodeBlock();
+                }
+                // Otherwise: clear marks first so the resulting codeBlock
+                // doesn't carry illegal inline marks (link/highlight/etc.)
+                return c.unsetAllMarks().setCodeBlock();
+            });
+        },
+
+        insertHr()          { this.runCommand(c => c.setHorizontalRule()); },
+        clearMarks()        { this.runCommand(c => c.unsetAllMarks().clearNodes()); },
+
+        setAlign(dir)       { this.runCommand(c => c.setTextAlign(dir)); },
+
+        undo()              { this.runCommand(c => c.undo()); },
+        redo()              { this.runCommand(c => c.redo()); },
 
         /* ─── Link handling ─────────────────────────────────────────── */
         openLinkPicker() {
@@ -236,18 +312,20 @@ document.addEventListener('alpine:init', () => {
         applyLink() {
             const url = (this.linkUrl || '').trim();
             if (!url) {
-                this.editor?.chain().focus().extendMarkRange('link').unsetLink().run();
+                this.runCommand(c => c.extendMarkRange('link').unsetLink());
             } else {
                 // Normalize: prepend https:// if user just types example.com
                 const safe = /^(https?:\/\/|\/|mailto:|tel:)/.test(url) ? url : `https://${url}`;
-                if (this.linkText && this.editor.state.selection.empty) {
-                    this.editor?.chain().focus().insertContent({
+                const e = this.editor;
+                const empty = e?.state?.selection?.empty;
+                if (this.linkText && empty) {
+                    this.runCommand(c => c.insertContent({
                         type: 'text',
                         text: this.linkText,
                         marks: [{ type: 'link', attrs: { href: safe } }],
-                    }).run();
+                    }));
                 } else {
-                    this.editor?.chain().focus().extendMarkRange('link').setLink({ href: safe, target: '_blank' }).run();
+                    this.runCommand(c => c.extendMarkRange('link').setLink({ href: safe, target: '_blank' }));
                 }
             }
             this.linkPickerOpen = false;
@@ -255,7 +333,7 @@ document.addEventListener('alpine:init', () => {
             this.linkText = '';
         },
         removeLink() {
-            this.editor?.chain().focus().extendMarkRange('link').unsetLink().run();
+            this.runCommand(c => c.extendMarkRange('link').unsetLink());
             this.linkPickerOpen = false;
         },
 
@@ -268,7 +346,7 @@ document.addEventListener('alpine:init', () => {
         applyImageUrl() {
             const url = (this.imageUrlInput || '').trim();
             if (!url) return;
-            this.editor?.chain().focus().setImage({ src: url, alt: this.imageAltInput || '' }).run();
+            this.runCommand(c => c.setImage({ src: url, alt: this.imageAltInput || '' }));
             this.imagePickerOpen = false;
         },
         triggerImageFile() {
@@ -302,7 +380,7 @@ document.addEventListener('alpine:init', () => {
                 if (!response.ok || !data.success) {
                     throw new Error(data.error || 'อัพโหลดล้มเหลว');
                 }
-                this.editor?.chain().focus().setImage({ src: data.url, alt: file.name.replace(/\.[^.]+$/, '') }).run();
+                this.runCommand(c => c.setImage({ src: data.url, alt: file.name.replace(/\.[^.]+$/, '') }));
                 this.imagePickerOpen = false;
             } catch (err) {
                 if (window.Swal) {
@@ -316,14 +394,12 @@ document.addEventListener('alpine:init', () => {
         },
 
         /* ─── Tables ───────────────────────────────────────────────── */
-        insertTable() {
-            this.editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
-        },
-        addColumnAfter()  { this.editor?.chain().focus().addColumnAfter().run(); },
-        addRowAfter()     { this.editor?.chain().focus().addRowAfter().run(); },
-        deleteColumn()    { this.editor?.chain().focus().deleteColumn().run(); },
-        deleteRow()       { this.editor?.chain().focus().deleteRow().run(); },
-        deleteTable()     { this.editor?.chain().focus().deleteTable().run(); },
+        insertTable()     { this.runCommand(c => c.insertTable({ rows: 3, cols: 3, withHeaderRow: true })); },
+        addColumnAfter()  { this.runCommand(c => c.addColumnAfter()); },
+        addRowAfter()     { this.runCommand(c => c.addRowAfter()); },
+        deleteColumn()    { this.runCommand(c => c.deleteColumn()); },
+        deleteRow()       { this.runCommand(c => c.deleteRow()); },
+        deleteTable()     { this.runCommand(c => c.deleteTable()); },
 
         /* ─── YouTube embed ─────────────────────────────────────────── */
         openYoutube() {
@@ -333,19 +409,28 @@ document.addEventListener('alpine:init', () => {
         applyYoutube() {
             const url = (this.ytUrl || '').trim();
             if (!url) { this.ytPickerOpen = false; return; }
-            this.editor?.chain().focus().setYoutubeVideo({ src: url }).run();
+            this.runCommand(c => c.setYoutubeVideo({ src: url }));
             this.ytPickerOpen = false;
         },
 
         /* ─── Public API for parent (AI insert, programmatic set) ──── */
         getHTML()      { return this.editor?.getHTML() ?? ''; },
-        setHTML(html)  { this.editor?.commands.setContent(html || '<p></p>', true); this.refreshState(); },
-        appendHTML(html) {
-            if (!this.editor) return;
-            this.editor.chain().focus('end').insertContent(html).run();
-            this.refreshState();
+        setHTML(html)  {
+            const e = this.editor;
+            if (!e || e.isDestroyed) return;
+            try { e.commands.setContent(html || '<p></p>', true); }
+            catch (err) { console.warn('[Tiptap] setHTML failed:', err?.message); }
+            this.scheduleRefresh();
         },
-        focus()        { this.editor?.commands.focus(); },
+        appendHTML(html) {
+            this.runCommand(c => c.insertContentAt(this.editor.state.doc.content.size, html));
+        },
+        focus() {
+            const e = this.editor;
+            if (!e || e.isDestroyed) return;
+            try { e.commands.focus(); }
+            catch (_) { /* no-op */ }
+        },
 
         /* ─── Cleanup ──────────────────────────────────────────────── */
         destroyEditor() {
