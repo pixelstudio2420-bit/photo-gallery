@@ -167,13 +167,27 @@ class ProfileController extends Controller
         $user = Auth::user();
 
         $validated = $request->validate([
-            'first_name' => 'required|string|max:100',
-            'last_name'  => 'nullable|string|max:100',
-            'email'      => 'required|email|unique:auth_users,email,' . $user->id,
-            'phone'      => 'nullable|string|max:20',
+            'first_name'  => 'required|string|max:100',
+            'last_name'   => 'nullable|string|max:100',
+            'email'       => 'required|email|unique:auth_users,email,' . $user->id,
+            'phone'       => 'nullable|string|max:20',
+            // Province for geo-targeting (announcements + festivals + new
+            // event broadcasts). nullable = "ไม่ระบุ" — user opts out
+            // of geo-personalisation but doesn't lose the rest of profile.
+            'province_id' => 'nullable|integer|exists:thai_provinces,id',
         ]);
 
+        // Coerce empty string → null so DB stores NULL not 0
+        $validated['province_id'] = $validated['province_id'] ?: null;
+
         $user->update($validated);
+
+        // Bust geo-targeted popup caches so the user immediately sees
+        // their new province's announcements/festivals on next page load.
+        try {
+            \Illuminate\Support\Facades\Cache::forget('announce_popup_user_' . $user->id);
+            app(\App\Services\FestivalThemeService::class)->bustUserCache($user->id);
+        } catch (\Throwable) { /* cache failure is non-fatal */ }
 
         return back()->with('success', 'อัพเดทโปรไฟล์สำเร็จ');
     }

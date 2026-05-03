@@ -194,6 +194,24 @@
                 <input type="password" name="password_confirmation" required minlength="8" class="w-full px-4 py-2.5 border border-gray-200 dark:border-white/10 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white dark:bg-slate-800 dark:text-gray-100">
               </div>
             </div>
+
+            {{-- Optional province for geo-personalisation. Skipping is
+                 totally fine — user gets nationwide content + can set
+                 it later in profile. We frame it as a perk, not a
+                 requirement, so signup stays one-screen. --}}
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1.5">
+                <i class="bi bi-geo-alt mr-1 text-slate-400"></i>
+                จังหวัด
+                <span class="text-[11px] font-normal text-slate-400 ml-1">(ไม่บังคับ — ใช้รับ popup กิจกรรมในพื้นที่)</span>
+              </label>
+              @include('partials.province-select', [
+                  'name'        => 'province_id',
+                  'selected'    => old('province_id'),
+                  'placeholder' => '— ข้ามไปก่อนได้ —',
+              ])
+            </div>
+
             <button type="submit" class="w-full py-3 font-semibold text-white rounded-xl transition hover:opacity-95"
               style="background:linear-gradient(135deg,#6366f1,#4f46e5);">
               <i class="bi bi-person-plus mr-1"></i> สมัครด้วยอีเมล

@@ -273,6 +273,12 @@ class AnnouncementController extends Controller
             'cta_label'  => 'nullable|string|max:60',
             'cta_url'    => 'nullable|url|max:500',
             'cover_image'  => 'nullable|image|max:5120',   // 5MB
+
+            // Geo + popup (added in Phase 4 — see GeoEventBroadcastService
+            // for how the popup partial uses these fields). Nullable so
+            // existing announcements without geo data still validate.
+            'show_as_popup'      => 'nullable|boolean',
+            'target_province_id' => 'nullable|integer|exists:thai_provinces,id',
         ];
 
         // Slug uniqueness — exclude self on edit so admin can save without
@@ -291,7 +297,13 @@ class AnnouncementController extends Controller
                 $validated[$f] = null;
             }
         }
-        $validated['is_pinned'] = $request->boolean('is_pinned');
+        $validated['is_pinned']     = $request->boolean('is_pinned');
+        $validated['show_as_popup'] = $request->boolean('show_as_popup');
+        // Coerce empty string → null for the foreign key so we don't
+        // hit a 0-doesn't-exist FK violation
+        if (empty($validated['target_province_id'])) {
+            $validated['target_province_id'] = null;
+        }
 
         // Cover/upload + remove flags are handled in store/update directly
         unset($validated['cover_image']);

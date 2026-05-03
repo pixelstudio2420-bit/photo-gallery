@@ -77,6 +77,25 @@
               <input type="tel" name="phone" value="{{ old('phone', $user->phone) }}"
                      class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
             </div>
+
+            {{-- Province — drives geo-targeting (announcements, festivals,
+                 new-event popups for users in your area). Optional —
+                 leave blank to receive nationwide messages only. --}}
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                <i class="bi bi-geo-alt mr-1 text-slate-400"></i> จังหวัด
+                <span class="text-[10px] font-normal text-slate-400 ml-1">(เพื่อรับข้อมูลกิจกรรมในพื้นที่)</span>
+              </label>
+              @include('partials.province-select', [
+                  'name'     => 'province_id',
+                  'selected' => old('province_id', $user->province_id ?? null),
+              ])
+              <p class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                <i class="bi bi-info-circle"></i>
+                ตั้งจังหวัดเพื่อรับ popup กิจกรรม/อีเวนต์ใหม่ในพื้นที่ของคุณก่อนใคร
+              </p>
+            </div>
+
             <button type="submit"
                     class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold shadow-md hover:shadow-lg transition-all">
               <i class="bi bi-check-lg"></i> บันทึกการเปลี่ยนแปลง

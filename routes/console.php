@@ -178,6 +178,19 @@ Schedule::command('carts:cleanup --days=30')
     ->at('04:00')
     ->withoutOverlapping();
 
+// ── Per-province weekly email digest ──────────────────────────────
+// Runs Monday 09:00 — Thai consumer "after coffee, before lunch"
+// open-rate window. Sends each user a digest of:
+//   • Active festivals (next 14 days)
+//   • New events in their province (past 7 days)
+//   • Province-targeted announcements (past 7 days)
+// Empty digests are auto-skipped so users don't get "here's nothing
+// new!" emails. withoutOverlapping protects against cron double-fire.
+Schedule::command('digest:send-weekly')
+    ->weeklyOn(1, '09:00')   // 1 = Monday
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Warn photographers 24h before their events are auto-deleted.
 // Runs FIRST (02:00) so warnings are sent before the purge at 02:30.
 // No-ops silently if retention_warning_enabled=0.

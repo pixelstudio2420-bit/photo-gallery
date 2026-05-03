@@ -5,7 +5,9 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 class User extends Authenticatable
 {
     protected $table = 'auth_users';
-    protected $fillable = ['username','first_name','last_name','email','password_hash','phone','avatar','auth_provider','provider_id','status','email_verified','email_verified_at','last_login_at','login_count'];
+    protected $fillable = ['username','first_name','last_name','email','password_hash','phone','avatar','auth_provider','provider_id','status','email_verified','email_verified_at','last_login_at','login_count',
+        // Geo for personalised popups + email digest (Phase 4)
+        'province_id','district_id','subdistrict_id'];
     protected $hidden = ['password_hash'];
     protected $casts = ['email_verified'=>'boolean','email_verified_at'=>'datetime','last_login_at'=>'datetime','created_at'=>'datetime','updated_at'=>'datetime'];
 

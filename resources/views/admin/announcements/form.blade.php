@@ -152,6 +152,32 @@
                         <label class="form-check-label" for="isPinned">📌 ปักหมุดบนสุด</label>
                     </div>
 
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="show_as_popup" value="1" id="showAsPopup"
+                               @checked(old('show_as_popup', $announcement->show_as_popup ?? false))>
+                        <label class="form-check-label" for="showAsPopup">
+                            🎯 แสดงเป็น popup
+                            <small class="text-muted d-block">ปกติ = แสดงในรายการ. ติ๊กถ้าอยากให้เด้ง popup กลางจอ</small>
+                        </label>
+                    </div>
+
+                    <hr>
+
+                    {{-- Geo targeting — pick a province to limit popup audience to
+                         users with that province_id. Leave blank = nationwide. --}}
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="bi bi-geo-alt"></i> จำกัดเฉพาะจังหวัด
+                            <small class="text-muted d-block">เว้นว่าง = แสดงทั่วประเทศ</small>
+                        </label>
+                        @include('partials.province-select', [
+                            'name'        => 'target_province_id',
+                            'selected'    => old('target_province_id', $announcement->target_province_id ?? null),
+                            'placeholder' => '— ทั่วประเทศ —',
+                            'class'       => 'form-select',
+                        ])
+                    </div>
+
                     <hr>
 
                     <div class="mb-3">

@@ -50,13 +50,17 @@ class Announcement extends Model
         'status', 'starts_at', 'ends_at', 'is_pinned',
         'created_by_admin_id', 'updated_by_admin_id',
         'view_count',
+        // Geo targeting + popup display (Phase 4 — backed by columns
+        // added in 2026_05_03_030000_add_location_to_users_and_announcements)
+        'show_as_popup', 'target_province_id', 'target_district_id', 'target_subdistrict_id',
     ];
 
     protected $casts = [
-        'starts_at' => 'datetime',
-        'ends_at'   => 'datetime',
-        'is_pinned' => 'boolean',
-        'view_count' => 'integer',
+        'starts_at'     => 'datetime',
+        'ends_at'       => 'datetime',
+        'is_pinned'     => 'boolean',
+        'show_as_popup' => 'boolean',
+        'view_count'    => 'integer',
     ];
 
     public function attachments(): HasMany

@@ -104,6 +104,10 @@ class AuthController extends Controller
             // Optional device fingerprint hash from the frontend (FingerprintJS / similar).
             // We accept it when provided to tighten anti-abuse — never required.
             'device_fingerprint' => 'nullable|string|size:64',
+            // Optional province for geo-personalisation (Phase 4). Captured
+            // at signup so the user lands on a province-targeted homepage
+            // immediately. They can change it later in profile settings.
+            'province_id' => 'nullable|integer|exists:thai_provinces,id',
         ]);
 
         // ── Anti-abuse gate (Free-tier multi-account protection) ──────────
@@ -146,6 +150,8 @@ class AuthController extends Controller
             'email'         => $request->email,
             'password_hash' => Hash::make($request->password),
             'auth_provider' => 'local',
+            // province_id is optional — null = nationwide messaging
+            'province_id'   => $request->input('province_id') ?: null,
         ]);
 
         // Link the pre-signup signal row to the brand-new user_id so
