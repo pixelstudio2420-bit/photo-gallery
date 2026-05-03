@@ -178,6 +178,38 @@ Schedule::command('carts:cleanup --days=30')
     ->at('04:00')
     ->withoutOverlapping();
 
+// ── Blog: auto-publish scheduled posts ────────────────────────────
+// Runs every minute so posts with status='scheduled' and
+// scheduled_at <= now() flip to 'published' within at most ~60s of
+// their target time. Without this, scheduled posts NEVER auto-publish
+// (admin reported missing this — see BlogPublishScheduledCommand).
+// withoutOverlapping protects against cron double-fire even though
+// the command is itself idempotent.
+Schedule::command('blog:publish-scheduled')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// ── Blog: fetch news from RSS sources ─────────────────────────────
+// Hourly, but the command itself respects each source's
+// fetch_interval_hours so a 24h-interval source isn't hit 24× per day.
+// Skips sources whose last_fetched_at is too recent. Failures are
+// logged in the source row, not surfaced as cron failures.
+Schedule::command('blog:fetch-news')
+    ->hourly()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// ── Blog: refresh-content (SEO maintenance) ───────────────────────
+// Weekly on Wednesday 03:00 — scans posts older than 90 days +
+// requests AI analysis for SEO improvements. Creates BlogAiTask rows
+// for admin review (never auto-applies). --limit=10 caps the cost
+// per run. Skip on Friday so the weekend backup window is clear.
+Schedule::command('blog:refresh-content --days=90 --limit=10')
+    ->weeklyOn(3, '03:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // ── Festival calendar sync ────────────────────────────────────────
 // Runs 1st of month at 04:30 — re-applies canonical dates from the
 // multi-year calendar table. Bumps fixed-date festivals to their
