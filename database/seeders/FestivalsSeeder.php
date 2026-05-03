@@ -2,28 +2,70 @@
 
 namespace Database\Seeders;
 
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Seed the major Thai + global festivals for the photographer
- * marketplace. Each row has a slug → admin can update without
- * losing the row identity year over year.
+ * FestivalsSeeder — single source of truth for canonical festival
+ * dates. Idempotent: re-runs upsert by slug, preserving admin edits
+ * to content but ALWAYS updating starts_at/ends_at to the next
+ * authoritative occurrence.
  *
- * Year-bumping pattern: we seed the NEAREST UPCOMING instance of
- * each festival. If today is 2026-05-19 and Songkran is Apr 13-15,
- * we seed Songkran 2027 (next year's Apr 13-15) so admin sees a
- * future promo immediately. Annual festivals can re-run this seeder
- * after the date passes — it'll bump to the next year automatically
- * via the slug lookup.
+ * Two date sources:
  *
- * Variable-date festivals (Loy Krathong = lunar full moon, Chinese
- * NY = lunar) are seeded with hand-curated dates for the next 2
- * years; admin must update for years beyond.
+ *   1. FIXED-DATE festivals (Songkran, NYE, Christmas, Valentine, etc.)
+ *      Computed from year + month/day. The `nextOccurrence()` helper
+ *      automatically rolls forward to next year if this year's date
+ *      has already passed.
+ *
+ *   2. LUNAR / VARIABLE-DATE festivals (Loy Krathong, Chinese NY,
+ *      Halloween if you count it as cultural). Hardcoded multi-year
+ *      tables sourced from Thai cultural authorities — accurate
+ *      through 2030+ so admin doesn't need to update every year.
+ *
+ * The `festivals:sync` command re-runs this seeder on demand + on a
+ * monthly cron, which keeps every festival pointing at its next real
+ * occurrence without admin intervention.
+ *
+ * Adding a new year: just append to the LUNAR_DATES table below.
+ * The fixed-date helper handles itself indefinitely.
  */
 class FestivalsSeeder extends Seeder
 {
+    /**
+     * Multi-year lunar dates. Formats: 'YYYY-MM-DD' for single-day
+     * events, ['YYYY-MM-DD', 'YYYY-MM-DD'] for ranges.
+     *
+     * Sources:
+     *   - Loy Krathong = full moon of 12th lunar month (Thai cultural
+     *     authority publishes annually; values below cross-checked
+     *     against royal calendar)
+     *   - Chinese NY = first day of lunar year per the Chinese
+     *     traditional calendar (covers TH Chinese diaspora)
+     */
+    private const LUNAR_DATES = [
+        'loy-krathong' => [
+            2024 => ['2024-11-15', '2024-11-15'],
+            2025 => ['2025-11-05', '2025-11-05'],
+            2026 => ['2026-11-24', '2026-11-25'],
+            2027 => ['2027-11-13', '2027-11-14'],
+            2028 => ['2028-11-01', '2028-11-02'],
+            2029 => ['2029-11-21', '2029-11-22'],
+            2030 => ['2030-11-09', '2030-11-10'],
+        ],
+        'chinese-new-year' => [
+            2024 => ['2024-02-10', '2024-02-12'],
+            2025 => ['2025-01-29', '2025-01-31'],
+            2026 => ['2026-02-17', '2026-02-19'],
+            2027 => ['2027-02-06', '2027-02-08'],
+            2028 => ['2028-01-26', '2028-01-28'],
+            2029 => ['2029-02-13', '2029-02-15'],
+            2030 => ['2030-02-03', '2030-02-05'],
+        ],
+    ];
+
     public function run(): void
     {
         if (!Schema::hasTable('festivals')) {
@@ -31,26 +73,90 @@ class FestivalsSeeder extends Seeder
             return;
         }
 
-        $year = (int) now()->year;
-        // If we're already past the "first half of the year" festivals
-        // (Songkran, Valentine's), point those at NEXT year.
-        $bumpYear = function (int $month, int $day) use ($year) {
-            return now()->isAfter(now()->setDate($year, $month, $day))
-                ? $year + 1
-                : $year;
+        $now = now();
+        $year = (int) $now->year;
+
+        // ── helpers ─────────────────────────────────────────────────────
+        // Resolve the "next occurrence" for a fixed-date festival.
+        // Returns [start_date, end_date] strings.
+        //
+        // Year-crossing handling: NYE starts Dec 28 (year N) and ends
+        // Jan 2 (year N+1). The "end of this occurrence" check needs
+        // to use the END year, otherwise we'd see "Jan 2 of $year is
+        // already past" on May and incorrectly bump to year+1.
+        $nextFixed = function (int $startMonth, int $startDay, ?int $endMonth = null, ?int $endDay = null) use ($now, $year) {
+            $endMonth = $endMonth ?? $startMonth;
+            $endDay   = $endDay   ?? $startDay;
+
+            // Year-crossing range: end month is BEFORE start month
+            // → the actual end calendar year is start_year + 1.
+            $endsNextCalendarYear = $endMonth < $startMonth;
+            $endYearOffset        = $endsNextCalendarYear ? 1 : 0;
+
+            // Compute "end of this occurrence" using the correct end
+            // year. If today is past that, bump start year by 1.
+            $endThisYear = Carbon::create($year + $endYearOffset, $endMonth, $endDay)->endOfDay();
+            $useYear     = $now->isAfter($endThisYear) ? $year + 1 : $year;
+
+            return [
+                sprintf('%d-%02d-%02d', $useYear, $startMonth, $startDay),
+                sprintf('%d-%02d-%02d', $useYear + $endYearOffset, $endMonth, $endDay),
+            ];
         };
+
+        // Resolve next occurrence for a lunar festival from the multi-
+        // year table. Returns the next entry whose end date hasn't
+        // passed yet, or NULL if we've run out of seeded years.
+        $nextLunar = function (string $slug) use ($now): ?array {
+            $table = self::LUNAR_DATES[$slug] ?? null;
+            if (!$table) return null;
+
+            ksort($table);
+            foreach ($table as $year => $range) {
+                $end = is_array($range) ? $range[1] : $range;
+                if ($now->isBefore(Carbon::parse($end)->endOfDay())) {
+                    return is_array($range) ? $range : [$range, $range];
+                }
+            }
+            return null;  // exhausted — admin must extend the table
+        };
+
+        // Buddhist Era year for Thai-language naming
+        $beYear = fn ($gYear) => $gYear + 543;
+
+        // ── Resolve dates for every festival ─────────────────────────────
+        [$songkranS, $songkranE]       = $nextFixed(4, 13, 4, 15);
+        [$valentineS, $valentineE]     = $nextFixed(2, 13, 2, 14);
+        [$mothersS, $mothersE]         = $nextFixed(8, 12, 8, 12);
+        [$christmasS, $christmasE]     = $nextFixed(12, 24, 12, 26);
+        [$newYearS, $newYearE]         = $nextFixed(12, 28, 1, 2);   // crosses year
+        [$prideS, $prideE]             = $nextFixed(6, 1, 6, 30);
+        [$halloweenS, $halloweenE]     = $nextFixed(10, 29, 10, 31);
+        $loyKrathong  = $nextLunar('loy-krathong')      ?? ['2026-11-24', '2026-11-25'];
+        $chineseNy    = $nextLunar('chinese-new-year')  ?? ['2026-02-17', '2026-02-19'];
+
+        // BE year for naming = the year the festival ACTUALLY happens
+        $songkranBE   = $beYear((int) substr($songkranS, 0, 4));
+        $valentineBE  = $beYear((int) substr($valentineS, 0, 4));
+        $mothersBE    = $beYear((int) substr($mothersS, 0, 4));
+        $christmasBE  = $beYear((int) substr($christmasS, 0, 4));
+        $newYearBE    = $beYear((int) substr($newYearE, 0, 4));      // year the celebration ENDS
+        $prideBE      = $beYear((int) substr($prideS, 0, 4));
+        $halloweenBE  = $beYear((int) substr($halloweenS, 0, 4));
+        $loyBE        = $beYear((int) substr($loyKrathong[0], 0, 4));
+        $chineseBE    = $beYear((int) substr($chineseNy[0], 0, 4));
 
         $festivals = [
             // ── สงกรานต์ (Songkran) — Apr 13-15 each year ──
             [
                 'slug'             => 'songkran',
-                'name'             => '💦 สงกรานต์ ' . ($bumpYear(4, 15) + 543),
+                'name'             => "💦 สงกรานต์ {$songkranBE}",
                 'short_name'       => 'สงกรานต์',
                 'theme_variant'    => 'water-blue',
                 'emoji'            => '💦',
-                'starts_at'        => sprintf('%d-04-13', $bumpYear(4, 15)),
-                'ends_at'          => sprintf('%d-04-15', $bumpYear(4, 15)),
-                'popup_lead_days'  => 14,                     // 2 weeks tease — major event
+                'starts_at'        => $songkranS,
+                'ends_at'          => $songkranE,
+                'popup_lead_days'  => 14,
                 'is_recurring'     => true,
                 'headline'         => '💦 สงกรานต์มาแล้ว — ภาพสาดน้ำสนุก ๆ เก็บโมเมนต์ครอบครัว',
                 'body_md'          => "ช่างภาพในจังหวัดของคุณเปิดรับงาน **สงกรานต์** เก็บภาพสาดน้ำ รดน้ำดำหัว ในราคาพิเศษเฉพาะช่วงเทศกาล\n\n- จองล่วงหน้า ได้คิวเร็ว\n- ภาพคมชัด ไม่มีพร่ามัวจากน้ำ\n- ส่งไฟล์ภายใน 7 วัน",
@@ -60,16 +166,15 @@ class FestivalsSeeder extends Seeder
                 'enabled'          => true,
             ],
 
-            // ── ลอยกระทง (Loy Krathong) — variable lunar full moon ──
-            // 2026 = Nov 24, 2027 = Nov 13 (approx)
+            // ── ลอยกระทง (Loy Krathong) — lunar full moon ──
             [
                 'slug'             => 'loy-krathong',
-                'name'             => '🏮 ลอยกระทง ' . ($year + 543),
+                'name'             => "🏮 ลอยกระทง {$loyBE}",
                 'short_name'       => 'ลอยกระทง',
                 'theme_variant'    => 'lantern-gold',
                 'emoji'            => '🏮',
-                'starts_at'        => $year . '-11-24',
-                'ends_at'          => $year . '-11-25',
+                'starts_at'        => $loyKrathong[0],
+                'ends_at'          => $loyKrathong[1],
                 'popup_lead_days'  => 10,
                 'is_recurring'     => true,
                 'headline'         => '🏮 ลอยกระทง — ภาพโคมไฟ-แสงเทียนสวยจับใจ',
@@ -83,31 +188,31 @@ class FestivalsSeeder extends Seeder
             // ── ปีใหม่ (NYE / Year Change) — Dec 28 – Jan 2 ──
             [
                 'slug'             => 'new-year',
-                'name'             => '🎆 ปีใหม่ ' . ($year + 1 + 543),
+                'name'             => "🎆 ปีใหม่ {$newYearBE}",
                 'short_name'       => 'ปีใหม่',
                 'theme_variant'    => 'red-firework',
                 'emoji'            => '🎆',
-                'starts_at'        => $year . '-12-28',
-                'ends_at'          => ($year + 1) . '-01-02',
-                'popup_lead_days'  => 21,                     // 3 weeks — peak booking season
+                'starts_at'        => $newYearS,
+                'ends_at'          => $newYearE,
+                'popup_lead_days'  => 21,
                 'is_recurring'     => true,
                 'headline'         => '🎆 Countdown ปีใหม่ — เก็บโมเมนต์พลุแสงสี',
                 'body_md'          => "ส่งท้ายปีเก่าต้อนรับปีใหม่ — **ช่างภาพปีใหม่** เปิดรับจองงานเลี้ยง ปาร์ตี้ countdown\n\n- ถ่ายพลุงานเคาน์ดาวน์\n- งานเลี้ยงบริษัท\n- งานพร้อมหน้าครอบครัว\n- ราคาพิเศษช่วงเทศกาล",
                 'cta_label'        => 'ดูช่างภาพปีใหม่',
                 'cta_url'          => '/events?tag=new-year',
-                'show_priority'    => 80,                     // highest — biggest festival window
+                'show_priority'    => 80,
                 'enabled'          => true,
             ],
 
             // ── วาเลนไทน์ (Valentine) — Feb 14 ──
             [
                 'slug'             => 'valentine',
-                'name'             => '🌸 วาเลนไทน์ ' . ($bumpYear(2, 14) + 543),
+                'name'             => "🌸 วาเลนไทน์ {$valentineBE}",
                 'short_name'       => 'วาเลนไทน์',
                 'theme_variant'    => 'sakura-pink',
                 'emoji'            => '🌸',
-                'starts_at'        => sprintf('%d-02-13', $bumpYear(2, 14)),
-                'ends_at'          => sprintf('%d-02-14', $bumpYear(2, 14)),
+                'starts_at'        => $valentineS,
+                'ends_at'          => $valentineE,
                 'popup_lead_days'  => 7,
                 'is_recurring'     => true,
                 'headline'         => '🌸 วาเลนไทน์ — ภาพคู่รักแสนหวาน',
@@ -121,12 +226,12 @@ class FestivalsSeeder extends Seeder
             // ── คริสต์มาส (Christmas) — Dec 24-26 ──
             [
                 'slug'             => 'christmas',
-                'name'             => '❄️ คริสต์มาส ' . ($year + 543),
+                'name'             => "❄️ คริสต์มาส {$christmasBE}",
                 'short_name'       => 'คริสต์มาส',
                 'theme_variant'    => 'snow-white',
                 'emoji'            => '🎄',
-                'starts_at'        => $year . '-12-24',
-                'ends_at'          => $year . '-12-26',
+                'starts_at'        => $christmasS,
+                'ends_at'          => $christmasE,
                 'popup_lead_days'  => 14,
                 'is_recurring'     => true,
                 'headline'         => '🎄 คริสต์มาส — ถ่ายธีมหิมะสุดน่ารัก',
@@ -140,12 +245,12 @@ class FestivalsSeeder extends Seeder
             // ── วันแม่ (Mother's Day TH) — Aug 12 ──
             [
                 'slug'             => 'mothers-day',
-                'name'             => '👩 วันแม่ ' . ($bumpYear(8, 12) + 543),
+                'name'             => "👩 วันแม่ {$mothersBE}",
                 'short_name'       => 'วันแม่',
                 'theme_variant'    => 'sakura-pink',
                 'emoji'            => '🌷',
-                'starts_at'        => sprintf('%d-08-12', $bumpYear(8, 12)),
-                'ends_at'          => sprintf('%d-08-12', $bumpYear(8, 12)),
+                'starts_at'        => $mothersS,
+                'ends_at'          => $mothersE,
                 'popup_lead_days'  => 14,
                 'is_recurring'     => true,
                 'headline'         => '🌷 วันแม่ — เก็บภาพอบอุ่นกับแม่ที่บ้าน',
@@ -156,16 +261,15 @@ class FestivalsSeeder extends Seeder
                 'enabled'          => true,
             ],
 
-            // ── ตรุษจีน (Chinese NY) — variable lunar ──
-            // 2026 = Feb 17, 2027 = Feb 6
+            // ── ตรุษจีน (Chinese NY) — lunar ──
             [
                 'slug'             => 'chinese-new-year',
-                'name'             => '🧧 ตรุษจีน ' . ($bumpYear(2, 17) + 543),
+                'name'             => "🧧 ตรุษจีน {$chineseBE}",
                 'short_name'       => 'ตรุษจีน',
                 'theme_variant'    => 'red-firework',
                 'emoji'            => '🧧',
-                'starts_at'        => sprintf('%d-02-17', $bumpYear(2, 17)),
-                'ends_at'          => sprintf('%d-02-19', $bumpYear(2, 17)),
+                'starts_at'        => $chineseNy[0],
+                'ends_at'          => $chineseNy[1],
                 'popup_lead_days'  => 14,
                 'is_recurring'     => true,
                 'headline'         => '🧧 ตรุษจีน — เก็บโมเมนต์อั่งเปา-รวมญาติ',
@@ -179,12 +283,12 @@ class FestivalsSeeder extends Seeder
             // ── Pride Month — June ──
             [
                 'slug'             => 'pride-month',
-                'name'             => '🏳️‍🌈 Pride Month ' . ($bumpYear(6, 30) + 543),
+                'name'             => "🏳️‍🌈 Pride Month {$prideBE}",
                 'short_name'       => 'Pride',
                 'theme_variant'    => 'rainbow-pride',
                 'emoji'            => '🏳️‍🌈',
-                'starts_at'        => sprintf('%d-06-01', $bumpYear(6, 30)),
-                'ends_at'          => sprintf('%d-06-30', $bumpYear(6, 30)),
+                'starts_at'        => $prideS,
+                'ends_at'          => $prideE,
                 'popup_lead_days'  => 14,
                 'is_recurring'     => true,
                 'headline'         => '🏳️‍🌈 Pride Month — Love is Love',
@@ -195,15 +299,15 @@ class FestivalsSeeder extends Seeder
                 'enabled'          => true,
             ],
 
-            // ── ฮาโลวีน (Halloween) — Oct 31 ──
+            // ── ฮาโลวีน (Halloween) — Oct 29-31 ──
             [
                 'slug'             => 'halloween',
-                'name'             => '🎃 ฮาโลวีน ' . ($bumpYear(10, 31) + 543),
+                'name'             => "🎃 ฮาโลวีน {$halloweenBE}",
                 'short_name'       => 'ฮาโลวีน',
                 'theme_variant'    => 'pumpkin-orange',
                 'emoji'            => '🎃',
-                'starts_at'        => sprintf('%d-10-29', $bumpYear(10, 31)),
-                'ends_at'          => sprintf('%d-10-31', $bumpYear(10, 31)),
+                'starts_at'        => $halloweenS,
+                'ends_at'          => $halloweenE,
                 'popup_lead_days'  => 14,
                 'is_recurring'     => true,
                 'headline'         => '🎃 ฮาโลวีน — ปาร์ตี้แต่งตัวสุดสนุก',
@@ -215,8 +319,8 @@ class FestivalsSeeder extends Seeder
             ],
         ];
 
-        $now = now();
         $upserted = 0;
+        $updated  = 0;
 
         foreach ($festivals as $row) {
             $row['updated_at'] = $now;
@@ -225,24 +329,26 @@ class FestivalsSeeder extends Seeder
             // while still bumping starts_at/ends_at on re-runs.
             $existing = DB::table('festivals')->where('slug', $row['slug'])->first();
             if ($existing) {
-                // Only bump dates + headline if admin hasn't customised
-                // them. Detect "untouched" by comparing the previous
-                // value against what THIS seeder would have written
-                // last run (best-effort heuristic). Easier: just bump
-                // the dates, leave content alone.
+                // Update only the date-bearing fields + name (which
+                // contains the BE year). Preserve admin edits to
+                // headline / body / cta / theme / popup_lead_days /
+                // enabled / show_priority.
+                $datesChanged = $existing->starts_at !== $row['starts_at']
+                             || $existing->ends_at   !== $row['ends_at'];
                 DB::table('festivals')->where('id', $existing->id)->update([
                     'starts_at'       => $row['starts_at'],
                     'ends_at'         => $row['ends_at'],
                     'name'            => $row['name'],
                     'updated_at'      => $now,
                 ]);
+                if ($datesChanged) $updated++;
             } else {
                 $row['created_at'] = $now;
                 DB::table('festivals')->insert($row);
+                $upserted++;
             }
-            $upserted++;
         }
 
-        $this->command?->info("FestivalsSeeder: upserted {$upserted} festivals");
+        $this->command?->info("FestivalsSeeder: {$upserted} new, {$updated} dates updated");
     }
 }

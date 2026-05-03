@@ -240,6 +240,41 @@ class FestivalController extends Controller
     }
 
     /**
+     * Sync canonical festival dates from the multi-year calendar
+     * table. Re-runs FestivalsSeeder which:
+     *   • Bumps fixed-date festivals to their next occurrence
+     *   • Looks up lunar festivals from the hardcoded table
+     *   • Preserves admin edits to content + theme + flags
+     *
+     * Custom festivals (slugs not in the seeder) are untouched.
+     * Cron schedule runs this monthly; this endpoint lets admin
+     * trigger it on demand.
+     */
+    public function syncFromCalendar(Request $request)
+    {
+        try {
+            \Illuminate\Support\Facades\Artisan::call('festivals:sync');
+            $output = \Illuminate\Support\Facades\Artisan::output();
+
+            // Extract the "X new, Y dates updated" line for a
+            // human-friendly flash message.
+            $summary = '';
+            if (preg_match('/(\d+) new, (\d+) dates updated/', $output, $m)) {
+                $newRows  = (int) $m[1];
+                $updated  = (int) $m[2];
+                $summary  = $newRows + $updated > 0
+                    ? "({$newRows} ใหม่ · {$updated} อัปเดตวันที่)"
+                    : '(ทุกเทศกาลตรงปฏิทินอยู่แล้ว)';
+            }
+
+            return back()->with('success', "✓ ซิงค์ปฏิทินเรียบร้อย {$summary}");
+        } catch (\Throwable $e) {
+            \Log::error('Festival sync failed: ' . $e->getMessage());
+            return back()->with('error', 'ซิงค์ล้มเหลว: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Per-user cache keys aren't enumerable without scanning Redis
      * (or whatever cache backend we have), so we flush the entire
      * cache. Pragmatic — the marketplace is small enough that this

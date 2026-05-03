@@ -20,11 +20,28 @@
         <p class="text-xs text-slate-500 dark:text-slate-400">Popup ตามเทศกาลพร้อมธีมสี — สงกรานต์, ลอยกระทง, ปีใหม่ และอื่นๆ</p>
       </div>
     </div>
-    <button type="button" @click="showCreate = !showCreate; if(showCreate) $nextTick(() => document.getElementById('create-festival-form')?.scrollIntoView({behavior:'smooth', block:'start'}))"
-            class="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-pink-500 to-orange-500 hover:from-pink-600 hover:to-orange-600 text-white px-4 py-2 text-sm font-medium shadow-sm shadow-pink-500/25 transition">
-      <i class="bi" :class="showCreate ? 'bi-x-lg' : 'bi-plus-lg'"></i>
-      <span x-text="showCreate ? 'ยกเลิก' : 'เพิ่มเทศกาล'"></span>
-    </button>
+    <div class="flex items-center gap-2">
+      {{-- Sync from canonical calendar — re-applies authoritative dates
+           from the multi-year table (covers fixed-date + lunar festivals).
+           Confirms first because it overwrites starts_at/ends_at on the
+           9 canonical festivals. --}}
+      <form method="POST" action="{{ route('admin.festivals.sync') }}" class="contents"
+            onsubmit="return confirm('ซิงค์วันที่เทศกาลกับปฏิทิน 9 ตัวหลัก (สงกรานต์, ลอยกระทง, ปีใหม่, ฯลฯ)?\n\nระบบจะอัปเดต starts_at/ends_at ให้เป็นปีหน้าโดยอัตโนมัติ — admin edit ของเนื้อหา/ธีม/ปุ่ม จะไม่ถูกแตะ')">
+        @csrf
+        <button type="submit"
+                title="ซิงค์ปฏิทิน — อัปเดตวันที่เทศกาลตามปฏิทินจริง (เทศกาลที่ admin สร้างเองจะไม่ถูกแตะ)"
+                class="inline-flex items-center gap-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 px-3 py-2 text-sm font-medium transition">
+          <i class="bi bi-calendar-check"></i>
+          <span class="hidden sm:inline">ซิงค์ปฏิทิน</span>
+        </button>
+      </form>
+
+      <button type="button" @click="showCreate = !showCreate; if(showCreate) $nextTick(() => document.getElementById('create-festival-form')?.scrollIntoView({behavior:'smooth', block:'start'}))"
+              class="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-pink-500 to-orange-500 hover:from-pink-600 hover:to-orange-600 text-white px-4 py-2 text-sm font-medium shadow-sm shadow-pink-500/25 transition">
+        <i class="bi" :class="showCreate ? 'bi-x-lg' : 'bi-plus-lg'"></i>
+        <span x-text="showCreate ? 'ยกเลิก' : 'เพิ่มเทศกาล'"></span>
+      </button>
+    </div>
   </div>
 
   {{-- Flash messages --}}
@@ -644,7 +661,8 @@
           <li>กด "ปิด · ไม่แสดงอีก" หรือคลิก CTA = บันทึกใน DB ไม่กลับมาแสดงอีก</li>
           <li>เทศกาลจะหายจาก popup queue เมื่อเลย <code class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-white/10 text-[11px]">ends_at</code></li>
           <li>ตั้ง <strong>Priority</strong> สูงเพื่อให้ขึ้นก่อนเทศกาลอื่น (ถ้ามีเทศกาล active หลายตัวพร้อมกัน)</li>
-          <li>เพิ่มเทศกาลใหม่ผ่าน seeder — admin แก้ content ได้แต่ไม่ลบ slug เดิมเพื่อ idempotency</li>
+          <li><strong>ปฏิทินอัตโนมัติ</strong>: ระบบ <em>ซิงค์วันที่ทุกวันที่ 1 ของเดือน</em> — ปีใหม่/สงกรานต์/วาเลนไทน์ ฯลฯ จะเด้งไปปีถัดไปเองหลังจบเทศกาล + ลอยกระทง/ตรุษจีนใช้ตารางจันทรคติ 2024-2030</li>
+          <li>เพิ่มเทศกาลใหม่ผ่านปุ่ม "+ เพิ่มเทศกาล" — slug ใหม่จะไม่ถูกแตะโดย sync (เฉพาะ 9 ตัว canonical เท่านั้น)</li>
         </ul>
       </div>
     </div>

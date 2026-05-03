@@ -178,6 +178,18 @@ Schedule::command('carts:cleanup --days=30')
     ->at('04:00')
     ->withoutOverlapping();
 
+// ── Festival calendar sync ────────────────────────────────────────
+// Runs 1st of month at 04:30 — re-applies canonical dates from the
+// multi-year calendar table. Bumps fixed-date festivals to their
+// next occurrence + refreshes lunar dates (Loy Krathong, Chinese
+// NY) from the hardcoded table. Preserves all admin edits to
+// content/theme/flags. Admin can also trigger on demand from
+// /admin/festivals.
+Schedule::command('festivals:sync')
+    ->monthlyOn(1, '04:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // ── Per-province weekly email digest ──────────────────────────────
 // Runs Monday 09:00 — Thai consumer "after coffee, before lunch"
 // open-rate window. Sends each user a digest of:
