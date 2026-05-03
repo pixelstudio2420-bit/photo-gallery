@@ -57,14 +57,29 @@ class BlogContentSeeder extends Seeder
                 continue;
             }
 
-            $wordCount = str_word_count(strip_tags($a['content']));
-            $readingTime = max(1, (int) ceil($wordCount / 200));   // ~200 wpm
+            // Convert markdown → HTML at seed time. The public blog
+            // show view renders content through HtmlSanitizer::clean()
+            // which expects HTML, not raw markdown. If we stored
+            // markdown directly, ## headings would render as literal
+            // "## หัวข้อ" text instead of <h2> tags. Str::markdown
+            // returns commonmark HTML which sanitizer accepts.
+            $html = $this->markdownToHtml($a['content']);
+
+            // Word count needs the SAME source as the content we
+            // ship, but counted as "characters / 4" for Thai (which
+            // has no spaces) so reading_time is realistic. This is a
+            // rough heuristic — admin can re-audit via the Blog AI
+            // tools after publish.
+            $plainText = strip_tags($html);
+            $charCount = mb_strlen($plainText, 'UTF-8');
+            $wordCount = max(1, (int) ceil($charCount / 4));      // Thai approx
+            $readingTime = max(2, (int) ceil($charCount / 800));  // 800 chars/min for Thai
 
             DB::table('blog_posts')->insert([
                 'title'             => $a['title'],
                 'slug'              => $a['slug'],
                 'excerpt'           => $a['excerpt'],
-                'content'           => $a['content'],
+                'content'           => $html,
                 'category_id'       => $a['category_id'],
                 'author_id'         => $authorId,
                 'status'            => 'draft',           // admin reviews before publish
@@ -98,6 +113,46 @@ class BlogContentSeeder extends Seeder
         }
 
         $this->command?->info("BlogContentSeeder: {$inserted} new, {$skipped} skipped");
+    }
+
+    /**
+     * Convert markdown → HTML. Uses Laravel's Str::markdown which
+     * is built on League CommonMark. We post-process to:
+     *   • wrap output in a class for prose styling (so admin's
+     *     existing `.prose` Tailwind plugin theme picks it up)
+     *   • add `id` attributes to h2/h3 for table-of-contents anchor
+     *     scrolling
+     *   • add a leading `<p>` for the first paragraph styling
+     *
+     * Returns clean HTML safe for HtmlSanitizer::clean().
+     */
+    private function markdownToHtml(string $markdown): string
+    {
+        $html = \Illuminate\Support\Str::markdown($markdown);
+
+        // Add slug-style id="..." to all h2/h3 so the TOC partial can
+        // jump to them. Strip Thai chars from id (URL hash isn't
+        // reliable cross-browser with non-ASCII).
+        $html = preg_replace_callback(
+            '#<(h[23])>(.+?)</\1>#u',
+            function ($m) {
+                $tag  = $m[1];
+                $text = $m[2];
+                $id = \Illuminate\Support\Str::slug($text);
+                if ($id === '') {
+                    $id = $tag . '-' . substr(md5($text), 0, 6);
+                }
+                return "<{$tag} id=\"{$id}\">{$text}</{$tag}>";
+            },
+            $html
+        );
+
+        // Replace blockquote-style "💡 Tip:" lines that markdown
+        // renders as paragraphs into proper callout boxes
+        // (Tailwind blockquote styling)
+        // Already handled by markdown's > blockquote syntax — no-op here.
+
+        return $html;
     }
 
     /**

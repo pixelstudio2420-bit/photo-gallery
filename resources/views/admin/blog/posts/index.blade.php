@@ -382,11 +382,10 @@
         @csrf
         @method('DELETE')
     </form>
-    <form id="bulkForm" method="POST" action="{{ route('admin.blog.posts.bulk-action') }}" class="hidden">
-        @csrf
-        <input type="hidden" name="action" id="bulkActionInput">
-        <input type="hidden" name="ids" id="bulkIdsInput">
-    </form>
+    {{-- Bulk-action submission is now handled via fetch() in
+         bulkAction() above — sending ids[] as a real PHP array.
+         The previous hidden <form> with name="ids" only sent a JSON
+         string, which silently failed Laravel's `array` validation. --}}
 </div>
 @endsection
 
@@ -421,11 +420,45 @@ function blogPostsManager() {
                 confirmButtonText: 'ยืนยัน',
                 cancelButtonText: 'ยกเลิก'
             }).then((result) => {
-                if (result.isConfirmed) {
-                    document.getElementById('bulkActionInput').value = action;
-                    document.getElementById('bulkIdsInput').value = JSON.stringify(this.selectedPosts);
-                    document.getElementById('bulkForm').submit();
-                }
+                if (!result.isConfirmed) return;
+
+                // The controller returns a JSON response, so we submit
+                // via fetch + FormData (sending ids[] as a real PHP
+                // array — JSON.stringify would arrive as a single
+                // string and fail the `array` validation rule, which
+                // is why the publish-all button was silently failing).
+                const formData = new FormData();
+                formData.append('_token', '{{ csrf_token() }}');
+                formData.append('action', action);
+                this.selectedPosts.forEach(id => formData.append('ids[]', id));
+
+                fetch('{{ route('admin.blog.posts.bulk-action') }}', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                })
+                .then(async r => ({ status: r.status, body: await r.json().catch(() => ({})) }))
+                .then(({ status, body }) => {
+                    if (status === 200 && body.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'สำเร็จ',
+                            text: body.message || 'ดำเนินการเรียบร้อย',
+                            timer: 1500,
+                            showConfirmButton: false,
+                        }).then(() => window.location.reload());
+                    } else {
+                        // Validation errors come back as 422 + body.errors map
+                        const detail = body.message
+                            || (body.errors ? Object.values(body.errors).flat().join(', ') : '')
+                            || 'ดำเนินการไม่สำเร็จ';
+                        Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: detail });
+                    }
+                })
+                .catch(e => {
+                    Swal.fire({ icon: 'error', title: 'เครือข่ายมีปัญหา', text: e.message });
+                });
             });
         },
 
