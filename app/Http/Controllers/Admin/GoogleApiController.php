@@ -29,9 +29,10 @@ class GoogleApiController extends Controller
 {
     public function index()
     {
-        $auth         = app(GoogleApiAuth::class);
-        $ga           = app(GoogleAnalyticsService::class);
+        $auth          = app(GoogleApiAuth::class);
+        $ga            = app(GoogleAnalyticsService::class);
         $searchConsole = app(GoogleSearchConsoleService::class);
+        $oauth         = app(\App\Services\Google\GoogleOAuthUserAuth::class);
 
         $serviceAccountEmail = $auth->serviceAccountEmail();
 
@@ -47,6 +48,14 @@ class GoogleApiController extends Controller
             'sc_site_url'           => AppSetting::get('google_search_console_site_url', ''),
             'ga_configured'         => $ga->isConfigured(),
             'sc_configured'         => $searchConsole->isConfigured(),
+
+            // OAuth user flow (Search Console workaround)
+            'oauth_client_id'       => AppSetting::get('google_oauth_client_id', ''),
+            'oauth_client_secret'   => AppSetting::get('google_oauth_client_secret', ''),
+            'oauth_has_credentials' => $oauth->hasCredentials(),
+            'oauth_is_connected'    => $oauth->isConnected(),
+            'oauth_connected_email' => $oauth->connectedEmail(),
+            'oauth_callback_url'    => route('admin.settings.google-apis.oauth-callback'),
         ]);
     }
 
@@ -165,5 +174,90 @@ class GoogleApiController extends Controller
     {
         $count = app(GoogleAnalyticsService::class)->realtimeActiveUsers();
         return response()->json(['count' => $count]);
+    }
+
+    /* ─────────────────────────────────────────────────────────────────
+     * OAuth User flow — workaround for Search Console UI rejecting
+     * service account emails. Admin connects their own Google account
+     * which already has owner perms on Search Console property.
+     * ───────────────────────────────────────────────────────────────── */
+
+    /**
+     * Save OAuth client_id + secret. These come from Cloud Console →
+     * APIs & Services → Credentials → OAuth 2.0 Client IDs.
+     */
+    public function saveOauthCredentials(Request $request)
+    {
+        $validated = $request->validate([
+            'google_oauth_client_id'     => 'nullable|string|max:200',
+            'google_oauth_client_secret' => 'nullable|string|max:200',
+        ]);
+        AppSetting::set('google_oauth_client_id',     $validated['google_oauth_client_id'] ?? '');
+        AppSetting::set('google_oauth_client_secret', $validated['google_oauth_client_secret'] ?? '');
+
+        return back()->with('success', '✓ บันทึก OAuth credentials แล้ว — กดปุ่ม "Connect with Google" เพื่อ authorize');
+    }
+
+    /**
+     * Start OAuth flow — redirect admin to Google consent screen.
+     */
+    public function oauthConnect()
+    {
+        $oauth = app(\App\Services\Google\GoogleOAuthUserAuth::class);
+
+        if (!$oauth->hasCredentials()) {
+            return back()->with('error', 'กรุณาบันทึก OAuth Client ID + Secret ก่อน');
+        }
+
+        $callbackUrl = route('admin.settings.google-apis.oauth-callback');
+        $authUrl = $oauth->buildAuthUrl(
+            ['https://www.googleapis.com/auth/webmasters.readonly'],
+            $callbackUrl
+        );
+
+        return redirect()->away($authUrl);
+    }
+
+    /**
+     * OAuth callback — Google redirects here with ?code=...
+     * Exchange code for refresh_token and store.
+     */
+    public function oauthCallback(Request $request)
+    {
+        $code  = $request->query('code');
+        $state = $request->query('state');
+        $error = $request->query('error');
+
+        if ($error) {
+            return redirect()->route('admin.settings.google-apis.index')
+                ->with('error', 'OAuth ถูกปฏิเสธ: ' . $error);
+        }
+
+        if (!$code || !$state) {
+            return redirect()->route('admin.settings.google-apis.index')
+                ->with('error', 'OAuth callback ขาด code หรือ state');
+        }
+
+        try {
+            $callbackUrl = route('admin.settings.google-apis.oauth-callback');
+            $result = app(\App\Services\Google\GoogleOAuthUserAuth::class)
+                ->handleCallback($code, $state, $callbackUrl);
+
+            return redirect()->route('admin.settings.google-apis.index')
+                ->with('success', "✓ Connect Google สำเร็จ — connected as {$result['email']}");
+        } catch (\Throwable $e) {
+            return redirect()->route('admin.settings.google-apis.index')
+                ->with('error', 'OAuth callback failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Disconnect — revoke at Google + clear stored token.
+     */
+    public function oauthDisconnect()
+    {
+        app(\App\Services\Google\GoogleOAuthUserAuth::class)->disconnect();
+        app(GoogleSearchConsoleService::class)->bustAllCaches();
+        return back()->with('success', '✓ Disconnect Google account แล้ว');
     }
 }

@@ -35,17 +35,38 @@ class GoogleSearchConsoleService
 
     public function __construct(
         private readonly GoogleApiAuth $auth,
+        private readonly GoogleOAuthUserAuth $oauthUser,
     ) {}
 
+    /**
+     * Configured = (service account OR OAuth user) AND site URL set.
+     * OAuth user is the preferred path since Search Console UI rejects
+     * service account emails — but we still support service account
+     * for admins who managed to get past the UI quirk.
+     */
     public function isConfigured(): bool
     {
-        return $this->auth->isConfigured() && !empty($this->siteUrl());
+        $hasAuth = $this->auth->isConfigured() || $this->oauthUser->isConnected();
+        return $hasAuth && !empty($this->siteUrl());
+    }
+
+    /**
+     * Whether the OAuth user flow is being used (vs service account).
+     * Used by error messages to surface the right "fix" instructions.
+     */
+    public function isUsingOAuthUser(): bool
+    {
+        return $this->oauthUser->isConnected();
     }
 
     public function testConnection(): array
     {
-        if (!$this->auth->isConfigured()) {
-            return ['ok' => false, 'message' => 'ยังไม่ได้อัปโหลด Service Account JSON'];
+        if (!$this->auth->isConfigured() && !$this->oauthUser->isConnected()) {
+            return [
+                'ok'      => false,
+                'message' => 'ยังไม่ได้ตั้งค่า auth — ต้องเป็น Service Account หรือ OAuth User flow',
+                'fix'     => "เนื่องจาก Search Console UI block service account email\nแนะนำใช้ OAuth User flow แทน — กดปุ่ม \"Connect with Google\" ด้านล่าง",
+            ];
         }
         if (!$this->siteUrl()) {
             return ['ok' => false, 'message' => 'ยังไม่ได้ใส่ Site URL ของ Search Console'];
@@ -54,9 +75,10 @@ class GoogleSearchConsoleService
         try {
             // Fetch last 7 days summary
             $rows = $this->query(['startDate' => date('Y-m-d', strtotime('-7 days')), 'endDate' => date('Y-m-d'), 'rowLimit' => 1]);
+            $authMethod = $this->oauthUser->isConnected() ? 'OAuth User (' . $this->oauthUser->connectedEmail() . ')' : 'Service Account';
             return [
                 'ok'      => true,
-                'message' => '✓ เชื่อมต่อ Search Console สำเร็จ',
+                'message' => "✓ เชื่อมต่อ Search Console สำเร็จ — auth: {$authMethod}",
                 'count'   => count($rows),
             ];
         } catch (\Throwable $e) {
@@ -181,8 +203,16 @@ class GoogleSearchConsoleService
 
     private function query(array $payload): array
     {
-        $token = $this->auth->getAccessToken(self::SCOPE);
-        $url   = str_replace('{site}', urlencode($this->siteUrl()), self::ENDPOINT);
+        // Prefer OAuth user token when available (works around the
+        // Search Console "service account email not found" UI bug).
+        // Fall back to service account JWT if OAuth user not set up.
+        if ($this->oauthUser->isConnected()) {
+            $token = $this->oauthUser->getAccessToken();
+        } else {
+            $token = $this->auth->getAccessToken(self::SCOPE);
+        }
+
+        $url = str_replace('{site}', urlencode($this->siteUrl()), self::ENDPOINT);
 
         $response = Http::withToken($token)
             ->timeout(15)
@@ -202,11 +232,21 @@ class GoogleSearchConsoleService
         $lower = strtolower($raw);
 
         if (str_contains($lower, 'permission') || str_contains($lower, "user does not have")) {
-            $email = $this->auth->serviceAccountEmail();
+            // Search Console UI is known-broken at adding service
+            // account emails ("ไม่พบอีเมล" / "email not found"). The
+            // OAuth user flow is the reliable workaround — always
+            // suggest it FIRST.
             return [
                 'ok'      => false,
-                'message' => 'Service account ไม่มีสิทธิ์เข้า Search Console property',
-                'fix'     => "Search Console → Settings → Users and permissions → Add user → ใส่ email:\n  {$email}\nบทบาท: Restricted (พอ)",
+                'message' => $this->oauthUser->isConnected()
+                    ? 'OAuth user ไม่มีสิทธิ์เข้า Search Console property นี้'
+                    : 'Service account ไม่มีสิทธิ์ — Search Console UI block service account ทั่วไป',
+                'fix'     => $this->oauthUser->isConnected()
+                    ? "บัญชีที่ connect (" . $this->oauthUser->connectedEmail() . ") ไม่ใช่ owner ของ property\n"
+                      . "ต้อง connect ด้วย Google account ที่เป็น owner/full-user ของ Search Console property นี้\n"
+                      . "Disconnect แล้ว connect ใหม่ด้วย account อื่น"
+                    : "💡 แนะนำ: ใช้ OAuth User flow แทน (กดปุ่ม Connect with Google ในหน้า settings)\n\n"
+                      . "หรือลอง: Search Console → Settings → Users and permissions → Add user → ใส่ email service account → ถ้าเจอ \"ไม่พบอีเมล\" คือ Google bug เปลี่ยนไปใช้ OAuth User flow",
             ];
         }
 

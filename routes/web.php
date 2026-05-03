@@ -1411,6 +1411,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/test-sc',         [\App\Http\Controllers\Admin\GoogleApiController::class, 'testSc'])->name('test-sc');
                 // Realtime visitor count — polled by admin sidebar badge
                 Route::get('/realtime-users',   [\App\Http\Controllers\Admin\GoogleApiController::class, 'realtimeUsers'])->name('realtime-users');
+
+                // OAuth User flow — workaround for Search Console UI
+                // rejecting service account emails. Uses admin's own
+                // Google account which already has owner perms.
+                Route::post('/oauth-credentials', [\App\Http\Controllers\Admin\GoogleApiController::class, 'saveOauthCredentials'])->name('save-oauth');
+                Route::get('/oauth-connect',      [\App\Http\Controllers\Admin\GoogleApiController::class, 'oauthConnect'])->name('oauth-connect');
+                Route::get('/oauth-callback',     [\App\Http\Controllers\Admin\GoogleApiController::class, 'oauthCallback'])->name('oauth-callback');
+                Route::post('/oauth-disconnect',  [\App\Http\Controllers\Admin\GoogleApiController::class, 'oauthDisconnect'])->name('oauth-disconnect');
             });
         });
 

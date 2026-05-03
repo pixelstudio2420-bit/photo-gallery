@@ -250,6 +250,126 @@
     </div>
   </div>
 
+  {{-- ─────────────── Step 4: OAuth User flow (Search Console workaround) ─────────────── --}}
+  <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm overflow-hidden mb-5">
+    <div class="h-1.5 bg-gradient-to-r from-amber-500 to-orange-500"></div>
+    <div class="p-5">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+            <i class="bi bi-shield-lock text-lg"></i>
+          </div>
+          <div>
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 text-sm">
+              4. OAuth User Flow
+              <span class="ml-1 text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">Search Console workaround</span>
+            </h3>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">ใช้บัญชี Google ของคุณเอง (bypass UI bug ของ Search Console)</p>
+          </div>
+        </div>
+        @if($oauth_is_connected)
+          <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 text-[11px] font-bold">
+            <i class="bi bi-check-circle-fill"></i> Connected
+          </span>
+        @else
+          <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 px-2.5 py-1 text-[11px] font-medium">
+            <i class="bi bi-circle"></i> Not connected
+          </span>
+        @endif
+      </div>
+
+      {{-- Why this section exists --}}
+      <div class="rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 px-4 py-3 text-xs text-slate-700 dark:text-slate-300 leading-relaxed mb-4">
+        <p class="font-semibold text-amber-700 dark:text-amber-300 mb-1.5">
+          <i class="bi bi-exclamation-triangle-fill"></i> ทำไมต้องใช้ตัวนี้
+        </p>
+        <p>
+          Search Console UI ของ Google มี bug — block service account email ทั่วไป (เห็น "ไม่พบอีเมล" ตอน Add user) ทางแก้คือใช้ <strong>OAuth User flow</strong> แทน:
+          ใช้บัญชี Google ของคุณเอง (ที่เป็น owner ของ Search Console property อยู่แล้ว) → ไม่ต้องเพิ่ม service account
+        </p>
+        <p class="mt-2 text-[11px] text-amber-700">
+          <strong>หมายเหตุ</strong>: GA4 ยังคงใช้ service account เหมือนเดิม (ทำงานได้ปกติ) — ตัวนี้ใช้แค่กับ Search Console
+        </p>
+      </div>
+
+      @if($oauth_is_connected)
+        {{-- Connected state --}}
+        <div class="rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 px-4 py-3 mb-4">
+          <p class="text-xs font-semibold text-emerald-700 dark:text-emerald-300 mb-1">
+            <i class="bi bi-check-circle-fill"></i> Connected as:
+          </p>
+          <code class="block px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-500/30 text-xs font-mono break-all">
+            {{ $oauth_connected_email ?? '(unknown)' }}
+          </code>
+          <p class="text-[11px] text-emerald-700 dark:text-emerald-300 mt-2">
+            Search Console queries ตอนนี้ใช้บัญชีนี้ (ไม่ใช่ service account) — บัญชีนี้ต้องเป็น owner หรือ user ของ Search Console property
+          </p>
+        </div>
+        <form method="POST" action="{{ route('admin.settings.google-apis.oauth-disconnect') }}"
+              onsubmit="return confirm('Disconnect Google account นี้? — Search Console จะหยุดทำงานจนกว่าจะ connect ใหม่')">
+          @csrf
+          <button type="submit"
+                  class="inline-flex items-center gap-1.5 rounded-xl bg-white dark:bg-white/5 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-50 px-3 py-2 text-xs font-medium transition">
+            <i class="bi bi-box-arrow-left"></i> Disconnect
+          </button>
+        </form>
+      @else
+        {{-- Setup guide --}}
+        <div class="rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 px-4 py-3 text-xs text-slate-700 dark:text-slate-300 mb-4">
+          <p class="font-semibold text-blue-700 dark:text-blue-300 mb-1.5">
+            <i class="bi bi-info-circle"></i> ขั้นตอนตั้งค่า:
+          </p>
+          <ol class="space-y-1.5 list-decimal pl-5">
+            <li>
+              ไปที่
+              <a href="https://console.cloud.google.com/apis/credentials?project=loadroop" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">Cloud Console → Credentials</a>
+              → คลิก OAuth 2.0 Client ID ที่มีอยู่ (เช่น "Web Loadroop") หรือสร้างใหม่
+            </li>
+            <li>
+              ใต้ "Authorized redirect URIs" — กด <strong>Add URI</strong> และวาง:
+              <div class="mt-1 flex items-center gap-2">
+                <code class="flex-1 px-2 py-1 rounded bg-white dark:bg-slate-900 border border-blue-200 text-[11px] font-mono break-all">{{ $oauth_callback_url }}</code>
+                <button type="button"
+                        onclick="navigator.clipboard.writeText('{{ $oauth_callback_url }}'); this.textContent='✓'; setTimeout(() => this.textContent='Copy', 1500)"
+                        class="shrink-0 rounded bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 text-[11px] font-medium transition">Copy</button>
+              </div>
+            </li>
+            <li>กด Save ใน Cloud Console</li>
+            <li>Copy <strong>Client ID</strong> + <strong>Client Secret</strong> → กรอกในฟอร์มด้านล่าง</li>
+            <li>กดบันทึก → กด <strong>"Connect with Google"</strong> → Login ด้วยบัญชีที่เป็น owner ของ Search Console property</li>
+          </ol>
+        </div>
+
+        <form method="POST" action="{{ route('admin.settings.google-apis.save-oauth') }}" class="space-y-3">
+          @csrf
+          <div>
+            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">OAuth Client ID</label>
+            <input type="text" name="google_oauth_client_id" value="{{ $oauth_client_id }}"
+                   placeholder="123456789-abc...apps.googleusercontent.com" maxlength="200"
+                   class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 transition">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">OAuth Client Secret</label>
+            <input type="password" name="google_oauth_client_secret" value="{{ $oauth_client_secret }}"
+                   placeholder="GOCSPX-..." maxlength="200" autocomplete="off"
+                   class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 transition">
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="submit" class="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 text-sm font-medium transition">
+              <i class="bi bi-save"></i> บันทึก credentials
+            </button>
+            @if($oauth_has_credentials)
+            <a href="{{ route('admin.settings.google-apis.oauth-connect') }}"
+               class="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-4 py-2 text-sm font-semibold shadow-md transition">
+              <i class="bi bi-google"></i> Connect with Google
+            </a>
+            @endif
+          </div>
+        </form>
+      @endif
+    </div>
+  </div>
+
   <div class="rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 p-4 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
     <p class="font-medium text-slate-700 dark:text-slate-300 mb-1.5"><i class="bi bi-info-circle text-blue-500"></i> ฟีเจอร์ที่จะใช้งานได้หลังตั้งค่า:</p>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
