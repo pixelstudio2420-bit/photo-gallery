@@ -7,17 +7,25 @@ use App\Models\Festival;
 use App\Services\FestivalThemeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 /**
- * Admin festival management — list of seeded festivals with inline
- * enable/disable + edit. Festivals are seeded from FestivalsSeeder
- * (auto-run on deploy) so admin doesn't create from scratch — they
- * tweak the existing rows for content/copy/dates.
+ * Admin festival management — CRUD for themed seasonal popups.
  *
- * Why not full CRUD: festivals are a fixed canonical list (Songkran,
- * Loy Krathong, etc.). Admins shouldn't invent new festivals on a
- * whim — that path leads to popup spam. If they need a one-off promo,
- * the announcements system is the right tool.
+ * Originally seeded canonical festivals (Songkran, Loy Krathong,
+ * NYE, etc.) via FestivalsSeeder so admin only tweaked content.
+ * Phase 2 added full CRUD: admin can now create custom festivals
+ * (e.g. one-off promotions, regional events) + delete obsolete
+ * ones + duplicate an existing festival to bootstrap a new variant.
+ *
+ * Routes (registered in routes/festivals.php):
+ *   GET    /admin/festivals                 index   — list + stats
+ *   POST   /admin/festivals                 store   — create new
+ *   PUT    /admin/festivals/{id}            update  — save edit
+ *   DELETE /admin/festivals/{id}            destroy — remove (soft)
+ *   POST   /admin/festivals/{id}/toggle     toggle  — flip enabled
+ *   POST   /admin/festivals/{id}/bump-year  bumpYear — annual rotate
+ *   POST   /admin/festivals/{id}/duplicate  duplicate — clone preset
  */
 class FestivalController extends Controller
 {
@@ -41,6 +49,43 @@ class FestivalController extends Controller
     }
 
     /**
+     * Create a new festival. Admin uses this for one-off custom
+     * events that aren't covered by the canonical seeder (e.g. local
+     * provincial festivals, brand promotions, anniversary sales).
+     *
+     * Slug is auto-generated from the name if not provided — admin
+     * doesn't need to think about URL safety.
+     */
+    public function store(Request $request)
+    {
+        $validated = $this->validatePayload($request);
+
+        // Auto-generate slug from name if not provided. Append a 4-char
+        // random suffix to dodge slug collisions on similar names
+        // (e.g. two "Songkran 2026 special" rows in different years).
+        $slug = $validated['slug'] ?? null;
+        if (!$slug) {
+            $slug = Str::slug($validated['name']) ?: 'festival';
+        }
+        // Ensure uniqueness — append numbers if collision
+        $base = $slug;
+        $i = 1;
+        while (Festival::where('slug', $slug)->exists()) {
+            $slug = $base . '-' . (++$i);
+        }
+        $validated['slug']      = $slug;
+        $validated['enabled']   = $request->boolean('enabled', true);
+        $validated['is_recurring'] = $request->boolean('is_recurring', false);
+
+        $festival = Festival::create($validated);
+
+        $this->flushFestivalCaches();
+
+        return redirect()->route('admin.festivals.index')
+            ->with('success', "✓ เพิ่มเทศกาล '{$festival->name}' สำเร็จ");
+    }
+
+    /**
      * Update a festival in-place. Validates dates, headline, theme.
      * Cache flush ensures the next page load on any user picks up
      * the change.
@@ -49,39 +94,59 @@ class FestivalController extends Controller
     {
         $festival = Festival::findOrFail($id);
 
-        $validated = $request->validate([
-            'name'             => 'required|string|max:200',
-            'short_name'       => 'nullable|string|max:80',
-            'theme_variant'    => 'required|string|max:40',
-            'emoji'            => 'nullable|string|max:30',
-            'starts_at'        => 'required|date',
-            'ends_at'          => 'required|date|after_or_equal:starts_at',
-            'popup_lead_days'  => 'required|integer|min:0|max:90',
-            'headline'         => 'required|string|max:250',
-            'body_md'          => 'nullable|string|max:5000',
-            'cta_label'        => 'nullable|string|max:80',
-            'cta_url'          => 'nullable|string|max:500',
-            'show_priority'    => 'required|integer|min:0|max:255',
-            'enabled'          => 'nullable|boolean',
-        ]);
+        $validated = $this->validatePayload($request, $id);
+        $validated['enabled']      = $request->boolean('enabled');
+        $validated['is_recurring'] = $request->boolean('is_recurring', $festival->is_recurring);
 
-        // Verify theme variant exists in the service whitelist —
-        // prevents typo'd variants that would fall back to water-blue
-        // silently (admin would think they saved a theme that doesn't
-        // exist).
-        if (!isset(FestivalThemeService::THEMES[$validated['theme_variant']])) {
-            return back()->with('error', 'ธีมไม่ถูกต้อง — เลือกจากรายการ');
-        }
-
-        $validated['enabled'] = $request->boolean('enabled');
         $festival->update($validated);
-
-        // Bust any cached popup decisions — global flush is overkill,
-        // but festival cache keys are per-user and we don't track them
-        // individually. Cheap on small audiences.
         $this->flushFestivalCaches();
 
         return back()->with('success', '✓ บันทึก "' . $festival->name . '" สำเร็จ');
+    }
+
+    /**
+     * Soft-delete a festival. Uses Eloquent's SoftDeletes (via the
+     * model's deleted_at column) so the row stays in DB for audit —
+     * if admin deletes by mistake they can restore via raw SQL.
+     */
+    public function destroy(int $id)
+    {
+        $festival = Festival::findOrFail($id);
+        $name = $festival->name;
+        $festival->delete();
+
+        $this->flushFestivalCaches();
+
+        return back()->with('success', "✓ ลบเทศกาล '{$name}' สำเร็จ");
+    }
+
+    /**
+     * Duplicate an existing festival as a new draft. Useful for:
+     *   • Spinning up next year's variant before the seeder runs
+     *   • Creating a regional version (e.g. Songkran-Phuket)
+     *   • Building on top of a working template instead of from scratch
+     *
+     * Copy is created DISABLED by default so admin can edit before
+     * users see it. New slug appends -copy + counter.
+     */
+    public function duplicate(int $id)
+    {
+        $original = Festival::findOrFail($id);
+
+        $newSlug = $original->slug . '-copy';
+        $i = 1;
+        while (Festival::where('slug', $newSlug)->exists()) {
+            $newSlug = $original->slug . '-copy-' . (++$i);
+        }
+
+        $copy = $original->replicate();
+        $copy->slug = $newSlug;
+        $copy->name = $original->name . ' (สำเนา)';
+        $copy->enabled = false;   // start disabled — admin reviews before going live
+        $copy->save();
+
+        return redirect()->route('admin.festivals.index')
+            ->with('success', "✓ ทำสำเนา '{$original->name}' เป็น '{$copy->name}' (ปิดอยู่ — แก้ไขแล้วเปิด)");
     }
 
     /**
@@ -127,6 +192,54 @@ class FestivalController extends Controller
     }
 
     /**
+     * Shared validation rules for store + update. The optional $id
+     * lets update() exempt itself from the slug uniqueness check on
+     * its own row (otherwise edit would fail with "slug taken").
+     */
+    private function validatePayload(Request $request, ?int $id = null): array
+    {
+        $rules = [
+            'name'             => 'required|string|max:200',
+            'short_name'       => 'nullable|string|max:80',
+            'slug'             => 'nullable|string|max:80|regex:/^[a-z0-9\-]+$/',
+            'theme_variant'    => 'required|string|max:40',
+            'emoji'            => 'nullable|string|max:30',
+            'starts_at'        => 'required|date',
+            'ends_at'          => 'required|date|after_or_equal:starts_at',
+            'popup_lead_days'  => 'required|integer|min:0|max:90',
+            'headline'         => 'required|string|max:250',
+            'body_md'          => 'nullable|string|max:5000',
+            'cta_label'        => 'nullable|string|max:80',
+            'cta_url'          => 'nullable|string|max:500',
+            'show_priority'    => 'required|integer|min:0|max:255',
+            'target_province_id' => 'nullable|integer|exists:thai_provinces,id',
+            'enabled'          => 'nullable|boolean',
+            'is_recurring'     => 'nullable|boolean',
+        ];
+
+        // Slug uniqueness — exempt own row on edit
+        if ($id) {
+            $rules['slug'] .= '|unique:festivals,slug,' . $id;
+        } else {
+            $rules['slug'] .= '|unique:festivals,slug';
+        }
+
+        $validated = $request->validate($rules);
+
+        // Verify theme variant exists in the service whitelist
+        if (!isset(FestivalThemeService::THEMES[$validated['theme_variant']])) {
+            abort(422, 'ธีมไม่ถูกต้อง');
+        }
+
+        // Coerce empty province FK to null so we don't violate FK
+        if (empty($validated['target_province_id'])) {
+            $validated['target_province_id'] = null;
+        }
+
+        return $validated;
+    }
+
+    /**
      * Per-user cache keys aren't enumerable without scanning Redis
      * (or whatever cache backend we have), so we flush the entire
      * cache. Pragmatic — the marketplace is small enough that this
@@ -135,14 +248,8 @@ class FestivalController extends Controller
     private function flushFestivalCaches(): void
     {
         try {
-            // We only want to bust festival_popup_user_* keys but
-            // the cache driver doesn't support pattern delete.
-            // Settling for clearing on Redis-backed setups; on
-            // file/array drivers this is a no-op anyway.
             Cache::flush();
         } catch (\Throwable $e) {
-            // Cache flush failure is recoverable — popups will
-            // self-correct after the 60s TTL expires.
             \Log::warning('FestivalController cache flush failed: ' . $e->getMessage());
         }
     }

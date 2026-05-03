@@ -20,7 +20,10 @@ Route::prefix('admin/festivals')
     ->middleware(['admin', 'no.back'])
     ->group(function () {
         Route::get('/',                 [AdminFestivalController::class, 'index'])->name('index');
+        Route::post('/',                [AdminFestivalController::class, 'store'])->name('store');
         Route::put('/{id}',             [AdminFestivalController::class, 'update'])->name('update');
+        Route::delete('/{id}',          [AdminFestivalController::class, 'destroy'])->name('destroy');
         Route::post('/{id}/toggle',     [AdminFestivalController::class, 'toggle'])->name('toggle');
         Route::post('/{id}/bump-year',  [AdminFestivalController::class, 'bumpYear'])->name('bump-year');
+        Route::post('/{id}/duplicate',  [AdminFestivalController::class, 'duplicate'])->name('duplicate');
     });

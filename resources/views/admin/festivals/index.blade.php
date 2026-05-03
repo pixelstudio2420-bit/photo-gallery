@@ -3,7 +3,7 @@
 @section('title', 'เทศกาล / Festival popups')
 
 @section('content')
-<div x-data="{ openId: null, themePreviewId: null }">
+<div x-data="{ openId: null, themePreviewId: null, showCreate: false, confirmDeleteId: null }">
 
   {{-- ═══════════════════════════════════════════════════════════════
        HEADER — matches the products/digital-orders admin design
@@ -20,10 +20,11 @@
         <p class="text-xs text-slate-500 dark:text-slate-400">Popup ตามเทศกาลพร้อมธีมสี — สงกรานต์, ลอยกระทง, ปีใหม่ และอื่นๆ</p>
       </div>
     </div>
-    <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 px-3 py-1.5 text-xs font-medium border border-indigo-100 dark:border-indigo-500/20">
-      <i class="bi bi-info-circle"></i>
-      ระบบ seed เทศกาลใหม่อัตโนมัติทุกครั้งที่ deploy
-    </span>
+    <button type="button" @click="showCreate = !showCreate; if(showCreate) $nextTick(() => document.getElementById('create-festival-form')?.scrollIntoView({behavior:'smooth', block:'start'}))"
+            class="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-pink-500 to-orange-500 hover:from-pink-600 hover:to-orange-600 text-white px-4 py-2 text-sm font-medium shadow-sm shadow-pink-500/25 transition">
+      <i class="bi" :class="showCreate ? 'bi-x-lg' : 'bi-plus-lg'"></i>
+      <span x-text="showCreate ? 'ยกเลิก' : 'เพิ่มเทศกาล'"></span>
+    </button>
   </div>
 
   {{-- Flash messages --}}
@@ -102,13 +103,171 @@
   </div>
 
   {{-- ═══════════════════════════════════════════════════════════════
+       CREATE NEW FESTIVAL — Alpine-collapsed panel toggled by header
+       button. Same field layout as inline edit, just no row data.
+       ═══════════════════════════════════════════════════════════════ --}}
+  <div x-show="showCreate" x-cloak x-collapse id="create-festival-form" class="mb-6">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-pink-200 dark:border-pink-500/30 shadow-sm overflow-hidden">
+      <div class="h-1.5 bg-gradient-to-r from-pink-500 to-orange-500"></div>
+      <div class="p-5">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-400 flex items-center justify-center">
+            <i class="bi bi-plus-lg text-lg"></i>
+          </div>
+          <div>
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100">สร้างเทศกาลใหม่</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">สำหรับ promotion พิเศษหรือเทศกาลเฉพาะที่ — ระบบ canonical seeded แล้วแก้ไขในกรุปด้านล่าง</p>
+          </div>
+        </div>
+
+        <form method="POST" action="{{ route('admin.festivals.store') }}" class="space-y-4">
+          @csrf
+
+          {{-- Name + slug --}}
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="md:col-span-2">
+              <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">หัวข้อเทศกาล <span class="text-rose-500">*</span></label>
+              <input type="text" name="name" value="{{ old('name') }}" required maxlength="200" placeholder="เช่น สงกรานต์ Special 2027"
+                     class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500 transition">
+              @error('name')<p class="text-[11px] text-rose-500 mt-1">{{ $message }}</p>@enderror
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">ชื่อย่อ</label>
+              <input type="text" name="short_name" value="{{ old('short_name') }}" maxlength="80" placeholder="เช่น สงกรานต์"
+                     class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500 transition">
+            </div>
+          </div>
+
+          {{-- Slug + emoji + theme + priority --}}
+          <div class="grid grid-cols-2 md:grid-cols-12 gap-3">
+            <div class="md:col-span-4">
+              <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Slug <span class="text-slate-400 font-normal text-[10px]">(เว้นว่างเพื่อ auto-generate)</span>
+              </label>
+              <input type="text" name="slug" value="{{ old('slug') }}" maxlength="80" pattern="[a-z0-9\-]+" placeholder="songkran-2027-special"
+                     class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500 transition font-mono">
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Emoji</label>
+              <input type="text" name="emoji" value="{{ old('emoji', '🎉') }}" maxlength="30"
+                     class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-center text-lg focus:outline-none focus:ring-2 focus:ring-pink-500 transition">
+            </div>
+            <div class="md:col-span-4">
+              <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">ธีมสี <span class="text-rose-500">*</span></label>
+              <select name="theme_variant" required
+                      class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500 transition">
+                @foreach($themes as $key => $themeOpt)
+                  <option value="{{ $key }}" @selected(old('theme_variant', 'water-blue') === $key)>{{ $themeOpt['label'] }}</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Priority</label>
+              <input type="number" name="show_priority" value="{{ old('show_priority', 30) }}" min="0" max="255" required
+                     class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500 transition">
+            </div>
+          </div>
+
+          {{-- Dates --}}
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">เริ่มเทศกาล <span class="text-rose-500">*</span></label>
+              <input type="date" name="starts_at" value="{{ old('starts_at') }}" required
+                     class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500 transition">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">จบเทศกาล <span class="text-rose-500">*</span></label>
+              <input type="date" name="ends_at" value="{{ old('ends_at') }}" required
+                     class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500 transition">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">โชว์ popup ล่วงหน้า (วัน) <span class="text-rose-500">*</span></label>
+              <input type="number" name="popup_lead_days" value="{{ old('popup_lead_days', 7) }}" min="0" max="90" required
+                     class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500 transition">
+            </div>
+          </div>
+
+          {{-- Headline --}}
+          <div>
+            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">หัวข้อโชว์ใน popup <span class="text-rose-500">*</span></label>
+            <input type="text" name="headline" value="{{ old('headline') }}" required maxlength="250" placeholder="เช่น 🎉 ตรุษจีน 2027 — รับอั่งเปาภาพถ่ายฟรี!"
+                   class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500 transition">
+          </div>
+
+          {{-- Body --}}
+          <div>
+            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+              เนื้อหา <span class="text-slate-400 font-normal text-[10px]">(Markdown)</span>
+            </label>
+            <textarea name="body_md" rows="3" maxlength="5000" placeholder="**เทศกาล**...&#10;&#10;- รายละเอียด 1&#10;- รายละเอียด 2"
+                      class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500 transition font-mono">{{ old('body_md') }}</textarea>
+          </div>
+
+          {{-- CTA + targeting --}}
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">ปุ่ม CTA</label>
+              <input type="text" name="cta_label" value="{{ old('cta_label') }}" maxlength="80" placeholder="เช่น ดูรายละเอียด"
+                     class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500 transition">
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">ลิงก์ปุ่ม</label>
+              <input type="text" name="cta_url" value="{{ old('cta_url') }}" maxlength="500" placeholder="/events?tag=..."
+                     class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500 transition">
+            </div>
+          </div>
+
+          {{-- Targeting + flags --}}
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="md:col-span-2">
+              <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <i class="bi bi-geo-alt"></i> จำกัดเฉพาะจังหวัด <span class="text-slate-400 font-normal text-[10px]">(เว้นว่าง = ทั่วประเทศ)</span>
+              </label>
+              @include('partials.province-select', [
+                  'name' => 'target_province_id', 'selected' => old('target_province_id'),
+                  'placeholder' => '— ทั่วประเทศ —',
+              ])
+            </div>
+            <div class="flex items-end gap-2">
+              <label class="flex-1 flex items-center gap-2 cursor-pointer px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 hover:bg-slate-50 transition">
+                <input type="hidden" name="enabled" value="0">
+                <input type="checkbox" name="enabled" value="1" {{ old('enabled', '1') ? 'checked' : '' }}
+                       class="rounded border-slate-300 text-emerald-500 focus:ring-emerald-500">
+                <span class="text-xs font-medium text-slate-700 dark:text-slate-300">เปิดใช้</span>
+              </label>
+              <label class="flex-1 flex items-center gap-2 cursor-pointer px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 hover:bg-slate-50 transition">
+                <input type="hidden" name="is_recurring" value="0">
+                <input type="checkbox" name="is_recurring" value="1" {{ old('is_recurring') ? 'checked' : '' }}
+                       class="rounded border-slate-300 text-indigo-500 focus:ring-indigo-500">
+                <span class="text-xs font-medium text-slate-700 dark:text-slate-300">รายปี</span>
+              </label>
+            </div>
+          </div>
+
+          {{-- Submit row --}}
+          <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-white/10">
+            <button type="button" @click="showCreate = false"
+                    class="inline-flex items-center gap-1.5 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-50 px-4 py-2 text-sm font-medium transition">
+              ยกเลิก
+            </button>
+            <button type="submit"
+                    class="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-pink-500 to-orange-500 hover:from-pink-600 hover:to-orange-600 text-white px-4 py-2 text-sm font-medium shadow-sm shadow-pink-500/25 transition">
+              <i class="bi bi-plus-lg"></i> สร้างเทศกาล
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {{-- ═══════════════════════════════════════════════════════════════
        FESTIVAL CARDS
        Grid of cards. Each card has:
          • Theme color strip (top edge) — instant visual sort by mood
          • Big emoji + name + status pill row
          • Headline preview
          • Date range + popup window meta
-         • Action toolbar (toggle / bump-year / edit)
+         • Action toolbar (toggle / bump-year / edit / duplicate / delete)
          • Inline edit form (Alpine collapse)
        ═══════════════════════════════════════════════════════════════ --}}
 
@@ -289,13 +448,60 @@
               </form>
               @endif
 
-              {{-- Edit toggle --}}
-              <button type="button"
-                      @click="openId = openId === {{ $f->id }} ? null : {{ $f->id }}"
-                      class="inline-flex items-center gap-1.5 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10 px-3 py-1.5 text-xs font-medium transition ml-auto">
-                <i class="bi" :class="openId === {{ $f->id }} ? 'bi-x-lg' : 'bi-pencil'"></i>
-                <span x-text="openId === {{ $f->id }} ? 'ปิด' : 'แก้ไข'"></span>
-              </button>
+              {{-- Right cluster: Duplicate / Delete / Edit --}}
+              <div class="ml-auto flex items-center gap-2">
+                {{-- Duplicate — clones into a disabled draft --}}
+                <form method="POST" action="{{ route('admin.festivals.duplicate', $f->id) }}" class="contents"
+                      onsubmit="return confirm('ทำสำเนา &quot;{{ $f->short_name ?: $f->name }}&quot; เป็นเทศกาลใหม่ไหม? (จะถูกตั้งเป็นปิดอยู่)')">
+                  @csrf
+                  <button type="submit"
+                          title="ทำสำเนาเทศกาล (เพื่อแก้แล้วใช้ใหม่)"
+                          class="inline-flex items-center gap-1.5 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/10 px-2.5 py-1.5 text-xs font-medium transition">
+                    <i class="bi bi-files"></i>
+                  </button>
+                </form>
+
+                {{-- Delete — confirmation prompt then DELETE form --}}
+                <button type="button"
+                        @click="confirmDeleteId = {{ $f->id }}"
+                        title="ลบเทศกาลนี้"
+                        class="inline-flex items-center gap-1.5 rounded-xl bg-white dark:bg-white/5 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 px-2.5 py-1.5 text-xs font-medium transition">
+                  <i class="bi bi-trash"></i>
+                </button>
+
+                {{-- Edit toggle --}}
+                <button type="button"
+                        @click="openId = openId === {{ $f->id }} ? null : {{ $f->id }}"
+                        class="inline-flex items-center gap-1.5 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10 px-3 py-1.5 text-xs font-medium transition">
+                  <i class="bi" :class="openId === {{ $f->id }} ? 'bi-x-lg' : 'bi-pencil'"></i>
+                  <span x-text="openId === {{ $f->id }} ? 'ปิด' : 'แก้ไข'"></span>
+                </button>
+              </div>
+            </div>
+
+            {{-- Inline delete confirmation panel — opens within the
+                 card to avoid a full-screen modal that blocks the rest
+                 of the list. Shows the festival name + final guard. --}}
+            <div x-show="confirmDeleteId === {{ $f->id }}" x-cloak x-collapse class="mt-3">
+              <div class="rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                <div class="text-xs text-rose-800 dark:text-rose-200 leading-snug">
+                  <strong><i class="bi bi-exclamation-triangle-fill"></i> ยืนยันลบ "{{ $f->name }}"?</strong>
+                  <div class="opacity-90 mt-0.5">การลบจะ soft-delete (ข้อมูลยังอยู่ใน DB เพื่อ audit แต่จะหายจาก popup ทันที)</div>
+                </div>
+                <div class="flex gap-2">
+                  <button type="button" @click="confirmDeleteId = null"
+                          class="inline-flex items-center gap-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-3 py-1.5 text-xs font-medium transition">
+                    ยกเลิก
+                  </button>
+                  <form method="POST" action="{{ route('admin.festivals.destroy', $f->id) }}" class="contents">
+                    @csrf @method('DELETE')
+                    <button type="submit"
+                            class="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 text-xs font-medium shadow-sm transition">
+                      <i class="bi bi-trash"></i> ลบเลย
+                    </button>
+                  </form>
+                </div>
+              </div>
             </div>
           </div>
 
