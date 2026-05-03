@@ -418,6 +418,52 @@ class BlogPostController extends Controller
     }
 
     /* ================================================================
+     *  INLINE IMAGE UPLOAD (Tiptap editor toolbar / drag-drop / paste)
+     *
+     *  Used by the admin-blog-editor.js Tiptap module. Returns:
+     *      { success: true, url: 'https://r2.../...' }
+     *
+     *  Path schema delegates to R2MediaService::uploadBlogImage so
+     *  inline images live alongside the featured_image under
+     *  blog/posts/{authorAdminId}/{postId or 0 for unsaved drafts}/...
+     *  When the post is later saved, images already point to the
+     *  correct R2 URL — no rewrite needed.
+     * ================================================================ */
+    public function uploadInlineImage(Request $request, R2MediaService $media): JsonResponse
+    {
+        $request->validate([
+            // 8 MB ceiling — larger than featured_image (5 MB) since article
+            // body images may include screenshots / diagrams.
+            'image' => 'required|image|mimes:jpeg,jpg,png,webp,gif|max:8192',
+            'post_id' => 'nullable|integer',
+        ]);
+
+        $authorId = Auth::guard('admin')->id();
+        if (!$authorId) {
+            return response()->json(['success' => false, 'error' => 'unauthenticated'], 401);
+        }
+
+        // post_id = 0 is allowed for new posts (draft uploads). When the post
+        // is saved, the URLs already point to R2 — Laravel doesn't need to
+        // rewrite them.
+        $postId = (int) ($request->input('post_id') ?? 0);
+
+        try {
+            $upload = $media->uploadBlogImage($authorId, $postId, $request->file('image'));
+            return response()->json([
+                'success' => true,
+                'url'     => $upload->url ?: $media->url($upload->key),
+                'key'     => $upload->key,
+            ]);
+        } catch (InvalidMediaFileException $e) {
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            \Log::error('Tiptap inline image upload failed: ' . $e->getMessage());
+            return response()->json(['success' => false, 'error' => 'upload_failed'], 500);
+        }
+    }
+
+    /* ================================================================
      *  AI METHODS (return JSON for AJAX)
      * ================================================================ */
 

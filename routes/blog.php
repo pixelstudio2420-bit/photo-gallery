@@ -43,6 +43,9 @@ Route::prefix('admin/blog')->name('admin.blog.')->middleware(['admin', 'no.back'
     Route::post('posts/bulk-action',           [\App\Http\Controllers\Admin\BlogPostController::class, 'bulkAction'])->name('posts.bulk-action');
     Route::post('posts/{id}/duplicate',        [\App\Http\Controllers\Admin\BlogPostController::class, 'duplicate'])->name('posts.duplicate');
 
+    // Tiptap inline image upload (toolbar / drag-drop / paste)
+    Route::post('posts/upload-inline-image',   [\App\Http\Controllers\Admin\BlogPostController::class, 'uploadInlineImage'])->name('posts.upload-inline-image');
+
     // AI endpoints for posts
     Route::post('posts/ai/generate',          [\App\Http\Controllers\Admin\BlogPostController::class, 'aiGenerate'])->name('posts.ai.generate');
     Route::post('posts/ai/rewrite',           [\App\Http\Controllers\Admin\BlogPostController::class, 'aiRewrite'])->name('posts.ai.rewrite');

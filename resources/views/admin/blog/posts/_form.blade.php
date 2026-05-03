@@ -5,8 +5,7 @@
 
 @push('styles')
 <style>
-    .editor-toolbar button { @apply w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-indigo-400 transition-colors text-sm; }
-    .editor-toolbar button.active { @apply bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400; }
+    /* .editor-toolbar / .editor-toolbar button — removed (replaced by Tiptap .tt-toolbar/.tt-btn below) */
     .char-counter { @apply text-xs text-gray-400; }
     .char-counter.warning { @apply text-amber-500; }
     .char-counter.danger { @apply text-red-500; }
@@ -61,6 +60,184 @@
     .ai-range::-moz-range-thumb {
         @apply w-4 h-4 rounded-full bg-white border-2 border-indigo-600 cursor-pointer;
     }
+
+    /* ═══════════════════════════════════════════════════════════════
+       Tiptap Editor — Toolbar + Content Styling
+       ═══════════════════════════════════════════════════════════════ */
+    .tt-toolbar { gap: 2px; }
+    .tt-btn {
+        @apply w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 dark:text-gray-400
+               hover:bg-gray-100 hover:text-indigo-600 dark:hover:bg-slate-700 dark:hover:text-indigo-300
+               transition-colors text-sm cursor-pointer;
+    }
+    .tt-btn.is-active {
+        @apply bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300;
+    }
+    .tt-btn:disabled {
+        @apply opacity-40 cursor-not-allowed;
+    }
+    .tt-sep {
+        @apply w-px h-5 bg-gray-200 dark:bg-gray-600 mx-1;
+    }
+
+    /* Editor mount + ProseMirror content area */
+    .tt-editor {
+        min-height: 480px;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+    .tiptap-content {
+        @apply px-6 py-5 text-sm leading-relaxed text-gray-800 dark:text-gray-100;
+        outline: none;
+        min-height: 480px;
+        font-size: 15px;
+        line-height: 1.75;
+    }
+    .tiptap-content p { margin: 0 0 0.875rem; }
+    .tiptap-content h1, .tiptap-content h2, .tiptap-content h3, .tiptap-content h4 {
+        font-weight: 700; line-height: 1.35; margin: 1.5rem 0 0.625rem; color: #0f172a;
+    }
+    .dark .tiptap-content h1, .dark .tiptap-content h2, .dark .tiptap-content h3, .dark .tiptap-content h4 { color: #f1f5f9; }
+    .tiptap-content h2 { font-size: 1.5rem; padding-bottom: 0.375rem; border-bottom: 2px solid #e0e7ff; }
+    .dark .tiptap-content h2 { border-bottom-color: rgba(99, 102, 241, 0.25); }
+    .tiptap-content h3 { font-size: 1.25rem; }
+    .tiptap-content h4 { font-size: 1.0625rem; }
+
+    .tiptap-content strong { font-weight: 700; color: #0f172a; }
+    .dark .tiptap-content strong { color: #f1f5f9; }
+    .tiptap-content em { font-style: italic; }
+    .tiptap-content u { text-decoration: underline; }
+
+    /* Lists */
+    .tiptap-content ul.tt-ul, .tiptap-content ol.tt-ol {
+        margin: 0.75rem 0 1rem 1.5rem; padding-left: 0.5rem;
+    }
+    .tiptap-content ul.tt-ul { list-style: disc; }
+    .tiptap-content ol.tt-ol { list-style: decimal; }
+    .tiptap-content li { margin-bottom: 0.375rem; }
+    .tiptap-content li > p { margin: 0; }
+
+    /* Task list */
+    .tiptap-content ul.tt-task-list { list-style: none; padding-left: 0; margin: 0.75rem 0 1rem; }
+    .tiptap-content li.tt-task-item {
+        display: flex; align-items: flex-start; gap: 0.625rem; padding-left: 0;
+    }
+    .tiptap-content li.tt-task-item > label { user-select: none; padding-top: 0.125rem; }
+    .tiptap-content li.tt-task-item > div { flex: 1; }
+    .tiptap-content li.tt-task-item input[type="checkbox"] {
+        @apply w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500;
+    }
+
+    /* Links */
+    .tiptap-content a.tt-link {
+        @apply text-indigo-600 dark:text-indigo-300 underline decoration-indigo-300 underline-offset-2;
+    }
+
+    /* Inline code */
+    .tiptap-content code {
+        @apply bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300
+               px-1.5 py-0.5 rounded text-[0.875em] font-mono;
+    }
+
+    /* Code block */
+    .tiptap-content pre.tt-codeblock,
+    .tiptap-content pre {
+        @apply bg-slate-900 text-slate-100 rounded-xl px-4 py-3 my-4 overflow-x-auto text-[0.875em];
+        font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    }
+    .tiptap-content pre code { background: transparent; color: inherit; padding: 0; }
+
+    /* Blockquote */
+    .tiptap-content blockquote.tt-blockquote,
+    .tiptap-content blockquote {
+        margin: 1rem 0; padding: 0.75rem 1rem 0.75rem 1rem;
+        border-left: 4px solid #6366f1;
+        background: rgba(99, 102, 241, 0.06);
+        border-radius: 0 0.5rem 0.5rem 0;
+        color: #334155;
+    }
+    .dark .tiptap-content blockquote { color: #cbd5e1; background: rgba(99, 102, 241, 0.12); }
+    .tiptap-content blockquote p:last-child { margin-bottom: 0; }
+
+    /* Horizontal rule */
+    .tiptap-content hr.tt-hr,
+    .tiptap-content hr {
+        margin: 1.5rem auto; border: 0;
+        height: 3px; width: 64px;
+        background: linear-gradient(90deg, #6366f1, #a78bfa);
+        border-radius: 9999px; opacity: 0.55;
+    }
+
+    /* Highlight */
+    .tiptap-content mark.tt-mark,
+    .tiptap-content mark {
+        background: linear-gradient(180deg, transparent 60%, rgba(250, 204, 21, 0.55) 60%);
+        color: inherit; padding: 0 1px;
+    }
+    .dark .tiptap-content mark {
+        background: linear-gradient(180deg, transparent 60%, rgba(250, 204, 21, 0.4) 60%);
+    }
+
+    /* Image */
+    .tiptap-content img.tt-image,
+    .tiptap-content img {
+        max-width: 100%; height: auto;
+        border-radius: 0.75rem;
+        box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.18);
+        margin: 1rem auto;
+        display: block;
+    }
+    .tiptap-content img.ProseMirror-selectednode {
+        outline: 3px solid #6366f1; outline-offset: 4px;
+    }
+
+    /* Tables */
+    .tiptap-content table.tt-table,
+    .tiptap-content table {
+        border-collapse: collapse; width: 100%; margin: 1rem 0;
+        border-radius: 0.5rem; overflow: hidden;
+        border: 1px solid #e5e7eb;
+    }
+    .dark .tiptap-content table { border-color: rgba(255,255,255,0.08); }
+    .tiptap-content th, .tiptap-content td { padding: 0.625rem 0.875rem; border: 1px solid #e5e7eb; vertical-align: top; }
+    .dark .tiptap-content th, .dark .tiptap-content td { border-color: rgba(255,255,255,0.08); }
+    .tiptap-content th.tt-th, .tiptap-content th {
+        background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; font-weight: 600; text-align: left;
+    }
+    .tiptap-content td.tt-td.has-focus, .tiptap-content th.tt-th.has-focus,
+    .tiptap-content td.has-focus, .tiptap-content th.has-focus {
+        outline: 2px solid #6366f1; outline-offset: -2px;
+    }
+    .tiptap-content .tableWrapper { overflow-x: auto; }
+
+    /* Selection cell */
+    .tiptap-content .selectedCell:after {
+        background: rgba(99, 102, 241, 0.15);
+        content: ""; position: absolute; left: 0; right: 0; top: 0; bottom: 0; pointer-events: none; z-index: 2;
+    }
+
+    /* YouTube */
+    .tiptap-content div[data-youtube-video] { margin: 1rem auto; max-width: 100%; }
+    .tiptap-content iframe.tt-youtube,
+    .tiptap-content iframe {
+        max-width: 100%; aspect-ratio: 16/9; border-radius: 0.75rem;
+        box-shadow: 0 8px 24px -8px rgba(0,0,0,0.2);
+    }
+
+    /* Placeholder */
+    .tiptap-content p.is-editor-empty:first-child::before {
+        color: #9ca3af; content: attr(data-placeholder); float: left; height: 0; pointer-events: none;
+    }
+    .dark .tiptap-content p.is-editor-empty:first-child::before { color: #6b7280; }
+
+    /* Focus ring on the whole editor */
+    .tt-editor:focus-within {
+        background: #fff;
+    }
+    .dark .tt-editor:focus-within { background: rgba(15, 23, 42, 0.5); }
+
+    /* ProseMirror sometimes leaves a stray gap-cursor — hide it */
+    .tiptap-content .ProseMirror-gapcursor { display: block; pointer-events: none; }
 </style>
 @endpush
 
@@ -119,57 +296,232 @@
                     </div>
                 </div>
 
-                {{-- Content Editor --}}
-                <div class="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-white/[0.06] overflow-hidden">
-                    {{-- Editor Tabs --}}
-                    <div class="flex items-center justify-between border-b border-gray-100 dark:border-white/[0.06] px-4 py-2">
-                        <div class="flex items-center gap-1">
-                            <button type="button" @click="editorTab = 'write'"
-                                    :class="editorTab === 'write' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'"
-                                    class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
-                                <i class="bi bi-pencil mr-1"></i>เขียน
-                            </button>
-                            <button type="button" @click="editorTab = 'preview'"
-                                    :class="editorTab === 'preview' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'"
-                                    class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
-                                <i class="bi bi-eye mr-1"></i>พรีวิว
-                            </button>
+                {{-- ═══ Content Editor (Tiptap WYSIWYG) ═══ --}}
+                <div class="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-white/[0.06] overflow-hidden"
+                     x-data="blogTiptapEditor({
+                        initialContent: @js(old('content', $post->content ?? '')),
+                        postId: {{ $isEdit ? $post->id : 0 }},
+                        uploadUrl: '{{ route('admin.blog.posts.upload-inline-image') }}',
+                        onChange: (html) => form.content = html,
+                     })"
+                     x-init="initEditor()"
+                     x-on:keydown.ctrl.s.prevent.window="$el.querySelector('form,#postForm') || null">
+
+                    {{-- Hidden field that actually submits to the controller --}}
+                    <textarea name="content" id="contentEditor" x-model="form.content" class="hidden" tabindex="-1" aria-hidden="true">{{ old('content', $post->content ?? '') }}</textarea>
+
+                    {{-- Toolbar --}}
+                    <div class="tt-toolbar flex items-center gap-0.5 px-3 py-2 border-b border-gray-100 dark:border-white/[0.06] bg-gray-50/50 dark:bg-slate-700/30 flex-wrap">
+
+                        {{-- History --}}
+                        <button type="button" @click="undo()" class="tt-btn" title="ย้อนกลับ (Ctrl+Z)"><i class="bi bi-arrow-counterclockwise"></i></button>
+                        <button type="button" @click="redo()" class="tt-btn" title="ทำซ้ำ (Ctrl+Shift+Z)"><i class="bi bi-arrow-clockwise"></i></button>
+
+                        <div class="tt-sep"></div>
+
+                        {{-- Block formatters --}}
+                        <button type="button" @click="setParagraph()" :class="state.paragraph && !state.h2 && !state.h3 && !state.h4 ? 'is-active' : ''" class="tt-btn" title="ย่อหน้าปกติ"><span class="text-xs font-bold">¶</span></button>
+                        <button type="button" @click="setH(2)" :class="state.h2 ? 'is-active' : ''" class="tt-btn" title="หัวข้อ H2"><span class="text-xs font-bold">H2</span></button>
+                        <button type="button" @click="setH(3)" :class="state.h3 ? 'is-active' : ''" class="tt-btn" title="หัวข้อ H3"><span class="text-xs font-bold">H3</span></button>
+                        <button type="button" @click="setH(4)" :class="state.h4 ? 'is-active' : ''" class="tt-btn" title="หัวข้อ H4"><span class="text-xs font-bold">H4</span></button>
+
+                        <div class="tt-sep"></div>
+
+                        {{-- Inline formatters --}}
+                        <button type="button" @click="toggleBold()" :class="state.bold ? 'is-active' : ''" class="tt-btn" title="ตัวหนา (Ctrl+B)"><i class="bi bi-type-bold"></i></button>
+                        <button type="button" @click="toggleItalic()" :class="state.italic ? 'is-active' : ''" class="tt-btn" title="ตัวเอียง (Ctrl+I)"><i class="bi bi-type-italic"></i></button>
+                        <button type="button" @click="toggleUnderline()" :class="state.underline ? 'is-active' : ''" class="tt-btn" title="ขีดเส้นใต้ (Ctrl+U)"><i class="bi bi-type-underline"></i></button>
+                        <button type="button" @click="toggleStrike()" :class="state.strike ? 'is-active' : ''" class="tt-btn" title="ขีดทับ"><i class="bi bi-type-strikethrough"></i></button>
+                        <button type="button" @click="toggleHighlight()" :class="state.highlight ? 'is-active' : ''" class="tt-btn" title="ไฮไลต์"><i class="bi bi-highlighter"></i></button>
+                        <button type="button" @click="toggleCode()" :class="state.code ? 'is-active' : ''" class="tt-btn" title="โค้ด inline"><i class="bi bi-code"></i></button>
+
+                        <div class="tt-sep"></div>
+
+                        {{-- Lists --}}
+                        <button type="button" @click="toggleBulletList()" :class="state.bulletList ? 'is-active' : ''" class="tt-btn" title="รายการแบบจุด"><i class="bi bi-list-ul"></i></button>
+                        <button type="button" @click="toggleOrderedList()" :class="state.orderedList ? 'is-active' : ''" class="tt-btn" title="รายการแบบเลข"><i class="bi bi-list-ol"></i></button>
+                        <button type="button" @click="toggleTaskList()" :class="state.taskList ? 'is-active' : ''" class="tt-btn" title="Checklist"><i class="bi bi-check2-square"></i></button>
+
+                        <div class="tt-sep"></div>
+
+                        {{-- Alignment --}}
+                        <button type="button" @click="setAlign('left')" :class="state.alignLeft ? 'is-active' : ''" class="tt-btn" title="ชิดซ้าย"><i class="bi bi-text-left"></i></button>
+                        <button type="button" @click="setAlign('center')" :class="state.alignCenter ? 'is-active' : ''" class="tt-btn" title="กึ่งกลาง"><i class="bi bi-text-center"></i></button>
+                        <button type="button" @click="setAlign('right')" :class="state.alignRight ? 'is-active' : ''" class="tt-btn" title="ชิดขวา"><i class="bi bi-text-right"></i></button>
+
+                        <div class="tt-sep"></div>
+
+                        {{-- Block elements --}}
+                        <button type="button" @click="toggleBlockquote()" :class="state.blockquote ? 'is-active' : ''" class="tt-btn" title="คำพูด/Callout"><i class="bi bi-quote"></i></button>
+                        <button type="button" @click="toggleCodeBlock()" :class="state.codeBlock ? 'is-active' : ''" class="tt-btn" title="โค้ดบล็อก"><i class="bi bi-code-square"></i></button>
+                        <button type="button" @click="insertHr()" class="tt-btn" title="เส้นแบ่ง"><i class="bi bi-hr"></i></button>
+
+                        <div class="tt-sep"></div>
+
+                        {{-- Link / Image / Embed --}}
+                        <button type="button" @click="openLinkPicker()" :class="state.link ? 'is-active' : ''" class="tt-btn" title="เพิ่มลิงก์ (Ctrl+K)"><i class="bi bi-link-45deg"></i></button>
+                        <button type="button" @click="openImagePicker()" class="tt-btn" title="เพิ่มรูปภาพ"><i class="bi bi-image"></i></button>
+                        <button type="button" @click="openYoutube()" class="tt-btn" title="ฝัง YouTube"><i class="bi bi-youtube"></i></button>
+                        <button type="button" @click="insertTable()" :class="state.table ? 'is-active' : ''" class="tt-btn" title="แทรกตาราง"><i class="bi bi-table"></i></button>
+
+                        {{-- Table operations (only show when inside table) --}}
+                        <template x-if="state.table">
+                            <span class="inline-flex items-center gap-0.5">
+                                <div class="tt-sep"></div>
+                                <button type="button" @click="addColumnAfter()" class="tt-btn" title="เพิ่มคอลัมน์"><i class="bi bi-layout-three-columns"></i></button>
+                                <button type="button" @click="addRowAfter()" class="tt-btn" title="เพิ่มแถว"><i class="bi bi-list-task"></i></button>
+                                <button type="button" @click="deleteColumn()" class="tt-btn" title="ลบคอลัมน์"><i class="bi bi-dash-square"></i></button>
+                                <button type="button" @click="deleteTable()" class="tt-btn !text-red-500" title="ลบตาราง"><i class="bi bi-trash"></i></button>
+                            </span>
+                        </template>
+
+                        <div class="tt-sep"></div>
+
+                        {{-- Clear formatting --}}
+                        <button type="button" @click="clearMarks()" class="tt-btn" title="ล้างการจัดรูปแบบ"><i class="bi bi-eraser"></i></button>
+                    </div>
+
+                    {{-- Editor mount point --}}
+                    <div x-ref="tiptap" class="tt-editor"></div>
+
+                    {{-- Status bar --}}
+                    <div class="flex items-center justify-between px-4 py-2 border-t border-gray-100 dark:border-white/[0.06] bg-gray-50/30 dark:bg-slate-700/20 text-xs text-gray-500 dark:text-gray-400">
+                        <div class="flex items-center gap-3">
+                            <span><i class="bi bi-fonts mr-1"></i><span x-text="words"></span> คำ</span>
+                            <span><i class="bi bi-textarea-t mr-1"></i><span x-text="chars"></span> ตัวอักษร</span>
+                        </div>
+                        <span class="hidden sm:flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            <span>บันทึกอัตโนมัติเมื่อกดบันทึก</span>
+                        </span>
+                    </div>
+
+                    {{-- ─── Link Picker Dialog ─── --}}
+                    <div x-show="linkPickerOpen" x-cloak
+                         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+                         x-transition.opacity @click.self="linkPickerOpen = false">
+                        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+                            <div class="px-5 py-4 border-b border-gray-100 dark:border-white/[0.06] flex items-center justify-between">
+                                <h3 class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                    <i class="bi bi-link-45deg text-indigo-500"></i>เพิ่ม / แก้ไขลิงก์
+                                </h3>
+                                <button type="button" @click="linkPickerOpen = false" class="text-gray-400 hover:text-gray-600"><i class="bi bi-x-lg"></i></button>
+                            </div>
+                            <div class="p-5 space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">URL</label>
+                                    <input type="url" x-model="linkUrl" placeholder="https://example.com"
+                                           @keydown.enter.prevent="applyLink()"
+                                           class="w-full text-sm px-3 py-2 border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-slate-700/50 focus:ring-2 focus:ring-indigo-500 dark:text-white">
+                                </div>
+                                <div x-show="!editor || editor.state.selection.empty">
+                                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">ข้อความที่แสดง (ตัวเลือก)</label>
+                                    <input type="text" x-model="linkText" placeholder="คลิกที่นี่"
+                                           class="w-full text-sm px-3 py-2 border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-slate-700/50 focus:ring-2 focus:ring-indigo-500 dark:text-white">
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-100 dark:border-white/[0.06] bg-gray-50/50 dark:bg-slate-700/20">
+                                <button type="button" @click="removeLink()" x-show="state.link"
+                                        class="text-xs px-3 py-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10">
+                                    <i class="bi bi-trash mr-1"></i>ลบลิงก์
+                                </button>
+                                <div class="flex items-center gap-2 ml-auto">
+                                    <button type="button" @click="linkPickerOpen = false"
+                                            class="text-xs px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700">
+                                        ยกเลิก
+                                    </button>
+                                    <button type="button" @click="applyLink()"
+                                            class="text-xs px-4 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-medium">
+                                        บันทึกลิงก์
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    {{-- Toolbar --}}
-                    <div class="editor-toolbar flex items-center gap-1 px-4 py-2 border-b border-gray-100 dark:border-white/[0.06] bg-gray-50/50 dark:bg-slate-700/30 flex-wrap"
-                         x-show="editorTab === 'write'">
-                        <button type="button" @click="insertFormat('bold')" title="ตัวหนา"><i class="bi bi-type-bold"></i></button>
-                        <button type="button" @click="insertFormat('italic')" title="ตัวเอียง"><i class="bi bi-type-italic"></i></button>
-                        <div class="w-px h-5 bg-gray-200 dark:bg-gray-600 mx-1"></div>
-                        <button type="button" @click="insertFormat('h2')" title="หัวข้อ H2"><b class="text-xs">H2</b></button>
-                        <button type="button" @click="insertFormat('h3')" title="หัวข้อ H3"><b class="text-xs">H3</b></button>
-                        <div class="w-px h-5 bg-gray-200 dark:bg-gray-600 mx-1"></div>
-                        <button type="button" @click="insertFormat('ul')" title="รายการ"><i class="bi bi-list-ul"></i></button>
-                        <button type="button" @click="insertFormat('link')" title="ลิงก์"><i class="bi bi-link-45deg"></i></button>
-                        <button type="button" @click="insertFormat('image')" title="รูปภาพ"><i class="bi bi-image"></i></button>
-                        <div class="w-px h-5 bg-gray-200 dark:bg-gray-600 mx-1"></div>
-                        <button type="button" @click="insertFormat('affiliate_cta')" title="Affiliate CTA Block"
-                                class="!w-auto px-2 gap-1">
-                            <i class="bi bi-megaphone"></i>
-                            <span class="text-xs">CTA</span>
-                        </button>
+                    {{-- ─── Image Picker Dialog ─── --}}
+                    <div x-show="imagePickerOpen" x-cloak
+                         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+                         x-transition.opacity @click.self="imagePickerOpen = false">
+                        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+                            <div class="px-5 py-4 border-b border-gray-100 dark:border-white/[0.06] flex items-center justify-between">
+                                <h3 class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                    <i class="bi bi-image text-indigo-500"></i>เพิ่มรูปภาพ
+                                </h3>
+                                <button type="button" @click="imagePickerOpen = false" class="text-gray-400 hover:text-gray-600"><i class="bi bi-x-lg"></i></button>
+                            </div>
+                            <div class="p-5 space-y-4">
+                                {{-- Upload from device --}}
+                                <button type="button" @click="triggerImageFile()" :disabled="imageUploading"
+                                        class="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-indigo-300 dark:border-indigo-400/40 rounded-xl bg-indigo-50/50 dark:bg-indigo-500/10 hover:bg-indigo-50 dark:hover:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 transition-colors disabled:opacity-50">
+                                    <template x-if="!imageUploading">
+                                        <span class="inline-flex items-center gap-2"><i class="bi bi-cloud-upload"></i>อัพโหลดจากอุปกรณ์</span>
+                                    </template>
+                                    <template x-if="imageUploading">
+                                        <span class="inline-flex items-center gap-2"><i class="bi bi-hourglass-split animate-spin"></i>กำลังอัพโหลด...</span>
+                                    </template>
+                                </button>
+                                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" x-ref="imageFileInput" @change="onImageFileSelected" class="hidden">
+
+                                <div class="flex items-center gap-2 text-xs text-gray-400">
+                                    <span class="flex-1 h-px bg-gray-200 dark:bg-white/10"></span>
+                                    <span>หรือ</span>
+                                    <span class="flex-1 h-px bg-gray-200 dark:bg-white/10"></span>
+                                </div>
+
+                                {{-- Paste URL --}}
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">URL รูปภาพ</label>
+                                    <input type="url" x-model="imageUrlInput" placeholder="https://example.com/image.jpg"
+                                           class="w-full text-sm px-3 py-2 border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-slate-700/50 focus:ring-2 focus:ring-indigo-500 dark:text-white">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Alt text (สำหรับ SEO)</label>
+                                    <input type="text" x-model="imageAltInput" placeholder="คำอธิบายรูปภาพ"
+                                           class="w-full text-sm px-3 py-2 border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-slate-700/50 focus:ring-2 focus:ring-indigo-500 dark:text-white">
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-100 dark:border-white/[0.06] bg-gray-50/50 dark:bg-slate-700/20">
+                                <button type="button" @click="imagePickerOpen = false"
+                                        class="text-xs px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700">
+                                    ยกเลิก
+                                </button>
+                                <button type="button" @click="applyImageUrl()" :disabled="!imageUrlInput"
+                                        class="text-xs px-4 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-medium disabled:opacity-50">
+                                    เพิ่มจาก URL
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
-                    {{-- Write Tab --}}
-                    <div x-show="editorTab === 'write'">
-                        <textarea name="content" id="contentEditor" x-model="form.content"
-                                  placeholder="เริ่มเขียนเนื้อหาบทความ..."
-                                  class="w-full px-6 py-4 text-sm border-0 focus:ring-0 bg-transparent dark:text-white resize-none font-mono leading-relaxed"
-                                  style="min-height: 500px;"
-                                  >{{ old('content', $post->content ?? '') }}</textarea>
-                    </div>
-
-                    {{-- Preview Tab --}}
-                    <div x-show="editorTab === 'preview'" x-cloak
-                         class="px-6 py-4 prose dark:prose-invert max-w-none min-h-[500px]"
-                         x-html="renderPreview()">
+                    {{-- ─── YouTube Picker Dialog ─── --}}
+                    <div x-show="ytPickerOpen" x-cloak
+                         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+                         x-transition.opacity @click.self="ytPickerOpen = false">
+                        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+                            <div class="px-5 py-4 border-b border-gray-100 dark:border-white/[0.06] flex items-center justify-between">
+                                <h3 class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                    <i class="bi bi-youtube text-red-500"></i>ฝัง YouTube
+                                </h3>
+                                <button type="button" @click="ytPickerOpen = false" class="text-gray-400 hover:text-gray-600"><i class="bi bi-x-lg"></i></button>
+                            </div>
+                            <div class="p-5">
+                                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">URL ของวิดีโอ YouTube</label>
+                                <input type="url" x-model="ytUrl" placeholder="https://www.youtube.com/watch?v=..."
+                                       @keydown.enter.prevent="applyYoutube()"
+                                       class="w-full text-sm px-3 py-2 border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-slate-700/50 focus:ring-2 focus:ring-red-500 dark:text-white">
+                            </div>
+                            <div class="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-100 dark:border-white/[0.06] bg-gray-50/50 dark:bg-slate-700/20">
+                                <button type="button" @click="ytPickerOpen = false"
+                                        class="text-xs px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700">
+                                    ยกเลิก
+                                </button>
+                                <button type="button" @click="applyYoutube()" :disabled="!ytUrl"
+                                        class="text-xs px-4 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 font-medium disabled:opacity-50">
+                                    ฝังวิดีโอ
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -812,7 +1164,8 @@
 <script>
 function blogPostForm() {
     return {
-        editorTab: 'write',
+        // editorTab/insertFormat/renderPreview removed — Tiptap WYSIWYG handles
+        // content editing in its own Alpine scope (`blogTiptapEditor`).
         aiTool: 'generate',
         tagInput: '',
         tagSuggestions: [],
@@ -869,42 +1222,10 @@ function blogPostForm() {
             this.form.slug = slug;
         },
 
-        insertFormat(type) {
-            const textarea = document.getElementById('contentEditor');
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            const selected = this.form.content.substring(start, end);
-            let insert = '';
-
-            switch(type) {
-                case 'bold': insert = `**${selected || 'ข้อความตัวหนา'}**`; break;
-                case 'italic': insert = `*${selected || 'ข้อความตัวเอียง'}*`; break;
-                case 'h2': insert = `\n## ${selected || 'หัวข้อ H2'}\n`; break;
-                case 'h3': insert = `\n### ${selected || 'หัวข้อ H3'}\n`; break;
-                case 'ul': insert = `\n- ${selected || 'รายการ'}\n`; break;
-                case 'link': insert = `[${selected || 'ข้อความลิงก์'}](url)`; break;
-                case 'image': insert = `![${selected || 'คำอธิบายรูป'}](url)`; break;
-                case 'affiliate_cta':
-                    insert = `\n<div class="affiliate-cta">\n  <h3>ชื่อสินค้า</h3>\n  <p>คำอธิบายสั้นๆ</p>\n  <a href="/go/slug" class="cta-button">ดูราคาล่าสุด</a>\n</div>\n`;
-                    break;
-            }
-
-            this.form.content = this.form.content.substring(0, start) + insert + this.form.content.substring(end);
-            this.$nextTick(() => {
-                textarea.focus();
-                textarea.setSelectionRange(start + insert.length, start + insert.length);
-            });
-        },
-
+        // Stub kept for any external callers that still reference renderPreview;
+        // Tiptap's WYSIWYG IS the preview now. Returns the raw HTML.
         renderPreview() {
             let html = this.form.content || '<p class="text-gray-400">ยังไม่มีเนื้อหา</p>';
-            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-            html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-            html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-            html = html.replace(/^\- (.*$)/gim, '<li>$1</li>');
-            html = html.replace(/\!\[(.*?)\]\((.*?)\)/g, '<img src="$2" alt="$1" class="rounded-lg max-w-full">');
-            html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" class="text-indigo-600 underline">$1</a>');
             html = html.replace(/\n/g, '<br>');
             return html;
         },
@@ -1010,10 +1331,34 @@ function blogPostForm() {
         },
 
         insertAiResult() {
-            this.form.content += '\n\n' + this.ai.result;
+            // The Tiptap editor exposes appendHTML() via its own Alpine
+            // component (id="contentEditor" parent has x-data="blogTiptapEditor"),
+            // so we walk up the DOM to find that Alpine scope. Falls back to
+            // plain content append if the editor isn't mounted yet.
+            const text = this.ai.result || '';
+            const editorEl = document.querySelector('[x-ref="tiptap"]');
+            if (editorEl && editorEl._x_dataStack) {
+                // Tiptap might receive markdown-like text; convert minimally.
+                const html = '<p>' + text.replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br>') + '</p>';
+                const scope = editorEl.closest('[x-data]');
+                if (scope && scope._x_dataStack) {
+                    const data = scope._x_dataStack[0];
+                    if (typeof data.appendHTML === 'function') {
+                        data.appendHTML(html);
+                        this.form.content = data.getHTML?.() ?? this.form.content;
+                    } else {
+                        this.form.content += '\n\n' + text;
+                    }
+                } else {
+                    this.form.content += '\n\n' + text;
+                }
+            } else {
+                this.form.content += '\n\n' + text;
+            }
             this.ai.result = null;
-            this.editorTab = 'write';
-            Swal.fire({ icon: 'success', title: 'เพิ่มเนื้อหาแล้ว', timer: 1000, showConfirmButton: false });
+            if (window.Swal) {
+                Swal.fire({ icon: 'success', title: 'เพิ่มเนื้อหาแล้ว', timer: 1000, showConfirmButton: false });
+            }
         },
 
         handleSubmit(event) {
