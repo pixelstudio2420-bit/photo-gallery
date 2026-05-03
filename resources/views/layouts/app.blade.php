@@ -206,6 +206,13 @@
        depending on page intent). --}}
   @include('partials.line-friend-prompt')
 
+  {{-- Announcement popup — geo-targeted modal. Self-gated: renders
+       nothing when no eligible announcement exists or user already
+       dismissed it. Triggers 6s after page load. Z-index slightly
+       below the LINE friend popup so they don't fight for screen
+       (line popup wins if both are eligible the same session). --}}
+  @include('partials.announcement-popup')
+
   {{-- Footer --}}
   @include('layouts.partials.footer')
 

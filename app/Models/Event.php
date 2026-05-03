@@ -170,6 +170,42 @@ class Event extends Model
      */
     protected static function booted(): void
     {
+        // ── Event publish → auto-broadcast to users in same area ──
+        //
+        // When an event transitions to status='published' (or 'active'
+        // — the codebase uses both as "publicly visible") we create
+        // a popup announcement targeting users in the same province +
+        // push a LINE OA message to friends in the same area.
+        //
+        // Wrapped in try so a notification-side failure doesn't roll
+        // back the event save. Idempotent: skipBroadcast flag prevents
+        // re-broadcasting on every save (e.g. cover image upload after
+        // publish would otherwise fire a duplicate notification).
+        static::saved(function (self $event) {
+            try {
+                // "Became public" = status is publishable AND status
+                // CHANGED in this save (or the row was just created
+                // already-public).
+                //
+                // Use wasChanged() not getOriginal() because the
+                // `saved` hook fires AFTER syncChanges(), so
+                // getOriginal returns the post-save value — useless
+                // for detecting transitions. wasChanged() retains
+                // the pre-save snapshot precisely for this case.
+                $isPublic = in_array($event->status, ['published', 'active'], true);
+                $justTransitioned = $event->wasChanged('status') || $event->wasRecentlyCreated;
+
+                if ($isPublic && $justTransitioned && empty($event->_skipBroadcast)) {
+                    app(\App\Services\GeoEventBroadcastService::class)
+                        ->broadcastNewEvent($event);
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning(
+                    "Event#{$event->id} broadcast failed: " . $e->getMessage()
+                );
+            }
+        });
+
         static::deleting(function (self $event) {
             $storage = app(\App\Services\StorageManager::class);
 

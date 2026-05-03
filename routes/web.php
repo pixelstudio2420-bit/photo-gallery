@@ -212,6 +212,20 @@ Route::get('/qr/branded', [App\Http\Controllers\Public\QrController::class, 'bra
 // is functionally correct + console stays clean.
 Route::get('/api/notifications/unread-count', [\App\Http\Controllers\Api\NotificationApiController::class, 'unreadCount']);
 
+// Announcement dismissal — auth users only. Recorded in
+// announcement_dismissals so the popup never returns on a future
+// session for the same user/announcement pair.
+Route::post('/announcements/{id}/dismiss', function ($id) {
+    $userId = \Illuminate\Support\Facades\Auth::id();
+    if (!$userId) return response()->json(['ok' => false], 401);
+    \DB::table('announcement_dismissals')->updateOrInsert(
+        ['announcement_id' => (int) $id, 'user_id' => $userId],
+        ['dismissed_at' => now()],
+    );
+    \Illuminate\Support\Facades\Cache::forget('announce_popup_user_' . $userId);
+    return response()->json(['ok' => true]);
+})->middleware('auth')->name('announcements.dismiss');
+
 // CSRF token refresh — issues a fresh token + cookie pair on demand.
 // Used by the 419 error page to auto-recover stale tokens without
 // requiring a full page reload (the old code referenced
