@@ -208,11 +208,42 @@
                 สร้าง API key ฟรีที่
                 <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener"
                    class="text-blue-600 dark:text-blue-400 hover:underline">Google Cloud Console</a>
-                → APIs & Services → Credentials → Create API key →
-                Restrict to "Google Calendar API" (recommended)
               </p>
             </div>
           </form>
+
+          {{-- ⚠️ Setup guide — explicit step-by-step to avoid common 403 errors
+               (especially the "HTTP referrers blocked" trap). --}}
+          <div class="rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 px-4 py-3 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+            <p class="font-semibold text-amber-700 dark:text-amber-300 mb-2">
+              <i class="bi bi-exclamation-triangle-fill"></i> ขั้นตอนตั้งค่า API Key (อ่านก่อนสร้าง)
+            </p>
+            <ol class="space-y-2 list-decimal pl-5">
+              <li>
+                <strong>Cloud Console → APIs & Services → Library</strong>
+                — ค้นหา <code class="px-1.5 rounded bg-white dark:bg-white/5">Google Calendar API</code> → กด <strong>Enable</strong>
+              </li>
+              <li>
+                <strong>APIs & Services → Credentials → Create credentials → API key</strong>
+              </li>
+              <li>
+                หลังสร้างแล้ว กดแก้ไข key:
+                <ul class="mt-1.5 space-y-1 list-disc pl-5 text-[11px]">
+                  <li>
+                    <strong class="text-rose-600 dark:text-rose-400">Application restrictions</strong>:
+                    เลือก <strong>None</strong> หรือ <strong>IP addresses</strong>
+                    <span class="text-slate-500">(ไม่ใช่ "HTTP referrers" — อันนั้นใช้กับ JavaScript เท่านั้น ถ้าเลือกจะ 403 ทันที)</span>
+                  </li>
+                  <li>
+                    <strong>API restrictions</strong>:
+                    เลือก <strong>Restrict key</strong> → ติ๊ก <strong>Google Calendar API</strong>
+                    <span class="text-slate-500">(จำกัดความเสียหายถ้า key หลุด)</span>
+                  </li>
+                </ul>
+              </li>
+              <li>Copy key → paste ในช่องด้านบน → กด บันทึก → กด ทดสอบเชื่อมต่อ</li>
+            </ol>
+          </div>
 
           {{-- Test connection --}}
           @if($googleCal['configured'])
@@ -224,12 +255,21 @@
               <span x-show="testing" x-cloak>กำลังทดสอบ...</span>
             </button>
 
-            <div x-show="result" x-cloak x-transition class="mt-3 rounded-xl p-3 text-xs"
+            <div x-show="result" x-cloak x-transition class="mt-3 rounded-xl p-4 text-xs"
                  :class="result?.ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-900' : 'bg-rose-50 border border-rose-200 text-rose-900'">
               <div class="flex items-start gap-2">
-                <i class="bi mt-0.5" :class="result?.ok ? 'bi-check-circle-fill text-emerald-600' : 'bi-x-circle-fill text-rose-600'"></i>
+                <i class="bi mt-0.5 text-base" :class="result?.ok ? 'bi-check-circle-fill text-emerald-600' : 'bi-x-circle-fill text-rose-600'"></i>
                 <div class="flex-1 min-w-0">
-                  <p class="font-semibold leading-tight" x-text="result?.message"></p>
+                  <p class="font-semibold leading-snug text-sm" x-text="result?.message"></p>
+
+                  {{-- Actionable fix — preformatted so step lists from
+                       the service render with newlines preserved. --}}
+                  <div x-show="result?.fix" x-cloak class="mt-2 pt-2 border-t border-rose-200/70 leading-relaxed">
+                    <p class="font-semibold text-rose-700 mb-1">
+                      <i class="bi bi-tools"></i> วิธีแก้:
+                    </p>
+                    <pre class="font-sans whitespace-pre-wrap text-[11px] text-rose-800" x-text="result?.fix"></pre>
+                  </div>
                 </div>
               </div>
             </div>

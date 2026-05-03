@@ -89,7 +89,9 @@ class GoogleCalendarService
 
     /**
      * Test the configured API key by making a real (cheap) call.
-     * Returns ['ok' => bool, 'message' => string] for the admin UI.
+     * Returns ['ok' => bool, 'message' => string, 'fix' => ?string]
+     * for the admin UI. The `fix` field, when present, is actionable
+     * Thai-language guidance for the most common errors.
      */
     public function testConnection(): array
     {
@@ -99,21 +101,136 @@ class GoogleCalendarService
 
         try {
             $year = (int) now()->year;
-            $items = $this->fetchYear($year);
+            $items = $this->fetchYearRaw($year);   // raw to surface HTTP errors
             $count = $items->count();
             return [
                 'ok'      => $count > 0,
                 'message' => $count > 0
-                    ? "เชื่อมต่อสำเร็จ — พบ {$count} วันสำคัญในปฏิทินไทย ปี {$year}"
+                    ? "✓ เชื่อมต่อสำเร็จ — พบ {$count} วันสำคัญในปฏิทินไทย ปี {$year}"
                     : 'เชื่อมต่อได้ แต่ไม่มีข้อมูล (ตรวจสอบ Calendar ID)',
                 'count'   => $count,
             ];
         } catch (\Throwable $e) {
+            return $this->humaniseError($e->getMessage());
+        }
+    }
+
+    /**
+     * Map raw Google API errors to actionable Thai-language messages
+     * with specific fix instructions. Most common error: HTTP referrer
+     * restriction blocking server-side calls (admin set "HTTP referrers"
+     * as Application restriction in Cloud Console — that's for browser
+     * code, not for our PHP server).
+     */
+    private function humaniseError(string $raw): array
+    {
+        // Trim & lowercase for matching
+        $lower = strtolower($raw);
+
+        // ── Referrer restriction (most common) ────────────────────
+        if (str_contains($lower, 'requests from referer') && str_contains($lower, 'blocked')) {
             return [
                 'ok'      => false,
-                'message' => 'เชื่อมต่อไม่สำเร็จ: ' . $e->getMessage(),
+                'message' => 'API Key ถูกตั้งให้รับเฉพาะคำขอจากเว็บ (HTTP referrers) — แต่ระบบเราเรียกจาก server',
+                'fix'     => "วิธีแก้:\n"
+                    . "1. ไปที่ Google Cloud Console → APIs & Services → Credentials\n"
+                    . "2. คลิก API key ของคุณ\n"
+                    . "3. ใต้ \"Application restrictions\" — เปลี่ยนเป็น **None** หรือ **IP addresses** (ใส่ IP ของ Laravel Cloud)\n"
+                    . "4. บันทึก แล้วกดทดสอบอีกครั้ง\n\n"
+                    . "หมายเหตุ: \"HTTP referrers\" ใช้ได้เฉพาะกับ JavaScript ในเบราว์เซอร์ ไม่ใช่ server-side PHP",
+                'category'=> 'referrer_restriction',
             ];
         }
+
+        // ── IP restriction blocking us ────────────────────────────
+        if (str_contains($lower, 'requests from ip') && str_contains($lower, 'blocked')) {
+            return [
+                'ok'      => false,
+                'message' => 'API Key ถูกจำกัดให้ใช้ได้เฉพาะ IP บางตัว — แต่ IP ของ server เราไม่อยู่ในรายชื่อ',
+                'fix'     => "วิธีแก้:\n"
+                    . "1. Cloud Console → Credentials → คลิก API key\n"
+                    . "2. Application restrictions → IP addresses\n"
+                    . "3. เพิ่ม IP ของ server (Laravel Cloud) เข้าไป\n"
+                    . "   หรือเปลี่ยนเป็น \"None\" ถ้าไม่อยากจำกัด",
+                'category'=> 'ip_restriction',
+            ];
+        }
+
+        // ── API key invalid / expired ─────────────────────────────
+        if (str_contains($lower, 'api key not valid') || str_contains($lower, 'invalid api key')) {
+            return [
+                'ok'      => false,
+                'message' => 'API Key ไม่ถูกต้อง',
+                'fix'     => "ตรวจสอบว่า:\n"
+                    . "• Copy key ครบถ้วน (ไม่มี space หรือ newline เผลอติด)\n"
+                    . "• Key ยังไม่ถูกลบใน Cloud Console",
+                'category'=> 'invalid_key',
+            ];
+        }
+
+        // ── API not enabled in this project ───────────────────────
+        if (str_contains($lower, 'has not been used') && str_contains($lower, 'calendar')) {
+            return [
+                'ok'      => false,
+                'message' => 'Google Calendar API ยังไม่ถูก enable ใน project นี้',
+                'fix'     => "วิธีแก้:\n"
+                    . "1. Cloud Console → APIs & Services → Library\n"
+                    . "2. ค้นหา \"Google Calendar API\"\n"
+                    . "3. กด Enable\n"
+                    . "4. รออีก ~1 นาทีแล้วลองทดสอบใหม่",
+                'category'=> 'api_not_enabled',
+            ];
+        }
+
+        // ── Quota exceeded ────────────────────────────────────────
+        if (str_contains($lower, 'quota') || str_contains($lower, 'rate')) {
+            return [
+                'ok'      => false,
+                'message' => 'เกิน quota ของ Google Calendar API',
+                'fix'     => "Free tier = 1,000,000 calls/day — แทบเป็นไปไม่ได้ที่จะถึง\n"
+                    . "ถ้าเจอ: ตรวจสอบว่าไม่มี script รั่วเรียก API ซ้ำ ๆ\n"
+                    . "หรือรอ 24 ชม. ให้ quota reset",
+                'category'=> 'quota',
+            ];
+        }
+
+        // ── Generic fallback ──────────────────────────────────────
+        return [
+            'ok'      => false,
+            'message' => 'เชื่อมต่อไม่สำเร็จ',
+            'fix'     => 'รายละเอียด: ' . \Illuminate\Support\Str::limit($raw, 300),
+            'category'=> 'unknown',
+        ];
+    }
+
+    /**
+     * Like fetchYear() but throws on HTTP error so testConnection()
+     * can humanise the response. fetchYear() swallows errors for the
+     * normal sync path where graceful degrade is what we want.
+     */
+    private function fetchYearRaw(int $year): Collection
+    {
+        $url = str_replace('{id}', $this->calendarId(), self::ENDPOINT);
+
+        $response = Http::timeout(10)
+            ->retry(2, 200)
+            ->get($url, [
+                'key'           => $this->apiKey(),
+                'timeMin'       => Carbon::create($year, 1, 1, 0, 0, 0)->toIso8601String(),
+                'timeMax'       => Carbon::create($year, 12, 31, 23, 59, 59)->toIso8601String(),
+                'singleEvents'  => 'true',
+                'orderBy'       => 'startTime',
+                'maxResults'    => 250,
+            ]);
+
+        if (!$response->successful()) {
+            // Re-throw with the Google error message preserved so
+            // humaniseError() can string-match against it.
+            $errorMessage = $response->json('error.message') ?? $response->body();
+            throw new \RuntimeException($errorMessage);
+        }
+
+        return collect($response->json('items', []));
     }
 
     /**
