@@ -289,7 +289,7 @@
                           (popped open if redirected here from claim-free).
                        2. User IS a friend → submit the claim form.
                        3. Auto-resume after returning from LINE → JS
-                          auto-submits the claim form after 1s. -}}
+                          auto-submits the claim form after 1s. --}}
                 @if($isFriend)
                   <form method="POST" action="{{ route('products.claim-free', $product->id) }}"
                         class="space-y-2"
