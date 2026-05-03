@@ -414,7 +414,10 @@
                                            @keydown.enter.prevent="applyLink()"
                                            class="w-full text-sm px-3 py-2 border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-slate-700/50 focus:ring-2 focus:ring-indigo-500 dark:text-white">
                                 </div>
-                                <div x-show="!editor || editor.state.selection.empty">
+                                {{-- Show "display text" input only when there's no selected text in the editor.
+                                     `linkText` is set by openLinkPicker() to the selection contents (empty if none),
+                                     so this stays reactive in Alpine without poking through the non-reactive editor instance. --}}
+                                <div x-show="!linkText">
                                     <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">ข้อความที่แสดง (ตัวเลือก)</label>
                                     <input type="text" x-model="linkText" placeholder="คลิกที่นี่"
                                            class="w-full text-sm px-3 py-2 border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-slate-700/50 focus:ring-2 focus:ring-indigo-500 dark:text-white">

@@ -49,6 +49,25 @@ import Highlight from '@tiptap/extension-highlight';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 
+/**
+ * Editor instances live OUTSIDE Alpine's reactive proxy system.
+ *
+ * Why: Alpine 3 deep-proxies every property assigned to a `data()` scope.
+ * If we store `this.editor = new Editor(...)`, then `this.editor.chain()`
+ * walks through Alpine's reactive Proxy traps for every method call. Some
+ * of those traps return wrapped/unwrapped values inconsistently, so the
+ * ProseMirror schema reference inside the chain ends up not matching the
+ * schema instance the editor view holds — when the resulting transaction
+ * is dispatched, PM's `applyInner` throws "Applying a mismatched
+ * transaction".
+ *
+ * Storing the editor in a module-scoped WeakMap keyed by the Alpine
+ * component object keeps every method call on a *raw* Editor instance,
+ * so the schema identity check inside PM always succeeds. The reactive
+ * scope still gets a boolean `_editorReady` flag for x-show/x-if.
+ */
+const editorRegistry = new WeakMap();
+
 document.addEventListener('alpine:init', () => {
     window.Alpine.data('blogTiptapEditor', (config = {}) => ({
         // ─── Configuration ──────────────────────────────────────────────
@@ -59,8 +78,11 @@ document.addEventListener('alpine:init', () => {
         onChange:       config.onChange       ?? (() => {}),
 
         // ─── Reactive state ────────────────────────────────────────────
-        editor:           null,
-        state:            {},      // { bold:bool, italic:bool, h2:bool, ... }
+        // NOTE: do NOT store the editor instance on `this` — Alpine would
+        // wrap it in a reactive Proxy and break ProseMirror schema identity.
+        // Use `getEditor()` to access the raw instance from the WeakMap.
+        _editorReady:     false,    // boolean flag for templates (x-show etc.)
+        state:            {},       // { bold:bool, italic:bool, h2:bool, ... }
         chars:            0,
         words:            0,
         linkPickerOpen:   false,
@@ -73,6 +95,21 @@ document.addEventListener('alpine:init', () => {
         ytUrl:            '',
         imageUploading:   false,
 
+        /** Get the raw (non-reactive) Editor instance for command dispatch. */
+        getEditor() {
+            return editorRegistry.get(this);
+        },
+
+        /**
+         * Convenience getter so existing template references like
+         * `editor.state.selection.empty` keep working. Returns the raw
+         * editor — Alpine reads through getters without wrapping the
+         * result in a Proxy on each access.
+         */
+        get editor() {
+            return editorRegistry.get(this);
+        },
+
         /** Mount the editor into the element with x-ref="tiptap" */
         initEditor() {
             const mount = this.$refs.tiptap;
@@ -81,7 +118,7 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
 
-            this.editor = new Editor({
+            const editor = new Editor({
                 element: mount,
                 extensions: [
                     StarterKit.configure({
@@ -162,6 +199,10 @@ document.addEventListener('alpine:init', () => {
                 onTransaction:     () => this.scheduleRefresh(),
             });
 
+            // Stash the raw editor outside the Alpine proxy world so
+            // command chains see consistent ProseMirror schema identity.
+            editorRegistry.set(this, editor);
+            this._editorReady = true;
             this.refreshState();
         },
 
@@ -190,7 +231,7 @@ document.addEventListener('alpine:init', () => {
 
         /** Snapshot which marks/nodes are active so toolbar buttons can highlight */
         refreshState() {
-            const e = this.editor;
+            const e = editorRegistry.get(this);
             if (!e || e.isDestroyed) return;
             try {
                 this.state = {
@@ -239,7 +280,7 @@ document.addEventListener('alpine:init', () => {
          * crashing the whole Alpine component (which freezes the UI).
          */
         runCommand(builder) {
-            const e = this.editor;
+            const e = editorRegistry.get(this);   // raw, NOT this.editor (proxy)
             if (!e || e.isDestroyed) return false;
             try {
                 const chain = e.chain().focus();
@@ -280,7 +321,7 @@ document.addEventListener('alpine:init', () => {
         // the toggle if the resulting state can host a codeBlock.
         toggleCodeBlock() {
             this.runCommand(c => {
-                const e = this.editor;
+                const e = editorRegistry.get(this);
                 if (!e) return null;
                 // If we're already in a codeBlock, just toggle it off.
                 if (e.isActive('codeBlock')) {
@@ -302,10 +343,11 @@ document.addEventListener('alpine:init', () => {
 
         /* ─── Link handling ─────────────────────────────────────────── */
         openLinkPicker() {
-            if (!this.editor) return;
-            const prev = this.editor.getAttributes('link').href ?? '';
-            const { from, to } = this.editor.state.selection;
-            this.linkText = this.editor.state.doc.textBetween(from, to, ' ');
+            const e = editorRegistry.get(this);
+            if (!e) return;
+            const prev = e.getAttributes('link').href ?? '';
+            const { from, to } = e.state.selection;
+            this.linkText = e.state.doc.textBetween(from, to, ' ');
             this.linkUrl = prev;
             this.linkPickerOpen = true;
         },
@@ -316,7 +358,7 @@ document.addEventListener('alpine:init', () => {
             } else {
                 // Normalize: prepend https:// if user just types example.com
                 const safe = /^(https?:\/\/|\/|mailto:|tel:)/.test(url) ? url : `https://${url}`;
-                const e = this.editor;
+                const e = editorRegistry.get(this);
                 const empty = e?.state?.selection?.empty;
                 if (this.linkText && empty) {
                     this.runCommand(c => c.insertContent({
@@ -414,19 +456,24 @@ document.addEventListener('alpine:init', () => {
         },
 
         /* ─── Public API for parent (AI insert, programmatic set) ──── */
-        getHTML()      { return this.editor?.getHTML() ?? ''; },
-        setHTML(html)  {
-            const e = this.editor;
+        getHTML() {
+            const e = editorRegistry.get(this);
+            return e?.getHTML() ?? '';
+        },
+        setHTML(html) {
+            const e = editorRegistry.get(this);
             if (!e || e.isDestroyed) return;
             try { e.commands.setContent(html || '<p></p>', true); }
             catch (err) { console.warn('[Tiptap] setHTML failed:', err?.message); }
             this.scheduleRefresh();
         },
         appendHTML(html) {
-            this.runCommand(c => c.insertContentAt(this.editor.state.doc.content.size, html));
+            const e = editorRegistry.get(this);
+            if (!e || e.isDestroyed) return;
+            this.runCommand(c => c.insertContentAt(e.state.doc.content.size, html));
         },
         focus() {
-            const e = this.editor;
+            const e = editorRegistry.get(this);
             if (!e || e.isDestroyed) return;
             try { e.commands.focus(); }
             catch (_) { /* no-op */ }
@@ -434,8 +481,10 @@ document.addEventListener('alpine:init', () => {
 
         /* ─── Cleanup ──────────────────────────────────────────────── */
         destroyEditor() {
-            this.editor?.destroy();
-            this.editor = null;
+            const e = editorRegistry.get(this);
+            try { e?.destroy(); } catch (_) {}
+            editorRegistry.delete(this);
+            this._editorReady = false;
         },
     }));
 });
