@@ -151,6 +151,17 @@
         </a>
       </li>
 
+      {{-- Chat menu — only render when the chat feature is globally
+           enabled by admin at /admin/features. Mirrors the route-level
+           `feature.global:chat` middleware (which 404s when disabled),
+           so the menu item never shows for a feature the photographer
+           can't actually reach.
+
+           Computed once via SubscriptionService::featureGloballyEnabled
+           so the result is consistent with what the route gate decides
+           — admin can flip the flag and both the menu + route update
+           in lockstep on the next request. --}}
+      @if(app(\App\Services\SubscriptionService::class)->featureGloballyEnabled('chat'))
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('photographer.chat*') ? 'pg-link-active' : '' }}"
           href="{{ route('photographer.chat') }}"
@@ -159,6 +170,7 @@
           <span x-show="!collapsed" x-transition>แชท</span>
         </a>
       </li>
+      @endif
 
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('photographer.reviews*') ? 'pg-link-active' : '' }}"
