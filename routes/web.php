@@ -193,6 +193,7 @@ require __DIR__ . '/blog.php';
 // Defined in its own file because the three audience-scoped surfaces
 // don't share a single prefix.
 require __DIR__ . '/announcements.php';
+require __DIR__ . '/festivals.php';
 
 // SEO
 Route::get('/sitemap.xml', [App\Http\Controllers\Public\SeoController::class, 'sitemap'])->name('sitemap')->middleware('edge.cache:3600,86400');
@@ -225,6 +226,21 @@ Route::post('/announcements/{id}/dismiss', function ($id) {
     \Illuminate\Support\Facades\Cache::forget('announce_popup_user_' . $userId);
     return response()->json(['ok' => true]);
 })->middleware('auth')->name('announcements.dismiss');
+
+// Festival popup dismissal — same shape as announcements but writes
+// into festival_dismissals + busts FestivalThemeService's cache key.
+// Idempotent (UNIQUE constraint on the pair) so a double-tap during
+// a flaky network is harmless.
+Route::post('/festivals/{id}/dismiss', function ($id) {
+    $userId = \Illuminate\Support\Facades\Auth::id();
+    if (!$userId) return response()->json(['ok' => false], 401);
+    \DB::table('festival_dismissals')->updateOrInsert(
+        ['festival_id' => (int) $id, 'user_id' => $userId],
+        ['dismissed_at' => now()],
+    );
+    app(\App\Services\FestivalThemeService::class)->bustUserCache($userId);
+    return response()->json(['ok' => true]);
+})->middleware('auth')->name('festivals.dismiss');
 
 // CSRF token refresh — issues a fresh token + cookie pair on demand.
 // Used by the 419 error page to auto-recover stale tokens without

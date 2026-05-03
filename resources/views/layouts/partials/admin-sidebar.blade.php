@@ -639,6 +639,16 @@
       <span x-show="!sidebarCollapsed" x-transition.opacity>ประกาศระบบ</span>
     </a>
 
+    {{-- Festivals — themed seasonal popups (Songkran, Loy Krathong,
+         NYE, etc.). Different from announcements: festivals are recurring
+         canonical events with themed visuals; announcements are ad-hoc
+         messages. Both live under Communications. --}}
+    <a class="{{ $linkCls }} {{ request()->routeIs('admin.festivals.*') ? $linkActive : '' }}"
+       href="{{ route('admin.festivals.index') }}" :class="{ '!justify-center !px-0 !mx-2 !shadow-none': sidebarCollapsed }">
+      <i class="bi bi-calendar-heart text-base w-5 text-center shrink-0"></i>
+      <span x-show="!sidebarCollapsed" x-transition.opacity>เทศกาล / Festivals</span>
+    </a>
+
     {{-- Notifications expandable — list + new routing matrix.
          Auto-opens when admin is on any /admin/notifications/* path so
          the active sublink is visible without manual expand. --}}

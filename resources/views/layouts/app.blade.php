@@ -213,6 +213,12 @@
        (line popup wins if both are eligible the same session). --}}
   @include('partials.announcement-popup')
 
+  {{-- Festival popup — fires 8s after load (announcement is 6s, so
+       announcement wins visually if both are eligible the same load).
+       Self-gated: no festival in window OR user dismissed it = no
+       render. --}}
+  @include('partials.festival-popup')
+
   {{-- Footer --}}
   @include('layouts.partials.footer')
 
