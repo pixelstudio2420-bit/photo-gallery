@@ -216,7 +216,19 @@
                 @php
                   $ext = strtolower(pathinfo($order->slip_image, PATHINFO_EXTENSION));
                   $isImage = in_array($ext, ['jpg','jpeg','png','gif','webp']);
-                  $slipUrl = $order->slip_image_url;
+                  // $order is a raw stdClass from DB::table()->select() in
+                  // DigitalOrderController::index — NOT an Eloquent model
+                  // — so the slip_image_url accessor on DigitalOrder
+                  // ($this->slip_image_url) doesn't apply. Resolve via
+                  // StorageManager directly, same logic the accessor uses.
+                  // Wrapped in try/catch so a single broken slip path
+                  // can't 500 the entire orders list.
+                  try {
+                      $slipUrl = app(\App\Services\StorageManager::class)
+                          ->resolveUrl($order->slip_image);
+                  } catch (\Throwable) {
+                      $slipUrl = '';
+                  }
                 @endphp
                 @if($isImage)
                   <a href="{{ $slipUrl }}" target="_blank" title="ดูหลักฐานการชำระเงิน">
