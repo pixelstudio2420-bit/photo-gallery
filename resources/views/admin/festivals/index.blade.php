@@ -120,6 +120,144 @@
   </div>
 
   {{-- ═══════════════════════════════════════════════════════════════
+       GOOGLE CALENDAR INTEGRATION — collapsible settings panel
+       Lets admin paste API key + test connection. Toggle visible
+       always, panel collapsed by default.
+       ═══════════════════════════════════════════════════════════════ --}}
+  <div class="mb-6" x-data="{
+        showPanel: {{ $googleCal['configured'] ? 'false' : 'false' }},
+        testing: false,
+        result: null,
+        async testKey() {
+            this.testing = true; this.result = null;
+            try {
+                const r = await fetch('{{ route('admin.festivals.google-test') }}', {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
+                });
+                this.result = await r.json();
+            } catch (e) { this.result = { ok: false, message: 'Network error: ' + e.message }; }
+            finally { this.testing = false; }
+        }
+      }">
+    <button type="button" @click="showPanel = !showPanel"
+            class="w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-white/5 transition">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 text-white flex items-center justify-center">
+          <i class="bi bi-google text-lg"></i>
+        </div>
+        <div class="text-left">
+          <h3 class="font-semibold text-slate-900 dark:text-slate-100 text-sm flex items-center gap-2">
+            Google Calendar Integration
+            @if($googleCal['configured'])
+              <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 text-[10px] font-bold">
+                <i class="bi bi-check-circle-fill"></i> เชื่อมต่อแล้ว
+              </span>
+            @else
+              <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 px-2 py-0.5 text-[10px] font-medium">
+                <i class="bi bi-circle"></i> ยังไม่เชื่อมต่อ
+              </span>
+            @endif
+          </h3>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400">
+            ดึงวันหยุดราชการ + วันสำคัญทางพุทธศาสนา จาก Google Calendar (ฟรี · ไม่ต้อง OAuth)
+          </p>
+        </div>
+      </div>
+      <i class="bi text-slate-400 transition-transform" :class="showPanel ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+    </button>
+
+    <div x-show="showPanel" x-cloak x-collapse class="mt-3">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-blue-200 dark:border-blue-500/30 shadow-sm overflow-hidden">
+        <div class="h-1.5 bg-gradient-to-r from-blue-500 to-cyan-500"></div>
+        <div class="p-5 space-y-5">
+
+          {{-- About + cost --}}
+          <div class="rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 px-4 py-3 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+            <p class="font-semibold text-blue-700 dark:text-blue-300 mb-1.5">
+              <i class="bi bi-info-circle"></i> เกี่ยวกับ Google Calendar Integration
+            </p>
+            <ul class="space-y-1 list-disc pl-5">
+              <li><strong>ฟรี</strong> — Google Calendar API quota = 1,000,000 calls/day, เราใช้แค่ ~12 calls/year</li>
+              <li><strong>ไม่ต้อง OAuth</strong> — ปฏิทิน "Thailand Holidays" เป็น public, ใช้แค่ API key</li>
+              <li><strong>ครอบคลุม</strong>: สงกรานต์, วันแม่ (พระราชสมภพราชินี), วันพ่อ (พระราชสมภพในหลวง), วันรัฐธรรมนูญ, วันมาฆ-วิสาขะ-อาสาฬหบูชา (จันทรคติ)</li>
+              <li><strong>ไม่ครอบคลุม</strong>: ลอยกระทง / ตรุษจีน / Pride / Halloween / Valentine / Christmas → ใช้ตารางใน code</li>
+            </ul>
+          </div>
+
+          {{-- API Key form --}}
+          <form method="POST" action="{{ route('admin.festivals.google-config') }}" class="space-y-3">
+            @csrf
+            <div>
+              <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                Google Calendar API Key
+                <span class="text-slate-400 font-normal text-[10px]">(เว้นว่างเพื่อปิดใช้)</span>
+              </label>
+              <div class="flex gap-2">
+                <input type="password" name="google_calendar_api_key"
+                       value="{{ $googleCal['api_key'] }}"
+                       placeholder="AIzaSy..." autocomplete="off" maxlength="200"
+                       class="flex-1 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+                <button type="submit"
+                        class="inline-flex items-center gap-1.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 text-sm font-medium transition">
+                  <i class="bi bi-save"></i> บันทึก
+                </button>
+              </div>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+                <i class="bi bi-key"></i>
+                สร้าง API key ฟรีที่
+                <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener"
+                   class="text-blue-600 dark:text-blue-400 hover:underline">Google Cloud Console</a>
+                → APIs & Services → Credentials → Create API key →
+                Restrict to "Google Calendar API" (recommended)
+              </p>
+            </div>
+          </form>
+
+          {{-- Test connection --}}
+          @if($googleCal['configured'])
+          <div class="pt-3 border-t border-slate-200 dark:border-white/10">
+            <button type="button" @click="testKey()" :disabled="testing"
+                    class="inline-flex items-center gap-1.5 rounded-xl bg-white dark:bg-white/5 border-2 border-blue-300 dark:border-blue-500/40 text-blue-700 dark:text-blue-300 hover:bg-blue-50 px-4 py-2 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition">
+              <i class="bi" :class="testing ? 'bi-arrow-repeat animate-spin' : 'bi-plug'"></i>
+              <span x-show="!testing">ทดสอบเชื่อมต่อ Google API</span>
+              <span x-show="testing" x-cloak>กำลังทดสอบ...</span>
+            </button>
+
+            <div x-show="result" x-cloak x-transition class="mt-3 rounded-xl p-3 text-xs"
+                 :class="result?.ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-900' : 'bg-rose-50 border border-rose-200 text-rose-900'">
+              <div class="flex items-start gap-2">
+                <i class="bi mt-0.5" :class="result?.ok ? 'bi-check-circle-fill text-emerald-600' : 'bi-x-circle-fill text-rose-600'"></i>
+                <div class="flex-1 min-w-0">
+                  <p class="font-semibold leading-tight" x-text="result?.message"></p>
+                </div>
+              </div>
+            </div>
+          </div>
+          @endif
+
+          {{-- Coverage list --}}
+          <div class="pt-3 border-t border-slate-200 dark:border-white/10">
+            <p class="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">
+              <i class="bi bi-list-check"></i> เทศกาลที่จะใช้ข้อมูลจาก Google เมื่อเปิดใช้:
+            </p>
+            <div class="flex flex-wrap gap-1.5">
+              @foreach($googleCal['covered_slugs'] as $slug)
+                <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 px-2 py-0.5 text-[10px] font-mono font-semibold">
+                  <i class="bi bi-google"></i> {{ $slug }}
+                </span>
+              @endforeach
+            </div>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+              เทศกาลอื่น ๆ (ลอยกระทง, ตรุษจีน, Pride, Halloween, ฯลฯ) จะใช้ตารางจันทรคติ/ตารางวันคงที่ในระบบเหมือนเดิม
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {{-- ═══════════════════════════════════════════════════════════════
        CREATE NEW FESTIVAL — Alpine-collapsed panel toggled by header
        button. Same field layout as inline edit, just no row data.
        ═══════════════════════════════════════════════════════════════ --}}
@@ -363,6 +501,27 @@
                   <span class="inline-flex items-center gap-1 rounded-full bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10 px-2 py-0.5 text-[10px] font-medium">
                     🎨 {{ $theme['label'] }}
                   </span>
+
+                  {{-- Date source badge — tells admin where this festival's
+                       dates came from (Google API / internal table /
+                       admin manual edit). --}}
+                  @php $src = $f->date_source ?? 'internal'; @endphp
+                  @if($src === 'google')
+                    <span title="วันที่นี้ดึงจาก Google Calendar API"
+                          class="inline-flex items-center gap-1 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 px-2 py-0.5 text-[10px] font-semibold">
+                      <i class="bi bi-google"></i> Google
+                    </span>
+                  @elseif($src === 'manual')
+                    <span title="แอดมินตั้งวันที่เอง — sync จะไม่แตะ"
+                          class="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 text-[10px] font-semibold">
+                      <i class="bi bi-pencil-fill"></i> ตั้งเอง
+                    </span>
+                  @else
+                    <span title="วันที่ใช้ตาราง/logic ในระบบ (lunar table หรือ fixed-date helper)"
+                          class="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 px-2 py-0.5 text-[10px] font-medium">
+                      <i class="bi bi-cpu"></i> ตารางในระบบ
+                    </span>
+                  @endif
                 </div>
 
                 {{-- Headline preview --}}

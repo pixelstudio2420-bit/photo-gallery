@@ -76,6 +76,22 @@ class FestivalsSeeder extends Seeder
         $now = now();
         $year = (int) $now->year;
 
+        // ── Optional Google Calendar enhancement ─────────────────────
+        // If admin has configured a Google Calendar API key, fetch
+        // Thai holidays for both this year + next year (so Songkran
+        // 2027 is available in May 2026). Keyed by slug via
+        // GoogleCalendarService::MAPPING for the festivals it covers.
+        // Empty collection if not configured / network failed —
+        // caller (each festival's date computation below) treats
+        // missing Google data as "use internal logic instead."
+        $googleSvc = app(\App\Services\GoogleCalendarService::class);
+        $googleSourcedSlugs = [];
+        $googleHolidays = collect();
+        if ($googleSvc->isConfigured()) {
+            $googleHolidays = $googleSvc->getThaiHolidays($year)
+                ->merge($googleSvc->getThaiHolidays($year + 1));
+        }
+
         // ── helpers ─────────────────────────────────────────────────────
         // Resolve the "next occurrence" for a fixed-date festival.
         // Returns [start_date, end_date] strings.
@@ -124,12 +140,37 @@ class FestivalsSeeder extends Seeder
         // Buddhist Era year for Thai-language naming
         $beYear = fn ($gYear) => $gYear + 543;
 
+        // Google override — when admin has configured the API and Google
+        // returned a matching holiday for this slug, prefer Google's
+        // date over our internal computation. Tracks which slugs got
+        // Google-sourced dates so the controller/UI can badge them.
+        $applyGoogleOverride = function (string $slug, array $internalDates) use (&$googleSourcedSlugs, $googleHolidays, $googleSvc, $now) {
+            if ($googleHolidays->isEmpty()) return $internalDates;
+
+            $matched = $googleSvc->matchToSlug($googleHolidays, $slug);
+            if (!$matched) return $internalDates;
+
+            // Google may have multiple matches across this+next year.
+            // Pick the FIRST upcoming one.
+            $allMatches = $googleHolidays->filter(function ($h) use ($googleSvc, $slug) {
+                return $googleSvc->matchToSlug(collect([$h]), $slug) !== null;
+            })->sortBy('start_date');
+
+            foreach ($allMatches as $h) {
+                if (\Carbon\Carbon::parse($h['end_date'])->endOfDay()->isAfter($now)) {
+                    $googleSourcedSlugs[] = $slug;
+                    return [$h['start_date'], $h['end_date']];
+                }
+            }
+            return $internalDates;
+        };
+
         // ── Resolve dates for every festival ─────────────────────────────
-        [$songkranS, $songkranE]       = $nextFixed(4, 13, 4, 15);
+        [$songkranS, $songkranE]       = $applyGoogleOverride('songkran',     $nextFixed(4, 13, 4, 15));
         [$valentineS, $valentineE]     = $nextFixed(2, 13, 2, 14);
-        [$mothersS, $mothersE]         = $nextFixed(8, 12, 8, 12);
+        [$mothersS, $mothersE]         = $applyGoogleOverride('mothers-day', $nextFixed(8, 12, 8, 12));
         [$christmasS, $christmasE]     = $nextFixed(12, 24, 12, 26);
-        [$newYearS, $newYearE]         = $nextFixed(12, 28, 1, 2);   // crosses year
+        [$newYearS, $newYearE]         = $applyGoogleOverride('new-year',    $nextFixed(12, 28, 1, 2));
         [$prideS, $prideE]             = $nextFixed(6, 1, 6, 30);
         [$halloweenS, $halloweenE]     = $nextFixed(10, 29, 10, 31);
         $loyKrathong  = $nextLunar('loy-krathong')      ?? ['2026-11-24', '2026-11-25'];
@@ -322,33 +363,48 @@ class FestivalsSeeder extends Seeder
         $upserted = 0;
         $updated  = 0;
 
+        $hasSourceCol = Schema::hasColumn('festivals', 'date_source');
+
         foreach ($festivals as $row) {
             $row['updated_at'] = $now;
+            $row['date_source'] = in_array($row['slug'], $googleSourcedSlugs, true)
+                ? 'google'
+                : 'internal';
 
             // Lookup by slug — preserves admin edits to enabled/copy
             // while still bumping starts_at/ends_at on re-runs.
             $existing = DB::table('festivals')->where('slug', $row['slug'])->first();
             if ($existing) {
-                // Update only the date-bearing fields + name (which
-                // contains the BE year). Preserve admin edits to
-                // headline / body / cta / theme / popup_lead_days /
-                // enabled / show_priority.
+                // Skip overwriting dates if admin has flagged this row
+                // as 'manual' — they care about their own values.
+                if ($hasSourceCol && ($existing->date_source ?? '') === 'manual') {
+                    continue;
+                }
+
                 $datesChanged = $existing->starts_at !== $row['starts_at']
                              || $existing->ends_at   !== $row['ends_at'];
-                DB::table('festivals')->where('id', $existing->id)->update([
-                    'starts_at'       => $row['starts_at'],
-                    'ends_at'         => $row['ends_at'],
-                    'name'            => $row['name'],
-                    'updated_at'      => $now,
-                ]);
+
+                $update = [
+                    'starts_at'  => $row['starts_at'],
+                    'ends_at'    => $row['ends_at'],
+                    'name'       => $row['name'],
+                    'updated_at' => $now,
+                ];
+                if ($hasSourceCol) {
+                    $update['date_source'] = $row['date_source'];
+                }
+                DB::table('festivals')->where('id', $existing->id)->update($update);
                 if ($datesChanged) $updated++;
             } else {
                 $row['created_at'] = $now;
+                if (!$hasSourceCol) unset($row['date_source']);
                 DB::table('festivals')->insert($row);
                 $upserted++;
             }
         }
 
-        $this->command?->info("FestivalsSeeder: {$upserted} new, {$updated} dates updated");
+        $googleCount = count(array_unique($googleSourcedSlugs));
+        $this->command?->info("FestivalsSeeder: {$upserted} new, {$updated} dates updated"
+            . ($googleCount > 0 ? " ({$googleCount} from Google Calendar)" : ''));
     }
 }

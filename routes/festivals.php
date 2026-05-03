@@ -30,4 +30,8 @@ Route::prefix('admin/festivals')
         // Calendar sync — re-apply authoritative dates from the
         // multi-year table (admin-triggered on top of the monthly cron)
         Route::post('/sync',            [AdminFestivalController::class, 'syncFromCalendar'])->name('sync');
+
+        // Google Calendar integration
+        Route::post('/google-config',   [AdminFestivalController::class, 'saveGoogleConfig'])->name('google-config');
+        Route::post('/google-test',     [AdminFestivalController::class, 'testGoogleConnection'])->name('google-test');
     });

@@ -29,6 +29,7 @@ class Festival extends Model
         'target_province_id',
         'enabled',
         'show_priority',
+        'date_source',  // 'manual' | 'internal' | 'google'
     ];
 
     protected $casts = [

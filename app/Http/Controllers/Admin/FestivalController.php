@@ -45,7 +45,51 @@ class FestivalController extends Controller
 
         $themes = FestivalThemeService::THEMES;
 
-        return view('admin.festivals.index', compact('festivals', 'stats', 'themes'));
+        // Google Calendar integration state for the admin UI
+        $googleCal = [
+            'configured' => app(\App\Services\GoogleCalendarService::class)->isConfigured(),
+            'api_key'    => \App\Models\AppSetting::get('google_calendar_api_key', ''),
+            'covered_slugs' => array_keys(\App\Services\GoogleCalendarService::MAPPING),
+        ];
+
+        return view('admin.festivals.index', compact('festivals', 'stats', 'themes', 'googleCal'));
+    }
+
+    /**
+     * Save the Google Calendar API key from admin settings.
+     * Validates with a real test call before persisting so admin gets
+     * immediate feedback if the key is invalid.
+     */
+    public function saveGoogleConfig(Request $request)
+    {
+        $validated = $request->validate([
+            'google_calendar_api_key' => 'nullable|string|max:200',
+        ]);
+
+        \App\Models\AppSetting::set('google_calendar_api_key', $validated['google_calendar_api_key'] ?? '');
+
+        // Bust cached holidays so the next sync uses the new key
+        $svc = app(\App\Services\GoogleCalendarService::class);
+        $year = (int) now()->year;
+        $svc->bustCache($year);
+        $svc->bustCache($year + 1);
+
+        $msg = empty($validated['google_calendar_api_key'])
+            ? '✓ ลบ Google Calendar API Key แล้ว — sync จะใช้ตารางในระบบแทน'
+            : '✓ บันทึก API Key แล้ว — กดปุ่ม "ทดสอบเชื่อมต่อ" เพื่อตรวจสอบ';
+
+        return back()->with('success', $msg);
+    }
+
+    /**
+     * Test the configured Google Calendar API key by making a real
+     * (cheap) call to fetch this year's Thai holidays. Returns JSON
+     * for the admin UI to display inline.
+     */
+    public function testGoogleConnection()
+    {
+        $result = app(\App\Services\GoogleCalendarService::class)->testConnection();
+        return response()->json($result);
     }
 
     /**
