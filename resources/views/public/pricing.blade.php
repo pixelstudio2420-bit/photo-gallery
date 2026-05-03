@@ -104,7 +104,12 @@
       <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-12 max-w-5xl mx-auto">
         @foreach($plans as $plan)
           @php
-            $features = json_decode($plan->features_json ?? '[]', true) ?: [];
+            // SubscriptionPlan::$casts has features_json => 'array', so
+            // Eloquent already decoded it. Handle both cases defensively
+            // in case the model is ever queried via raw DB::table().
+            $features = is_array($plan->features_json)
+                ? $plan->features_json
+                : (json_decode((string) $plan->features_json, true) ?: []);
             $isHighlighted = (bool) $plan->badge;
             $monthly = $thb($plan->price_thb);
             $annual  = $thb($plan->price_annual_thb);
