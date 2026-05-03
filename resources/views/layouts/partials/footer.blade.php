@@ -88,6 +88,7 @@ foreach ($_socialMap as $key => $info) {
           @if(\App\Support\Features::blogEnabled())
           <li><a href="{{ route('blog.index') }}" class="text-gray-400 hover:text-white transition">{{ __('nav.blog') }}</a></li>
           @endif
+          <li><a href="{{ route('pricing') }}" class="text-gray-400 hover:text-white transition">ราคา & ค่าธรรมเนียม</a></li>
           @auth
           <li><a href="{{ route('profile') }}" class="text-gray-400 hover:text-white transition">{{ __('nav.my_account') }}</a></li>
           <li><a href="{{ route('profile.orders') }}" class="text-gray-400 hover:text-white transition">{{ __('nav.my_orders') }}</a></li>

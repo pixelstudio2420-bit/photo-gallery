@@ -121,7 +121,12 @@ class HomeController extends Controller
             Log::warning('home.seo_failed', ['err' => $e->getMessage()]);
         }
 
-        return view('public.home', compact('featuredEvents', 'latestEvents', 'categories', 'photographers'));
+        // Adaptive trust counters — see App\Support\PlatformStats for the
+        // tier logic (founding/growing/mature). Cached internally so this
+        // is a hashtable read on cache hits.
+        $stats = \App\Support\PlatformStats::snapshot();
+
+        return view('public.home', compact('featuredEvents', 'latestEvents', 'categories', 'photographers', 'stats'));
     }
 
     /**
@@ -168,6 +173,44 @@ class HomeController extends Controller
         }
 
         return view('public.for-photographers', compact('plans'));
+    }
+
+    /**
+     * Standalone /pricing page — visible from main nav so customers
+     * and photographers can both see what they'll pay before signing
+     * up. Different from /sell-photos which is a "sell-the-dream"
+     * landing page; /pricing is the cold-blooded "what does this
+     * cost" answer page.
+     *
+     * Combines:
+     *   - photographer-side subscription plans (from DB)
+     *   - customer-side commission/fee structure (static for now —
+     *     when a per-event pricing model lands, swap to DB)
+     */
+    public function pricing()
+    {
+        $plans = $this->safeQuery('public.pricing.plans', 600, fn () =>
+            \App\Models\SubscriptionPlan::query()
+                ->where('is_active', true)
+                ->where('is_public', true)
+                ->orderBy('sort_order')
+                ->get()
+        );
+
+        try {
+            $seo = app(\App\Services\SeoService::class);
+            $seo->set([
+                'title'       => 'แพ็กเกจราคา & ค่าธรรมเนียม — โปร่งใส ไม่มีค่าซ่อน',
+                'description' => 'ราคาช่างภาพ + ค่าธรรมเนียมลูกค้าทั้งหมด ดูได้ก่อนสมัคร — ฟรี 60 วัน, ไม่ต้องใช้บัตรเครดิต, ยกเลิกได้ทุกเมื่อ',
+            ])->setBreadcrumbs([
+                ['name' => 'หน้าแรก', 'url' => route('home')],
+                ['name' => 'ราคา'],
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('home.pricing.seo_failed', ['err' => $e->getMessage()]);
+        }
+
+        return view('public.pricing', compact('plans'));
     }
 
     /**

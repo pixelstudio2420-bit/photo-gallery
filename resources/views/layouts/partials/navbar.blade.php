@@ -74,6 +74,12 @@
               <i class="bi bi-box-seam mr-1"></i>{{ __('nav.products') }}
             </a>
           </li>
+          <li>
+            <a class="px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('pricing') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
+              href="{{ route('pricing') }}">
+              <i class="bi bi-tag-fill mr-1"></i>ราคา
+            </a>
+          </li>
           {{-- "ติดต่อเรา" intentionally NOT in the top navbar — moved to
                the footer to keep the desktop menu focused on browse-to-buy
                actions (events, photographers, blog, products). The footer's
@@ -444,6 +450,12 @@
             <a class="block px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('products.*') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
               href="{{ route('products.index') }}">
               <i class="bi bi-box-seam mr-1"></i>{{ __('nav.products') }}
+            </a>
+          </li>
+          <li>
+            <a class="block px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('pricing') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
+              href="{{ route('pricing') }}">
+              <i class="bi bi-tag-fill mr-1"></i>ราคา
             </a>
           </li>
           {{-- "ติดต่อเรา" removed from mobile menu — same rationale as

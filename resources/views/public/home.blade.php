@@ -185,6 +185,91 @@
   </div>
 </section>
 
+{{-- ════════════════════════════════════════════════════════════════════
+     TRUST STRIP — adaptive counters (founding/growing/mature)
+     Pulled from App\Support\PlatformStats so the copy stays honest:
+     when DB counts are tiny we show momentum/process framing instead
+     of "ช่างภาพ 7 คน" which would feel like an empty marketplace.
+     ════════════════════════════════════════════════════════════════════ --}}
+<section class="mb-10 md:mb-12 fade-up">
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+    @foreach(['photographers', 'photos', 'events', 'orders'] as $key)
+      @php $s = $stats['adaptive'][$key]; @endphp
+      <div class="group relative p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 hover:-translate-y-1 hover:shadow-xl transition-all">
+        <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br
+                    {{ $s['tier'] === 'founding' ? 'from-amber-500 to-orange-600 shadow-amber-500/30' : 'from-indigo-500 to-violet-600 shadow-indigo-500/30' }}
+                    text-white shadow-md mb-3">
+          <i class="bi {{ $s['icon'] }} text-base"></i>
+        </div>
+        <div class="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white leading-none">
+          {{ $s['label'] }}
+        </div>
+        <div class="text-[11px] sm:text-xs font-medium text-slate-500 dark:text-slate-300/70 mt-1.5">
+          {{ $s['sub'] }}
+        </div>
+      </div>
+    @endforeach
+  </div>
+</section>
+
+{{-- ════════════════════════════════════════════════════════════════════
+     OUR COMMITMENT — risk-reversal badges (refund / privacy / verified)
+     Placed early so trust signals hit before the user scrolls past
+     the marketplace listing. 4 promises in flat icon-grid.
+     ════════════════════════════════════════════════════════════════════ --}}
+<section class="mb-12 md:mb-14 fade-up">
+  <div class="rounded-3xl bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-500/10 dark:via-teal-500/10 dark:to-cyan-500/10 border border-emerald-200/60 dark:border-emerald-400/20 p-5 sm:p-7 md:p-8">
+    <div class="flex items-center gap-3 mb-5 justify-center">
+      <span class="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/30">
+        <i class="bi bi-shield-check text-lg"></i>
+      </span>
+      <h2 class="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">สัญญาความปลอดภัยของเรา</h2>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/70 dark:border-white/10 flex items-start gap-3">
+        <div class="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0">
+          <i class="bi bi-cash-coin"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="font-bold text-slate-800 dark:text-white text-sm">คืนเงิน 100%</p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">จ่ายแล้วช่างไม่มา → คืนเข้าบัญชีใน 24 ชม.</p>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/70 dark:border-white/10 flex items-start gap-3">
+        <div class="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300 flex items-center justify-center shrink-0">
+          <i class="bi bi-patch-check-fill"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="font-bold text-slate-800 dark:text-white text-sm">ตรวจสอบช่างภาพทุกคน</p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">บัตรประชาชน + ผลงานจริงก่อนรับเข้าระบบ</p>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/70 dark:border-white/10 flex items-start gap-3">
+        <div class="w-9 h-9 rounded-xl bg-violet-100 dark:bg-violet-500/15 text-violet-600 dark:text-violet-300 flex items-center justify-center shrink-0">
+          <i class="bi bi-lock-fill"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="font-bold text-slate-800 dark:text-white text-sm">รูปไม่หลุด</p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">Watermark + ป้องกันการ screenshot อัตโนมัติ</p>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/70 dark:border-white/10 flex items-start gap-3">
+        <div class="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 flex items-center justify-center shrink-0">
+          <i class="bi bi-receipt"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="font-bold text-slate-800 dark:text-white text-sm">ตรวจสลิปอัตโนมัติ</p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">ผ่าน SlipOK ปลอดภัย ปลอมไม่ได้</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 {{-- Categories --}}
 @if($categories->count() > 0)
 <section class="mb-12 md:mb-16 fade-up">
@@ -383,6 +468,143 @@
   </div>
 </section>
 @endif
+
+{{-- ════════════════════════════════════════════════════════════════════
+     HOW IT WORKS — 3 simple steps for buyers + 3 for photographers
+     A switchable preview that shows the journey in plain language.
+     ════════════════════════════════════════════════════════════════════ --}}
+<section class="mb-12 md:mb-16 fade-up" x-data="{ role: 'buyer' }">
+  <div class="text-center mb-8">
+    <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white mb-2">วิธีใช้งาน</h2>
+    <p class="text-slate-500 dark:text-slate-400 mb-5">ไม่ซับซ้อน ทำได้ใน 3 ขั้น</p>
+    <div class="inline-flex items-center p-1 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-sm">
+      <button type="button" @click="role = 'buyer'"
+              :class="role === 'buyer' ? 'bg-gradient-to-br from-pink-500 to-rose-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-300'"
+              class="px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+        <i class="bi bi-person-heart mr-1"></i>สำหรับลูกค้า
+      </button>
+      <button type="button" @click="role = 'photographer'"
+              :class="role === 'photographer' ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-300'"
+              class="px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+        <i class="bi bi-camera-fill mr-1"></i>สำหรับช่างภาพ
+      </button>
+    </div>
+  </div>
+
+  {{-- Buyer flow --}}
+  <div x-show="role === 'buyer'" x-transition class="grid grid-cols-1 md:grid-cols-3 gap-5">
+    @php
+      $buyerSteps = [
+        ['n' => '1', 'icon' => 'search', 'title' => 'ค้นหารูปงานคุณ', 'desc' => 'พิมพ์ชื่ออีเวนต์ หรือใช้ AI Face Search อัพโหลดรูปตัวเอง — ระบบหาให้ใน 3 วินาที'],
+        ['n' => '2', 'icon' => 'qr-code', 'title' => 'จ่ายผ่าน PromptPay', 'desc' => 'สแกน QR + แนบสลิป — ระบบตรวจสอบอัตโนมัติผ่าน SlipOK'],
+        ['n' => '3', 'icon' => 'line', 'title' => 'รับรูปเข้า LINE', 'desc' => 'ภายใน 30 วินาทีหลังจ่าย ภาพต้นฉบับเข้า LINE คุณทันที — ดาวน์โหลดได้ตลอด'],
+      ];
+    @endphp
+    @foreach($buyerSteps as $step)
+      <div class="relative rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 p-6 hover:shadow-xl hover:-translate-y-1 transition-all">
+        <div class="absolute -top-3 -left-3 w-9 h-9 rounded-xl bg-gradient-to-br from-pink-500 to-rose-600 text-white flex items-center justify-center font-extrabold shadow-lg shadow-pink-500/30">{{ $step['n'] }}</div>
+        <div class="w-12 h-12 rounded-2xl bg-pink-100 dark:bg-pink-500/15 text-pink-600 dark:text-pink-300 flex items-center justify-center mb-4">
+          <i class="bi bi-{{ $step['icon'] }} text-xl"></i>
+        </div>
+        <h3 class="font-bold text-slate-800 dark:text-white mb-1.5">{{ $step['title'] }}</h3>
+        <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{{ $step['desc'] }}</p>
+      </div>
+    @endforeach
+  </div>
+
+  {{-- Photographer flow --}}
+  <div x-show="role === 'photographer'" x-cloak x-transition class="grid grid-cols-1 md:grid-cols-3 gap-5">
+    @php
+      $phSteps = [
+        ['n' => '1', 'icon' => 'person-plus', 'title' => 'สมัคร + ยืนยัน', 'desc' => 'อัพโหลดผลงาน 5 ภาพ + บัตรประชาชน — ทีมตรวจสอบใน 1-2 วันทำการ'],
+        ['n' => '2', 'icon' => 'cloud-upload', 'title' => 'อัพโหลดรูปงาน', 'desc' => 'สร้างอีเวนต์ → drag-drop รูปทั้งหมด — Face index อัตโนมัติ ลูกค้าหาเจอทันที'],
+        ['n' => '3', 'icon' => 'cash-stack', 'title' => 'รับเงินเข้าบัญชี', 'desc' => 'ลูกค้าจ่าย → ระบบหัก commission → โอนเข้า PromptPay ของคุณทุกศุกร์'],
+      ];
+    @endphp
+    @foreach($phSteps as $step)
+      <div class="relative rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 p-6 hover:shadow-xl hover:-translate-y-1 transition-all">
+        <div class="absolute -top-3 -left-3 w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white flex items-center justify-center font-extrabold shadow-lg shadow-indigo-500/30">{{ $step['n'] }}</div>
+        <div class="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 flex items-center justify-center mb-4">
+          <i class="bi bi-{{ $step['icon'] }} text-xl"></i>
+        </div>
+        <h3 class="font-bold text-slate-800 dark:text-white mb-1.5">{{ $step['title'] }}</h3>
+        <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{{ $step['desc'] }}</p>
+      </div>
+    @endforeach
+  </div>
+
+  {{-- Persona-specific deeper CTA --}}
+  <div class="text-center mt-8">
+    <div x-show="role === 'buyer'">
+      <a href="{{ route('events.index') }}" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold text-white bg-gradient-to-br from-pink-500 to-rose-600 shadow-lg shadow-pink-500/30 hover:shadow-xl hover:-translate-y-0.5 transition-all">
+        <i class="bi bi-search"></i>ค้นหารูปฉันเลย
+      </a>
+    </div>
+    <div x-show="role === 'photographer'" x-cloak>
+      <a href="{{ route('photographer-onboarding.quick') }}" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold text-white bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:-translate-y-0.5 transition-all">
+        <i class="bi bi-rocket-takeoff"></i>ลงทะเบียนช่างภาพ — ฟรี 60 วัน
+      </a>
+    </div>
+  </div>
+</section>
+
+{{-- ════════════════════════════════════════════════════════════════════
+     FOUNDING-COHORT SOCIAL PROOF
+     Honest framing — we don't fabricate testimonials. Instead we show
+     why early users joined and what they get for being early. This
+     reads as authentic for an early-stage marketplace where false
+     reviews would damage trust faster than no reviews.
+     ════════════════════════════════════════════════════════════════════ --}}
+<section class="mb-12 md:mb-16 fade-up">
+  <div class="text-center mb-8">
+    <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 mb-3">
+      <i class="bi bi-rocket-takeoff"></i>Founding Cohort
+    </span>
+    <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white mb-2">เปิดรับช่างภาพรุ่นแรก</h2>
+    <p class="text-slate-500 dark:text-slate-400">ทำไมช่างภาพไทยเลือก loadroop.com เป็นช่องทางใหม่</p>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+    <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 p-6 hover:shadow-xl transition-all">
+      <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/25 mb-4">
+        <i class="bi bi-percent text-lg"></i>
+      </div>
+      <h3 class="font-bold text-slate-800 dark:text-white mb-2">Commission ถูกที่สุดในไทย</h3>
+      <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-3">
+        Founding Photographer 50 คนแรก lock commission ที่ <strong class="text-emerald-600 dark:text-emerald-400">5%</strong> ตลอดอายุการใช้งาน — เทียบกับ 30-40% ของแพลตฟอร์มต่างประเทศ
+      </p>
+      <div class="text-xs text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
+        <i class="bi bi-arrow-right"></i>เหลืออีก 50 slot
+      </div>
+    </div>
+
+    <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 p-6 hover:shadow-xl transition-all">
+      <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/25 mb-4">
+        <i class="bi bi-stars text-lg"></i>
+      </div>
+      <h3 class="font-bold text-slate-800 dark:text-white mb-2">AI Face Search ในตัว</h3>
+      <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-3">
+        ลูกค้าหาตัวเองในงานได้ใน 3 วินาที — ไม่ต้อง scroll หา 1,000 ภาพอีกต่อไป conversion เพิ่ม <strong class="text-indigo-600 dark:text-indigo-400">3-5 เท่า</strong>
+      </p>
+      <div class="text-xs text-indigo-700 dark:text-indigo-400 font-semibold flex items-center gap-1">
+        <i class="bi bi-arrow-right"></i>ใช้ได้ทุก plan
+      </div>
+    </div>
+
+    <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 p-6 hover:shadow-xl transition-all">
+      <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-600 text-white flex items-center justify-center shadow-md shadow-pink-500/25 mb-4">
+        <i class="bi bi-line text-lg"></i>
+      </div>
+      <h3 class="font-bold text-slate-800 dark:text-white mb-2">ส่งรูปเข้า LINE อัตโนมัติ</h3>
+      <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-3">
+        จ่ายแล้ว → รูปต้นฉบับเข้า LINE ลูกค้าใน 30 วิ — ไม่ต้องเตรียม Drive link, ไม่ต้องตอบ chat ตี 2 อีกต่อไป
+      </p>
+      <div class="text-xs text-pink-700 dark:text-pink-400 font-semibold flex items-center gap-1">
+        <i class="bi bi-arrow-right"></i>หมดปัญหา customer support
+      </div>
+    </div>
+  </div>
+</section>
 
 {{-- CTA Section — Role-Aware --}}
 <section class="mb-4">

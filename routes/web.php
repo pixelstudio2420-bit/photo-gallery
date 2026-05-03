@@ -270,6 +270,10 @@ Route::get('/contact', [ContactController::class, 'index'])->name('contact')->mi
 Route::get('/sell-photos', [HomeController::class, 'forPhotographers'])
     ->name('sell-photos')->middleware('edge.cache:300,3600');
 
+// Public pricing page — single source of truth for "what does this cost"
+Route::get('/pricing', [HomeController::class, 'pricing'])
+    ->name('pricing')->middleware('edge.cache:300,3600');
+
 // ── Brand Ads tracking endpoints ────────────────────────────────────
 // Public, low-overhead endpoints. Both rate-limited at the service
 // level (per-IP impression dedup window + per-IP click cap). The
