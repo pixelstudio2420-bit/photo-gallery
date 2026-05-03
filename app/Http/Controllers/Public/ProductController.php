@@ -274,13 +274,14 @@ class ProductController extends Controller
 
         // ─── Notifications ───
         try {
-            // User: order created
+            // User: order created — link straight to order page (which
+            // now hosts the inline checkout, so no extra hops).
             UserNotification::notify(
                 (int) Auth::id(),
                 'digital_order',
                 'สร้างคำสั่งซื้อสำเร็จ',
                 "คำสั่งซื้อ {$orderNumber} ยอด ฿" . number_format($amount, 2) . " รอการชำระเงิน",
-                "products/checkout/{$digitalOrder->id}"
+                "products/order/{$digitalOrder->id}"
             );
 
             // Admin: new digital order
@@ -296,28 +297,32 @@ class ProductController extends Controller
             \Log::warning('Digital order notification failed: ' . $e->getMessage());
         }
 
-        return redirect()->route('products.checkout', $digitalOrder->id);
+        return redirect()->route('products.order', $digitalOrder->id);
     }
 
     /**
-     * Show payment/checkout page for a digital order.
+     * Legacy checkout page route — now redirects to the unified order
+     * page where the inline checkout lives. Kept so external links
+     * (LINE messages, email reminders) don't 404 after the consolidation.
+     *
+     * If you ever need the standalone checkout view back (e.g. desktop
+     * power-user mode), pass ?view=full and we'll render the original
+     * checkout template instead of redirecting.
      */
-    public function checkout($orderId)
+    public function checkout(Request $request, $orderId)
     {
         $order = DigitalOrder::where('id', $orderId)
             ->where('user_id', Auth::id())
             ->with('product')
             ->firstOrFail();
 
-        if ($order->status !== 'pending_payment') {
-            return redirect()->route('products.order', $order->id)
-                ->with('info', 'คำสั่งซื้อนี้ได้ดำเนินการแล้ว');
+        if ($request->query('view') === 'full' && $order->status === 'pending_payment') {
+            $bankAccounts = DB::table('bank_accounts')->where('is_active', 1)->get();
+            $paymentMethods = DB::table('payment_methods')->where('is_active', 1)->orderBy('sort_order')->get();
+            return view('public.products.checkout', compact('order', 'bankAccounts', 'paymentMethods'));
         }
 
-        $bankAccounts = DB::table('bank_accounts')->where('is_active', 1)->get();
-        $paymentMethods = DB::table('payment_methods')->where('is_active', 1)->orderBy('sort_order')->get();
-
-        return view('public.products.checkout', compact('order', 'bankAccounts', 'paymentMethods'));
+        return redirect()->route('products.order', $order->id);
     }
 
     /**
@@ -462,6 +467,13 @@ class ProductController extends Controller
 
     /**
      * Show digital order status page.
+     *
+     * For pending_payment orders, this page now ALSO renders an inline
+     * checkout (PromptPay QR + bank options + slip upload) so customers
+     * can pay without an extra navigation step. The previous flow forced
+     * customers through /products/checkout/{id} as a separate page —
+     * great for desktop, terrible for mobile conversion. Inline collapses
+     * the funnel: see status, pay, upload slip, all on one screen.
      */
     public function order($orderId)
     {
@@ -470,7 +482,16 @@ class ProductController extends Controller
             ->with('product')
             ->firstOrFail();
 
-        return view('public.products.order', compact('order'));
+        // Only fetch payment options when the order actually needs paying.
+        // Saves a couple of queries on the paid/cancelled view paths.
+        $bankAccounts   = collect();
+        $paymentMethods = collect();
+        if ($order->status === 'pending_payment') {
+            $bankAccounts   = DB::table('bank_accounts')->where('is_active', 1)->get();
+            $paymentMethods = DB::table('payment_methods')->where('is_active', 1)->orderBy('sort_order')->get();
+        }
+
+        return view('public.products.order', compact('order', 'bankAccounts', 'paymentMethods'));
     }
 
     /**

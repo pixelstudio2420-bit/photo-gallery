@@ -154,13 +154,6 @@
        ACTION BUTTONS (primary CTAs based on status)
        ═══════════════════════════════════════════════════════════════ --}}
   <div class="mb-5 flex flex-col sm:flex-row gap-3">
-    @if($order->status === 'pending_payment')
-      <a href="{{ route('products.checkout', $order->id) }}"
-         class="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 text-sm md:text-base">
-        <i class="bi bi-credit-card-fill"></i> ชำระเงินเลย
-      </a>
-    @endif
-
     @if($isPaid && $order->download_token)
       <a href="{{ route('products.download', $order->download_token) }}"
          class="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 text-sm md:text-base">
@@ -179,6 +172,206 @@
       <i class="bi bi-list-ul"></i> คำสั่งซื้อทั้งหมด
     </a>
   </div>
+
+  {{-- ═══════════════════════════════════════════════════════════════
+       INLINE CHECKOUT — only when payment is still pending.
+       Replaces the old "ชำระเงินเลย" button that bounced users to
+       a separate /checkout page. Single-screen flow:
+         1. See QR (PromptPay default) or one-tap to bank list
+         2. Pay with phone banking app
+         3. Drop slip into the dropzone right below
+         4. Submit — page reloads to whichever status the system put
+            the order in (paid via SlipOK auto, or pending_review)
+
+       Defaults to PromptPay because it's the dominant Thai payment
+       rail (one scan, no typing). Bank list is one tap away for
+       customers whose bank app doesn't scan well or who prefer typing.
+       ═══════════════════════════════════════════════════════════════ --}}
+  @if($order->status === 'pending_payment')
+    @php
+      $promptpay = collect($paymentMethods ?? [])->firstWhere('method_type', 'promptpay');
+      $hasPromptpay = $promptpay !== null;
+      $hasBanks     = isset($bankAccounts) && $bankAccounts->count() > 0;
+      // Default tab: PromptPay if available, else first bank
+      $defaultTab = $hasPromptpay ? 'promptpay' : ($hasBanks ? 'bank' : 'promptpay');
+    @endphp
+    <div class="rounded-3xl bg-white dark:bg-slate-800 border-2 border-indigo-200 dark:border-indigo-500/30 shadow-xl overflow-hidden mb-5"
+         x-data="inlineCheckout({ defaultTab: @js($defaultTab) })">
+
+      {{-- Header with amount + tab switcher --}}
+      <div class="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-5 lg:p-6 text-white">
+        <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+          <div>
+            <div class="text-xs uppercase tracking-wider opacity-80 mb-1">ยอดที่ต้องชำระ</div>
+            <div class="text-3xl lg:text-4xl font-extrabold leading-none">
+              {{ number_format($order->amount, 2) }}
+              <span class="text-lg font-medium opacity-80">฿</span>
+            </div>
+          </div>
+          <button type="button"
+                  data-copy="{{ number_format($order->amount, 2, '.', '') }}"
+                  class="copy-btn shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-semibold transition backdrop-blur">
+            <i class="bi bi-clipboard"></i> คัดลอกยอด
+          </button>
+        </div>
+
+        {{-- Tab switcher — only render if there are multiple options --}}
+        @if($hasPromptpay && $hasBanks)
+        <div class="flex items-center gap-2 p-1 bg-white/15 backdrop-blur rounded-xl">
+          <button type="button" @click="tab = 'promptpay'"
+                  :class="tab === 'promptpay' ? 'bg-white text-indigo-700 shadow-md' : 'text-white/80 hover:text-white hover:bg-white/10'"
+                  class="flex-1 py-2.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2">
+            <i class="bi bi-qr-code-scan"></i> PromptPay (แนะนำ)
+          </button>
+          <button type="button" @click="tab = 'bank'"
+                  :class="tab === 'bank' ? 'bg-white text-indigo-700 shadow-md' : 'text-white/80 hover:text-white hover:bg-white/10'"
+                  class="flex-1 py-2.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2">
+            <i class="bi bi-bank2"></i> โอนผ่านธนาคาร
+          </button>
+        </div>
+        @endif
+      </div>
+
+      {{-- Body — single screen with QR/banks + slip upload below --}}
+      <div class="p-5 lg:p-6 space-y-5">
+
+        {{-- ────── PromptPay panel ────── --}}
+        @if($hasPromptpay)
+        <div x-show="tab === 'promptpay'" x-transition>
+          <div class="flex flex-col sm:flex-row items-center gap-5">
+            {{-- QR --}}
+            @if(!empty($promptpay->qr_image))
+              <div class="relative flex-shrink-0">
+                <div class="absolute -inset-1 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-2xl blur opacity-25"></div>
+                <div class="relative w-44 h-44 lg:w-52 lg:h-52 p-3 bg-white rounded-2xl border-2 border-emerald-200 shadow-lg">
+                  <img src="{{ asset('storage/' . $promptpay->qr_image) }}" alt="PromptPay QR" class="w-full h-full object-contain">
+                  <div class="absolute inset-3 overflow-hidden rounded-lg pointer-events-none">
+                    <div class="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-emerald-500 to-transparent shadow-[0_0_10px_rgba(16,185,129,0.8)] animate-qr-scan"></div>
+                  </div>
+                </div>
+              </div>
+            @endif
+            {{-- Steps + recipient --}}
+            <div class="flex-1 min-w-0 space-y-3">
+              <div class="text-sm font-semibold text-slate-900 dark:text-white">
+                <i class="bi bi-1-circle-fill text-emerald-500 mr-1"></i>
+                เปิดแอปธนาคาร → กดสแกน QR
+              </div>
+              <div class="text-sm font-semibold text-slate-900 dark:text-white">
+                <i class="bi bi-2-circle-fill text-emerald-500 mr-1"></i>
+                ตรวจยอด <strong class="text-emerald-600 dark:text-emerald-400">฿{{ number_format($order->amount, 2) }}</strong> → กดยืนยัน
+              </div>
+              <div class="text-sm font-semibold text-slate-900 dark:text-white">
+                <i class="bi bi-3-circle-fill text-emerald-500 mr-1"></i>
+                บันทึกสลิป → อัปโหลดด้านล่าง 👇
+              </div>
+
+              @if(!empty($promptpay->account_holder_name))
+              <div class="mt-3 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20">
+                <div class="text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400 font-bold mb-0.5">โอนถึง</div>
+                <div class="text-sm font-bold text-slate-900 dark:text-white">{{ $promptpay->account_holder_name }}</div>
+              </div>
+              @endif
+            </div>
+          </div>
+        </div>
+        @endif
+
+        {{-- ────── Bank panel ────── --}}
+        @if($hasBanks)
+        <div x-show="tab === 'bank'" x-transition class="space-y-2">
+          @foreach($bankAccounts as $bank)
+          <div class="rounded-2xl border border-slate-200 dark:border-white/10 hover:border-blue-300 dark:hover:border-blue-500/40 hover:shadow-md transition overflow-hidden">
+            <div class="px-4 py-3 flex items-center gap-3">
+              <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/10 to-indigo-500/10 dark:from-blue-500/20 dark:to-indigo-500/20 border border-blue-200 dark:border-blue-500/20 flex items-center justify-center flex-shrink-0">
+                <i class="bi bi-bank text-blue-600 dark:text-blue-400 text-xl"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="font-bold text-slate-900 dark:text-white text-sm truncate">{{ $bank->bank_name }}</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ $bank->account_holder_name }}</div>
+                <div class="font-mono text-base font-bold text-slate-900 dark:text-white tracking-wider mt-0.5">{{ $bank->account_number }}</div>
+              </div>
+              <button type="button"
+                      data-copy="{{ $bank->account_number }}"
+                      title="คัดลอกเลขบัญชี"
+                      class="copy-btn shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-blue-500 hover:text-white text-slate-600 dark:text-slate-300 transition">
+                <i class="bi bi-clipboard"></i>
+              </button>
+            </div>
+          </div>
+          @endforeach
+        </div>
+        @endif
+
+        {{-- ────── Slip Upload (always visible) ────── --}}
+        <form method="POST" action="{{ route('products.upload-slip', $order->id) }}"
+              enctype="multipart/form-data"
+              class="pt-4 border-t border-slate-200 dark:border-white/10 space-y-3">
+          @csrf
+          {{-- Hidden payment_method — auto-driven by tab choice --}}
+          <input type="hidden" name="payment_method" :value="tab === 'bank' ? 'bank_transfer' : 'promptpay'">
+
+          <label class="flex items-center gap-1.5 text-sm font-semibold text-slate-700 dark:text-slate-300">
+            <i class="bi bi-cloud-upload-fill text-purple-500"></i>
+            อัปโหลดสลิป
+            <span class="text-rose-500">*</span>
+          </label>
+
+          <label class="relative block cursor-pointer rounded-2xl border-2 border-dashed transition overflow-hidden group"
+                 :class="slipPreview ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-500/5' : (dragging ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10 scale-[1.01]' : 'border-slate-300 dark:border-white/10 hover:border-indigo-400 bg-slate-50 dark:bg-slate-900/50')"
+                 @dragover.prevent="dragging = true"
+                 @dragleave.prevent="dragging = false"
+                 @drop.prevent="handleDrop($event)">
+            <input type="file" name="slip_image" accept="image/*" required x-ref="slipInput"
+                   @change="handleFile($event)"
+                   class="absolute inset-0 opacity-0 cursor-pointer z-10">
+
+            <div x-show="!slipPreview" class="py-8 px-6 text-center">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center mb-3 shadow-lg shadow-indigo-500/40 group-hover:scale-110 transition-transform">
+                <i class="bi bi-cloud-upload-fill text-2xl"></i>
+              </div>
+              <div class="font-bold text-sm text-slate-900 dark:text-white mb-1">แตะเพื่อเลือกสลิป</div>
+              <div class="text-xs text-slate-500 dark:text-slate-400">หรือลากรูปมาวาง · JPG/PNG สูงสุด 5MB</div>
+            </div>
+
+            <div x-show="slipPreview" x-cloak class="relative p-3">
+              <div class="relative rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-900">
+                <img :src="slipPreview" alt="Slip preview" class="w-full max-h-72 object-contain">
+                <div class="absolute top-2 right-2 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500 text-white text-xs font-bold shadow-lg">
+                  <i class="bi bi-check-circle-fill"></i> พร้อมส่ง
+                </div>
+              </div>
+              <div class="mt-2 flex items-center justify-between gap-2">
+                <span class="text-xs text-slate-500 dark:text-slate-400 truncate" x-text="slipName"></span>
+                <button type="button" @click.prevent.stop="clearSlip()"
+                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition text-xs font-medium relative z-20">
+                  <i class="bi bi-trash"></i> เปลี่ยน
+                </button>
+              </div>
+            </div>
+          </label>
+
+          <button type="submit"
+                  :disabled="!slipPreview || submitting"
+                  @click="submitting = true"
+                  class="relative w-full py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold text-base shadow-lg shadow-emerald-500/40 hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden group">
+            <span class="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 skew-x-12"></span>
+            <i class="bi" :class="submitting ? 'bi-arrow-clockwise animate-spin' : 'bi-check-circle-fill'"></i>
+            <span x-show="!submitting">ส่งสลิป — ตรวจสอบอัตโนมัติ</span>
+            <span x-show="submitting" x-cloak>กำลังส่ง...</span>
+          </button>
+
+          <div class="flex items-center justify-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 flex-wrap">
+            <span class="inline-flex items-center gap-1"><i class="bi bi-shield-check text-emerald-500"></i> SSL</span>
+            <span>·</span>
+            <span class="inline-flex items-center gap-1"><i class="bi bi-lightning-charge-fill text-amber-500"></i> ตรวจอัตโนมัติ</span>
+            <span>·</span>
+            <span class="inline-flex items-center gap-1"><i class="bi bi-clock-history text-slate-400"></i> สำรอง: ภายใน 24 ชม.</span>
+          </div>
+        </form>
+      </div>
+    </div>
+  @endif
 
   {{-- ═══════════════════════════════════════════════════════════════
        ORDER DETAILS
@@ -209,14 +402,31 @@
       </a>
     </div>
 
-    {{-- Total card --}}
-    <div class="rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg p-5 flex flex-col justify-between">
+    {{-- Total card — label adapts to status so customers don't get
+         "ชำระเรียบร้อย" while still seeing the pay-now form. --}}
+    <div class="rounded-2xl bg-gradient-to-br
+                {{ $isPaid ? 'from-emerald-500 to-teal-600' : ($isCancelled ? 'from-slate-500 to-slate-700' : 'from-amber-500 to-orange-600') }}
+                text-white shadow-lg p-5 flex flex-col justify-between">
       <div>
-        <div class="text-xs uppercase tracking-wide opacity-75 mb-1">ยอดชำระ</div>
-        <div class="text-3xl font-bold">{{ number_format($order->amount, 2) }} <span class="text-base font-medium">฿</span></div>
+        <div class="text-xs uppercase tracking-wide opacity-75 mb-1">
+          {{ $isPaid ? 'ยอดชำระ' : ($isCancelled ? 'ยอดสั่งซื้อ' : 'ยอดที่ต้องชำระ') }}
+        </div>
+        <div class="text-3xl font-bold">
+          @if((float) $order->amount <= 0)
+            <span class="text-2xl">FREE</span>
+          @else
+            {{ number_format($order->amount, 2) }} <span class="text-base font-medium">฿</span>
+          @endif
+        </div>
       </div>
       <div class="text-xs opacity-75 mt-3 flex items-center gap-1.5">
-        <i class="bi bi-shield-fill-check"></i> ยอดที่ชำระเรียบร้อย
+        @if($isPaid)
+          <i class="bi bi-shield-fill-check"></i> ชำระเรียบร้อย
+        @elseif($isCancelled)
+          <i class="bi bi-x-circle-fill"></i> ยกเลิกแล้ว
+        @else
+          <i class="bi bi-clock-history"></i> รอชำระ — กดด้านล่างเพื่อจ่าย
+        @endif
       </div>
     </div>
   </div>
@@ -286,8 +496,90 @@
   </div>
 </div>
 
+@push('styles')
+<style>
+  /* QR scan-line animation matches the standalone checkout flavour
+     so customers feel the same "machine is working" cue inline. */
+  @keyframes qr-scan {
+    0%, 100% { top: 0; }
+    50%      { top: 100%; }
+  }
+  .animate-qr-scan { animation: qr-scan 2.4s ease-in-out infinite; }
+</style>
+@endpush
+
 @push('scripts')
 <script>
+/* Alpine component for the inline checkout (PromptPay/bank tabs +
+   slip dropzone). Mirrors productCheckout() from the legacy /checkout
+   page so behaviour stays identical — just consolidated onto one page. */
+function inlineCheckout(config) {
+  return {
+    tab: config.defaultTab || 'promptpay',
+    slipPreview: null,
+    slipName: '',
+    dragging: false,
+    submitting: false,
+
+    handleFile(e) {
+      const file = e.target.files && e.target.files[0];
+      this.loadFile(file);
+    },
+    handleDrop(e) {
+      this.dragging = false;
+      const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!file) return;
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        if (this.$refs.slipInput) this.$refs.slipInput.files = dt.files;
+      } catch (_) { /* older browsers */ }
+      this.loadFile(file);
+    },
+    loadFile(file) {
+      if (!file) { this.slipPreview = null; this.slipName = ''; return; }
+      this.slipName = file.name;
+      const reader = new FileReader();
+      reader.onload = ev => { this.slipPreview = ev.target.result; };
+      reader.readAsDataURL(file);
+    },
+    clearSlip() {
+      this.slipPreview = null; this.slipName = '';
+      if (this.$refs.slipInput) this.$refs.slipInput.value = '';
+    },
+  };
+}
+
+/* Copy-to-clipboard for any .copy-btn in the inline checkout block.
+   Scoped delegation handler — works on dynamically-rendered buttons,
+   non-Alpine fallback included. */
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('.copy-btn');
+  if (!btn) return;
+  const text = btn.dataset.copy;
+  if (!text) return;
+
+  const doCopy = (t) => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(t);
+    }
+    const ta = document.createElement('textarea');
+    ta.value = t;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (_) {}
+    document.body.removeChild(ta);
+    return Promise.resolve();
+  };
+
+  doCopy(text).then(() => {
+    const old = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-check2-circle"></i> คัดลอกแล้ว';
+    setTimeout(() => { btn.innerHTML = old; }, 1500);
+  });
+});
+
 function orderStatusPoller(config) {
   return {
     orderId: config.orderId,
