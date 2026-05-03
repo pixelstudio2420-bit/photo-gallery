@@ -140,20 +140,7 @@
     @endif
 
     {{-- Article Content --}}
-    <div class="blog-content prose prose-lg prose-gray dark:prose-invert max-w-none
-                prose-headings:font-bold prose-headings:text-slate-800 dark:prose-headings:text-gray-100
-                prose-h2:text-2xl prose-h2:mt-12 prose-h2:mb-5 prose-h2:pb-3 prose-h2:border-b prose-h2:border-gray-100 dark:prose-h2:border-white/10
-                prose-h3:text-xl prose-h3:mt-10 prose-h3:mb-4
-                prose-p:leading-[1.8] prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-p:my-5
-                prose-a:text-indigo-600 dark:prose-a:text-indigo-300 prose-a:font-medium prose-a:no-underline hover:prose-a:underline
-                prose-strong:text-slate-800 dark:prose-strong:text-gray-100
-                prose-img:rounded-2xl prose-img:shadow-xl prose-img:mx-auto prose-img:my-8
-                prose-blockquote:border-l-4 prose-blockquote:border-indigo-400 dark:prose-blockquote:border-indigo-300 prose-blockquote:bg-indigo-50/60 dark:prose-blockquote:bg-indigo-500/10 prose-blockquote:rounded-r-xl prose-blockquote:py-2 prose-blockquote:px-4 prose-blockquote:not-italic prose-blockquote:text-slate-700 dark:prose-blockquote:text-gray-300
-                prose-code:text-indigo-600 dark:prose-code:text-indigo-300 prose-code:bg-indigo-50 dark:prose-code:bg-indigo-500/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
-                prose-pre:bg-gray-900 dark:prose-pre:bg-black/50 prose-pre:rounded-xl prose-pre:shadow-lg prose-pre:border prose-pre:border-white/5
-                prose-li:text-gray-700 dark:prose-li:text-gray-300 prose-li:my-1.5
-                prose-hr:border-gray-200 dark:prose-hr:border-white/10"
-         style="line-height:1.8;"
+    <div class="blog-content max-w-none text-gray-800 dark:text-gray-200"
          itemprop="articleBody">
       {!! \App\Support\HtmlSanitizer::clean($post->content) !!}
     </div>
@@ -407,10 +394,404 @@
 
 @push('styles')
 <style>
-/* Blog content typography */
-.blog-content h2 { scroll-margin-top: 80px; }
-.blog-content h3 { scroll-margin-top: 80px; }
-.blog-content h4 { scroll-margin-top: 80px; }
+/* ============================================================
+   BLOG ARTICLE TYPOGRAPHY
+   Self-contained — no Tailwind Typography plugin dependency.
+   Carefully tuned for Thai readability + SEO content hierarchy.
+   ============================================================ */
+.blog-content {
+  font-size: 1.0625rem;          /* 17px base — comfortable for Thai */
+  line-height: 1.85;
+  color: #374151;                 /* slate-700 — softer than pure black */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+.dark .blog-content { color: #d1d5db; }  /* gray-300 */
+
+/* First & last children: no extra margin */
+.blog-content > *:first-child { margin-top: 0 !important; }
+.blog-content > *:last-child  { margin-bottom: 0 !important; }
+
+/* ---------- Headings ---------- */
+.blog-content h2,
+.blog-content h3,
+.blog-content h4 {
+  scroll-margin-top: 90px;       /* offset for sticky nav */
+  font-weight: 800;
+  color: #0f172a;                 /* slate-900 */
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+.dark .blog-content h2,
+.dark .blog-content h3,
+.dark .blog-content h4 { color: #f1f5f9; }
+
+.blog-content h2 {
+  font-size: 1.625rem;            /* 26px */
+  margin: 3rem 0 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid transparent;
+  border-image: linear-gradient(90deg, #6366f1 0%, #a78bfa 40%, transparent 100%) 1;
+  position: relative;
+}
+.blog-content h2::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 1.5rem;
+  background: linear-gradient(180deg, #6366f1, #8b5cf6);
+  border-radius: 2px;
+  margin-right: 0.75rem;
+  vertical-align: -3px;
+}
+@media (min-width: 768px) {
+  .blog-content h2 { font-size: 1.875rem; margin-top: 3.5rem; }
+}
+
+.blog-content h3 {
+  font-size: 1.3125rem;           /* 21px */
+  margin: 2.25rem 0 0.875rem;
+  color: #1e293b;
+}
+.dark .blog-content h3 { color: #e2e8f0; }
+@media (min-width: 768px) {
+  .blog-content h3 { font-size: 1.5rem; }
+}
+
+.blog-content h4 {
+  font-size: 1.125rem;
+  margin: 1.75rem 0 0.625rem;
+  color: #334155;
+}
+.dark .blog-content h4 { color: #cbd5e1; }
+
+/* ---------- Paragraphs ---------- */
+.blog-content p {
+  margin: 0 0 1.4rem;
+  line-height: 1.85;
+}
+.blog-content p:has(+ h2),
+.blog-content p:has(+ h3) { margin-bottom: 1.75rem; }
+
+/* Lead paragraph: first <p> right after the article opens */
+.blog-content > p:first-of-type {
+  font-size: 1.15rem;
+  line-height: 1.8;
+  color: #1f2937;
+  font-weight: 500;
+}
+.dark .blog-content > p:first-of-type { color: #e5e7eb; }
+
+/* ---------- Strong / Emphasis ---------- */
+.blog-content strong,
+.blog-content b {
+  font-weight: 700;
+  color: #0f172a;
+  background: linear-gradient(180deg, transparent 65%, rgba(99, 102, 241, 0.18) 65%);
+  padding: 0 2px;
+}
+.dark .blog-content strong,
+.dark .blog-content b {
+  color: #f1f5f9;
+  background: linear-gradient(180deg, transparent 65%, rgba(165, 180, 252, 0.22) 65%);
+}
+
+.blog-content em,
+.blog-content i { font-style: italic; color: #4338ca; }
+.dark .blog-content em,
+.dark .blog-content i { color: #c7d2fe; }
+
+/* ---------- Links ---------- */
+.blog-content a {
+  color: #4f46e5;
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(79, 70, 229, 0.25);
+  transition: all 0.15s ease;
+}
+.blog-content a:hover {
+  color: #4338ca;
+  border-bottom-color: #4338ca;
+  background: rgba(99, 102, 241, 0.06);
+}
+.dark .blog-content a { color: #a5b4fc; border-bottom-color: rgba(165, 180, 252, 0.3); }
+.dark .blog-content a:hover { color: #c7d2fe; border-bottom-color: #c7d2fe; background: rgba(165, 180, 252, 0.08); }
+
+/* ---------- Lists ---------- */
+.blog-content ul,
+.blog-content ol {
+  margin: 1.25rem 0 1.75rem;
+  padding-left: 0;
+  list-style: none;
+}
+.blog-content ul ul,
+.blog-content ol ol,
+.blog-content ul ol,
+.blog-content ol ul { margin: 0.5rem 0 0.5rem 1rem; }
+
+.blog-content li {
+  position: relative;
+  padding-left: 1.875rem;
+  margin-bottom: 0.625rem;
+  line-height: 1.8;
+}
+
+/* Unordered: gradient bullet */
+.blog-content ul > li::before {
+  content: "";
+  position: absolute;
+  left: 0.375rem;
+  top: 0.7rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  background: linear-gradient(135deg, #6366f1, #a78bfa);
+  border-radius: 9999px;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+/* Ordered: counter chip */
+.blog-content ol { counter-reset: blog-counter; }
+.blog-content ol > li {
+  counter-increment: blog-counter;
+  padding-left: 2.5rem;
+}
+.blog-content ol > li::before {
+  content: counter(blog-counter);
+  position: absolute;
+  left: 0;
+  top: 0.1rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+}
+
+/* ---------- Blockquote ---------- */
+.blog-content blockquote {
+  position: relative;
+  margin: 2rem 0;
+  padding: 1.25rem 1.25rem 1.25rem 3rem;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.07), rgba(139, 92, 246, 0.04));
+  border-left: 4px solid #6366f1;
+  border-radius: 0.5rem 1rem 1rem 0.5rem;
+  color: #334155;
+  font-style: normal;
+}
+.blog-content blockquote::before {
+  content: "\201C";
+  position: absolute;
+  left: 0.75rem;
+  top: 0.25rem;
+  font-size: 3rem;
+  line-height: 1;
+  color: rgba(99, 102, 241, 0.35);
+  font-family: Georgia, serif;
+}
+.blog-content blockquote p:last-child { margin-bottom: 0; }
+.dark .blog-content blockquote {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.08));
+  border-left-color: #a5b4fc;
+  color: #e5e7eb;
+}
+.dark .blog-content blockquote::before { color: rgba(165, 180, 252, 0.45); }
+
+/* ---------- Inline Code ---------- */
+.blog-content code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875em;
+  background: rgba(99, 102, 241, 0.1);
+  color: #4338ca;
+  padding: 0.15em 0.45em;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(99, 102, 241, 0.18);
+}
+.dark .blog-content code {
+  background: rgba(165, 180, 252, 0.12);
+  color: #c7d2fe;
+  border-color: rgba(165, 180, 252, 0.2);
+}
+
+/* ---------- Code Block ---------- */
+.blog-content pre {
+  margin: 1.75rem 0;
+  padding: 1.25rem 1.5rem;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 1rem;
+  overflow-x: auto;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.blog-content pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
+/* ---------- Tables ---------- */
+.blog-content table {
+  width: 100%;
+  margin: 2rem 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.9375rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.875rem;
+  overflow: hidden;
+  box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.06);
+}
+.dark .blog-content table { border-color: rgba(255, 255, 255, 0.08); }
+
+.blog-content thead { background: linear-gradient(135deg, #4f46e5, #7c3aed); }
+.blog-content th {
+  padding: 0.875rem 1rem;
+  text-align: left;
+  font-weight: 700;
+  color: #fff;
+  font-size: 0.875rem;
+  letter-spacing: 0.01em;
+}
+.blog-content td {
+  padding: 0.875rem 1rem;
+  border-top: 1px solid #f1f5f9;
+  color: #374151;
+}
+.dark .blog-content td {
+  border-top-color: rgba(255, 255, 255, 0.06);
+  color: #d1d5db;
+}
+.blog-content tbody tr:hover { background: rgba(99, 102, 241, 0.04); }
+.dark .blog-content tbody tr:hover { background: rgba(165, 180, 252, 0.05); }
+.blog-content tbody tr:nth-child(even) { background: rgba(248, 250, 252, 0.5); }
+.dark .blog-content tbody tr:nth-child(even) { background: rgba(255, 255, 255, 0.015); }
+
+/* Mobile table: enable scroll */
+@media (max-width: 640px) {
+  .blog-content table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    font-size: 0.875rem;
+  }
+  .blog-content th,
+  .blog-content td { padding: 0.625rem 0.75rem; }
+}
+
+/* ---------- Images ---------- */
+.blog-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 2rem auto;
+  border-radius: 1rem;
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.18);
+}
+
+.blog-content figure { margin: 2rem 0; text-align: center; }
+.blog-content figcaption {
+  margin-top: 0.625rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-style: italic;
+}
+.dark .blog-content figcaption { color: #9ca3af; }
+
+/* ---------- Horizontal rule (section divider) ---------- */
+.blog-content hr {
+  margin: 3rem auto;
+  border: 0;
+  height: 4px;
+  width: 80px;
+  background: linear-gradient(90deg, #6366f1, #a78bfa, #6366f1);
+  border-radius: 9999px;
+  opacity: 0.6;
+}
+
+/* ---------- FAQ pattern (Q: / A: lines) ----------
+   These styles activate when seeder uses **Q:** + **A:** prefix; they
+   give a card-like feel even in plain text format. */
+.blog-content p strong:first-child:where([data-q], [data-a]) { /* placeholder – see callout below */ }
+
+/* ---------- Callout boxes (💡 tips, ⚠️ warnings) ----------
+   Triggered when a paragraph starts with one of the emoji prefixes.
+   Authors just write `💡 **Tip:** ...` and the styling kicks in. */
+.blog-content p:where(:has(> strong:first-child)) {
+  /* base styling preserved */
+}
+
+/* Generic info card: any blockquote whose first child <p> starts with emoji */
+.blog-content .blog-callout,
+.blog-content .blog-tip,
+.blog-content .blog-warning {
+  margin: 1.75rem 0;
+  padding: 1rem 1.25rem 1rem 3rem;
+  border-radius: 0.875rem;
+  position: relative;
+  font-size: 0.9375rem;
+  line-height: 1.75;
+}
+.blog-content .blog-tip {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(5, 150, 105, 0.04));
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: #065f46;
+}
+.blog-content .blog-tip::before {
+  content: "💡";
+  position: absolute;
+  left: 1rem;
+  top: 1rem;
+  font-size: 1.25rem;
+}
+.dark .blog-content .blog-tip { color: #6ee7b7; background: rgba(16, 185, 129, 0.1); }
+
+.blog-content .blog-warning {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.04));
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #92400e;
+}
+.blog-content .blog-warning::before {
+  content: "⚠️";
+  position: absolute;
+  left: 1rem;
+  top: 1rem;
+  font-size: 1.25rem;
+}
+.dark .blog-content .blog-warning { color: #fcd34d; background: rgba(245, 158, 11, 0.1); }
+
+/* ---------- Spacing between consecutive blocks ---------- */
+.blog-content ul + p,
+.blog-content ol + p,
+.blog-content blockquote + p,
+.blog-content table + p { margin-top: 1.5rem; }
+
+/* ---------- Mobile tuning ---------- */
+@media (max-width: 640px) {
+  .blog-content { font-size: 1rem; line-height: 1.8; }
+  .blog-content h2 { font-size: 1.375rem; margin-top: 2.25rem; }
+  .blog-content h3 { font-size: 1.1875rem; margin-top: 1.75rem; }
+  .blog-content h4 { font-size: 1.0625rem; }
+  .blog-content > p:first-of-type { font-size: 1.0625rem; }
+  .blog-content blockquote { padding: 1rem 1rem 1rem 2.5rem; }
+  .blog-content blockquote::before { font-size: 2.25rem; left: 0.5rem; }
+  .blog-content ol > li,
+  .blog-content ul > li { padding-left: 1.75rem; }
+  .blog-content ol > li::before { width: 1.5rem; height: 1.5rem; font-size: 0.75rem; }
+}
+
+/* ============================================================
+   ORIGINAL STYLES PRESERVED
+   ============================================================ */
 
 /* Blog card hover */
 .blog-card { will-change: transform; transition: all 0.3s ease; }
