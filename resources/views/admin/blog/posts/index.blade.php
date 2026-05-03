@@ -13,6 +13,29 @@
 @section('content')
 <div x-data="blogPostsManager()" x-init="init()">
 
+    {{-- ─── Public-side disabled warning banner ─── --}}
+    @if(!\App\Support\Features::blogEnabled())
+    <div class="mb-5 px-4 py-3 rounded-xl flex items-start gap-3
+                bg-amber-50 dark:bg-amber-500/10
+                border border-amber-300 dark:border-amber-500/30
+                text-amber-900 dark:text-amber-200">
+        <i class="bi bi-exclamation-triangle-fill mt-0.5 shrink-0 text-base"></i>
+        <div class="flex-1 text-sm leading-relaxed">
+            <p class="font-bold mb-0.5">ระบบบทความปิดใช้งานอยู่</p>
+            <p class="text-xs">
+                ผู้ใช้งานทั่วไปไม่สามารถเข้าหน้า <code class="font-mono">/blog</code> ได้ — แสดง 404 แทน
+                คุณยังจัดการบทความที่นี่ได้ปกติ
+            </p>
+        </div>
+        <a href="{{ route('admin.settings.features') }}"
+           class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold
+                  bg-amber-600 hover:bg-amber-700 text-white
+                  shadow-sm transition-colors">
+            <i class="bi bi-toggles2 mr-1"></i>เปิดใช้งาน
+        </a>
+    </div>
+    @endif
+
     {{-- Header --}}
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>

@@ -85,7 +85,9 @@ foreach ($_socialMap as $key => $info) {
         <ul class="list-none space-y-2">
           <li><a href="{{ route('home') }}" class="text-gray-400 hover:text-white transition">{{ __('nav.home') }}</a></li>
           <li><a href="{{ route('events.index') }}" class="text-gray-400 hover:text-white transition">{{ __('nav.events') }}</a></li>
+          @if(\App\Support\Features::blogEnabled())
           <li><a href="{{ route('blog.index') }}" class="text-gray-400 hover:text-white transition">{{ __('nav.blog') }}</a></li>
+          @endif
           @auth
           <li><a href="{{ route('profile') }}" class="text-gray-400 hover:text-white transition">{{ __('nav.my_account') }}</a></li>
           <li><a href="{{ route('profile.orders') }}" class="text-gray-400 hover:text-white transition">{{ __('nav.my_orders') }}</a></li>

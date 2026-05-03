@@ -87,6 +87,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'user.storage'         => \App\Http\Middleware\CheckUserStorageEnabled::class,
             'credits.enabled'      => \App\Http\Middleware\CheckCreditsEnabled::class,
             'subscriptions.enabled' => \App\Http\Middleware\CheckSubscriptionsEnabled::class,
+            'blog.enabled' => \App\Http\Middleware\CheckBlogEnabled::class,
             'rate.limit'   => \App\Http\Middleware\RateLimit::class,
             'no.back'      => \App\Http\Middleware\PreventBackHistory::class,
             'api.key'      => \App\Http\Middleware\ApiKeyAuth::class,

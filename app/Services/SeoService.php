@@ -979,34 +979,38 @@ HTML;
             }
         } catch (\Throwable) {}
 
-        // Blog posts (high SEO priority)
-        try {
-            $posts = DB::table('blog_posts')
-                ->where('status', 'published')
-                ->where('visibility', 'public')
-                ->whereNull('deleted_at')
-                ->select('slug', 'id', 'updated_at', 'published_at')
-                ->get();
+        // Blog posts (high SEO priority) — skip entirely when the blog
+        // subsystem is disabled in admin settings, otherwise Google
+        // would re-index URLs that now serve 404.
+        if (\App\Support\Features::blogEnabled()) {
+            try {
+                $posts = DB::table('blog_posts')
+                    ->where('status', 'published')
+                    ->where('visibility', 'public')
+                    ->whereNull('deleted_at')
+                    ->select('slug', 'id', 'updated_at', 'published_at')
+                    ->get();
 
-            foreach ($posts as $post) {
-                $identifier = $post->slug ?: $post->id;
-                $lastmod    = $post->updated_at ? date('c', strtotime($post->updated_at)) : $now;
-                $urls[] = $this->sitemapUrl($appUrl . '/blog/' . $identifier, $lastmod, 'monthly', '0.7');
-            }
+                foreach ($posts as $post) {
+                    $identifier = $post->slug ?: $post->id;
+                    $lastmod    = $post->updated_at ? date('c', strtotime($post->updated_at)) : $now;
+                    $urls[] = $this->sitemapUrl($appUrl . '/blog/' . $identifier, $lastmod, 'monthly', '0.7');
+                }
 
-            // Blog index
-            $urls[] = $this->sitemapUrl($appUrl . '/blog', $now, 'daily', '0.8');
-        } catch (\Throwable) {}
+                // Blog index
+                $urls[] = $this->sitemapUrl($appUrl . '/blog', $now, 'daily', '0.8');
+            } catch (\Throwable) {}
 
-        // Blog categories
-        try {
-            $blogCats = DB::table('blog_categories')->where('is_active', 1)->select('slug', 'id', 'updated_at')->get();
-            foreach ($blogCats as $cat) {
-                $identifier = $cat->slug ?: $cat->id;
-                $lastmod = $cat->updated_at ? date('c', strtotime($cat->updated_at)) : $now;
-                $urls[] = $this->sitemapUrl($appUrl . '/blog/category/' . $identifier, $lastmod, 'weekly', '0.6');
-            }
-        } catch (\Throwable) {}
+            // Blog categories
+            try {
+                $blogCats = DB::table('blog_categories')->where('is_active', 1)->select('slug', 'id', 'updated_at')->get();
+                foreach ($blogCats as $cat) {
+                    $identifier = $cat->slug ?: $cat->id;
+                    $lastmod = $cat->updated_at ? date('c', strtotime($cat->updated_at)) : $now;
+                    $urls[] = $this->sitemapUrl($appUrl . '/blog/category/' . $identifier, $lastmod, 'weekly', '0.6');
+                }
+            } catch (\Throwable) {}
+        }
 
         // Photographer profiles
         try {

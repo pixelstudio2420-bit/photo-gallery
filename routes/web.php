@@ -1285,6 +1285,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/queue/retry/{id}', [\App\Http\Controllers\Admin\SettingsController::class, 'retryJob'])->name('queue.retry');
             Route::post('/queue/clear', [\App\Http\Controllers\Admin\SettingsController::class, 'clearQueue'])->name('queue.clear');
 
+            // Feature Flags (system on/off toggles for major subsystems)
+            Route::get('/features',  [\App\Http\Controllers\Admin\SettingsController::class, 'features'])->name('features');
+            Route::post('/features', [\App\Http\Controllers\Admin\SettingsController::class, 'updateFeatures'])->name('features.update');
+
             // Settings Guide
             Route::get('/guide', [\App\Http\Controllers\Admin\SettingsController::class, 'guide'])->name('guide');
 

@@ -16,8 +16,14 @@ use App\Http\Controllers\Public\AffiliateRedirectController;
 
 /* ═══════════════════════════════════════════════════════════════════════
  *  Public blog routes (no auth required)
+ *
+ *  Gated by `blog.enabled` middleware — when admin disables the blog
+ *  via /admin/settings/features, all of these routes return 404 to
+ *  guests. Admins still see them so they can verify content + flip
+ *  the toggle back on. Admin /admin/blog/* routes (below) are NOT
+ *  gated so admins can always manage drafts even with public off.
  * ═══════════════════════════════════════════════════════════════════════ */
-Route::prefix('blog')->name('blog.')->group(function () {
+Route::prefix('blog')->name('blog.')->middleware('blog.enabled')->group(function () {
     Route::get('/',               [BlogController::class, 'index'])->name('index');
     Route::get('/search',         [BlogController::class, 'search'])->name('search');
     Route::get('/feed',           [BlogController::class, 'feed'])->name('feed');

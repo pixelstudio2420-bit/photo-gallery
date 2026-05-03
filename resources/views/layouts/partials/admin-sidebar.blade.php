@@ -747,6 +747,7 @@
       // expanded-state trigger here so opening any SEO subtree opens
       // this section.
       $g1Open = request()->routeIs('admin.settings.general')
+             || request()->routeIs('admin.settings.features')
              || request()->routeIs('admin.settings.seo')
              || request()->routeIs('admin.settings.seo.analyzer')
              || request()->routeIs('admin.seo.*')
@@ -766,6 +767,12 @@
       </button>
       <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="pb-1">
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.settings.general') ? $sublinkActive : '' }}" href="{{ route('admin.settings.general') }}">ทั่วไป</a>
+        <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.settings.features') ? $sublinkActive : '' }}" href="{{ route('admin.settings.features') }}">
+          <i class="bi bi-toggles2 text-violet-400 text-[0.6rem]"></i> เปิด/ปิดระบบ
+          @if(!\App\Support\Features::blogEnabled())
+            <span class="ml-1 inline-block px-1 rounded bg-rose-500 text-white text-[9px] font-bold align-middle">!</span>
+          @endif
+        </a>
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.settings.seo') ? $sublinkActive : '' }}" href="{{ route('admin.settings.seo') }}">
           <i class="bi bi-gear text-[0.6rem]"></i> SEO Settings
         </a>

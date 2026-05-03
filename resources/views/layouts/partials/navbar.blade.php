@@ -60,12 +60,14 @@
               <i class="bi bi-camera-fill mr-1"></i>ช่างภาพ
             </a>
           </li>
+          @if(\App\Support\Features::blogEnabled())
           <li>
             <a class="px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('blog.*') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
               href="{{ route('blog.index') }}">
               <i class="bi bi-newspaper mr-1"></i>{{ __('nav.blog') }}
             </a>
           </li>
+          @endif
           <li>
             <a class="px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('products.*') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
               href="{{ route('products.index') }}">
@@ -430,12 +432,14 @@
               <i class="bi bi-camera-fill mr-1"></i>ช่างภาพ
             </a>
           </li>
+          @if(\App\Support\Features::blogEnabled())
           <li>
             <a class="block px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('blog.*') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
               href="{{ route('blog.index') }}">
               <i class="bi bi-newspaper mr-1"></i>{{ __('nav.blog') }}
             </a>
           </li>
+          @endif
           <li>
             <a class="block px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('products.*') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
               href="{{ route('products.index') }}">

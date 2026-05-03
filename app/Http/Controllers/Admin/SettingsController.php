@@ -836,6 +836,37 @@ class SettingsController extends Controller
     //   queue(), updateQueue() — see trait.
 
     // =========================================================
+    // Feature Flags — system on/off toggles for major subsystems
+    // =========================================================
+
+    public function features()
+    {
+        return view('admin.settings.features', [
+            'features' => \App\Support\Features::all(),
+        ]);
+    }
+
+    public function updateFeatures(\Illuminate\Http\Request $request)
+    {
+        // Each registered feature comes through as `features[<name>]` =
+        // '0' | '1' (the unchecked-checkbox shim ensures '0' is sent
+        // when the toggle is off — see the view).
+        $input = (array) $request->input('features', []);
+        $flags = [
+            'blog' => (bool) ($input['blog'] ?? false),
+        ];
+        \App\Support\Features::bulkSet($flags);
+
+        // Flush sitemap cache so the URLs reflect the new state on the
+        // next crawl. Cheap to forget, cheap to rebuild.
+        try { \Illuminate\Support\Facades\Cache::forget('sitemap_xml'); } catch (\Throwable) {}
+
+        return redirect()
+            ->route('admin.settings.features')
+            ->with('success', 'อัปเดตการเปิด/ปิดระบบเรียบร้อย');
+    }
+
+    // =========================================================
     // Version Info
     // =========================================================
 
