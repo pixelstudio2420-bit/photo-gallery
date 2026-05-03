@@ -313,7 +313,77 @@ class EventController extends Controller
 
     public function show(Event $event)
     {
-        return view('photographer.events.show', compact('event'));
+        $this->authorizePhotographer($event);
+
+        // Photo stats — single query with FILTER for each bucket so we
+        // don't fan out one query per status. Mirrors the photos index
+        // controller's stats query for consistency.
+        $photoStats = $event->photos()
+            ->where('status', '!=', 'deleted')
+            ->selectRaw("
+                COUNT(*)                                  as total,
+                COUNT(*) FILTER (WHERE status = 'active')     as active,
+                COUNT(*) FILTER (WHERE status = 'processing') as processing,
+                COUNT(*) FILTER (WHERE status = 'failed')     as failed,
+                COALESCE(SUM(file_size), 0)               as size_bytes
+            ")
+            ->first();
+
+        $stats = [
+            'photos'          => (int) ($photoStats->total ?? 0),
+            'photos_active'   => (int) ($photoStats->active ?? 0),
+            'photos_processing' => (int) ($photoStats->processing ?? 0),
+            'photos_failed'   => (int) ($photoStats->failed ?? 0),
+            'storage_bytes'   => (int) ($photoStats->size_bytes ?? 0),
+            'view_count'      => (int) ($event->view_count ?? 0),
+        ];
+
+        // Revenue + order stats — best-effort (skip if photographer
+        // doesn't have any orders yet). We pull aggregate from
+        // photographer_payouts where the originating order's event_id
+        // matches this event.
+        try {
+            $revenueRow = \DB::table('photographer_payouts as pp')
+                ->join('orders as o', 'o.id', '=', 'pp.order_id')
+                ->where('o.event_id', $event->id)
+                ->where('pp.photographer_id', \Illuminate\Support\Facades\Auth::id())
+                ->selectRaw('COUNT(DISTINCT o.id) as order_count, COALESCE(SUM(pp.payout_amount), 0) as total_revenue')
+                ->first();
+            $stats['orders'] = (int) ($revenueRow->order_count ?? 0);
+            $stats['revenue'] = (float) ($revenueRow->total_revenue ?? 0);
+        } catch (\Throwable) {
+            // Table or column shape doesn't match — degrade gracefully
+            $stats['orders'] = 0;
+            $stats['revenue'] = 0.0;
+        }
+
+        // Recent photos for the gallery preview (12 thumbs)
+        $recentPhotos = $event->photos()
+            ->where('status', 'active')
+            ->orderBy('sort_order')
+            ->orderByDesc('created_at')
+            ->limit(12)
+            ->get();
+
+        // Hydrate location names for display
+        $locationParts = [];
+        if ($event->subdistrict_id) {
+            $sub = \DB::table('thai_subdistricts')->where('id', $event->subdistrict_id)->first();
+            if ($sub) $locationParts[] = $sub->name_th;
+        }
+        if ($event->district_id) {
+            $dist = \DB::table('thai_districts')->where('id', $event->district_id)->first();
+            if ($dist) $locationParts[] = $dist->name_th;
+        }
+        if ($event->province_id) {
+            $prov = \DB::table('thai_provinces')->where('id', $event->province_id)->first();
+            if ($prov) $locationParts[] = $prov->name_th;
+        }
+        $locationFull = implode(' · ', $locationParts);
+
+        return view('photographer.events.show', compact(
+            'event', 'stats', 'recentPhotos', 'locationFull'
+        ));
     }
 
     public function edit(Event $event)
