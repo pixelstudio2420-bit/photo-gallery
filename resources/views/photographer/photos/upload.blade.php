@@ -21,291 +21,498 @@
 @endphp
 
 @section('content')
-{{-- ────────────────────────────────────────────────────────────────
-    Header: breadcrumb + title + quick actions
-    ──────────────────────────────────────────────────────────────── --}}
-<div class="mb-5">
-  <nav class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-2">
-    <a href="{{ route('photographer.events.index') }}" class="hover:text-blue-600 dark:hover:text-blue-400">อีเวนต์</a>
-    <i class="bi bi-chevron-right text-[10px]"></i>
-    <a href="{{ route('photographer.events.show', $event) }}" class="hover:text-blue-600 dark:hover:text-blue-400 truncate max-w-[220px]">{{ $event->name }}</a>
-    <i class="bi bi-chevron-right text-[10px]"></i>
-    <a href="{{ route('photographer.events.photos.index', $event) }}" class="hover:text-blue-600 dark:hover:text-blue-400">จัดการรูป</a>
-    <i class="bi bi-chevron-right text-[10px]"></i>
-    <span class="text-gray-700 dark:text-gray-200">อัพโหลด</span>
+<div class="max-w-7xl mx-auto">
+
+{{-- ════════════════════════════════════════════════════════════════
+     HEADER — gradient avatar + breadcrumb + actions
+     ════════════════════════════════════════════════════════════════ --}}
+<div class="mb-6">
+  <nav class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 mb-3">
+    <a href="{{ route('photographer.events.index') }}" class="hover:text-blue-600 dark:hover:text-blue-400 transition">อีเวนต์</a>
+    <i class="bi bi-chevron-right text-[10px] text-gray-300"></i>
+    <a href="{{ route('photographer.events.show', $event) }}" class="hover:text-blue-600 dark:hover:text-blue-400 truncate max-w-[200px] transition">{{ $event->name }}</a>
+    <i class="bi bi-chevron-right text-[10px] text-gray-300"></i>
+    <a href="{{ route('photographer.events.photos.index', $event) }}" class="hover:text-blue-600 dark:hover:text-blue-400 transition">จัดการรูป</a>
+    <i class="bi bi-chevron-right text-[10px] text-gray-300"></i>
+    <span class="text-gray-700 dark:text-gray-200 font-medium">อัพโหลด</span>
   </nav>
 
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div class="flex items-center gap-3">
-      <div class="flex items-center justify-center w-11 h-11 rounded-xl bg-blue-600/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
-        <i class="bi bi-cloud-upload text-xl"></i>
+      <div class="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 text-white flex items-center justify-center shadow-md shadow-blue-500/30">
+        <i class="bi bi-cloud-arrow-up-fill text-xl"></i>
       </div>
       <div>
-        <h1 class="text-xl font-bold text-gray-900 dark:text-gray-100 leading-tight">อัพโหลดรูปภาพ</h1>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">เพิ่มรูปใหม่เข้าสู่อีเวนต์ {{ $event->name }}</p>
+        <h1 class="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 leading-tight tracking-tight">อัพโหลดรูปภาพ</h1>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">เพิ่มรูปเข้าสู่อีเวนต์ — ลาก/วาง/วางจากคลิปบอร์ด</p>
       </div>
     </div>
     <div class="flex items-center gap-2">
       <a href="{{ route('photographer.events.photos.index', $event) }}"
-         class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-blue-600 bg-blue-600/10 hover:bg-blue-600/15 rounded-lg transition-colors dark:text-blue-400 dark:bg-blue-500/10 dark:hover:bg-blue-500/20">
-        <i class="bi bi-images"></i> จัดการรูปภาพ
+         class="inline-flex items-center gap-1.5 rounded-xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 px-3.5 py-2 text-sm font-medium transition">
+        <i class="bi bi-images"></i> จัดการรูป
       </a>
       <a href="{{ route('photographer.events.show', $event) }}"
-         class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-gray-600 bg-gray-500/10 hover:bg-gray-500/15 rounded-lg transition-colors dark:text-gray-300 dark:bg-white/5 dark:hover:bg-white/10">
+         class="inline-flex items-center gap-1.5 rounded-xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/10 px-3.5 py-2 text-sm font-medium transition">
         <i class="bi bi-arrow-left"></i> กลับ
       </a>
     </div>
   </div>
 </div>
 
-{{-- ────────────────────────────────────────────────────────────────
-    Event info strip — compact single-row card
-    ──────────────────────────────────────────────────────────────── --}}
-<div class="mb-5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-white/5 shadow-sm">
-  <div class="flex flex-wrap items-center gap-4 p-4">
-    <x-event-cover :src="$event->cover_image_url"
-            :name="$event->name"
-            :event-id="$event->id"
-            size="thumb" />
-    <div class="min-w-0 flex-1">
-      <h2 class="font-semibold text-gray-900 dark:text-gray-100 truncate">{{ $event->name }}</h2>
-      <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400 mt-1">
-        <span class="inline-flex items-center gap-1">
-          <i class="bi bi-images"></i>
-          <span class="font-medium text-gray-700 dark:text-gray-200">{{ number_format($photoCount) }}</span> รูปภาพ
-        </span>
-        @if($event->shoot_date)
-          <span class="inline-flex items-center gap-1">
-            <i class="bi bi-calendar-event"></i>
-            {{ \Carbon\Carbon::parse($event->shoot_date)->format('d/m/Y') }}
-          </span>
-        @endif
-        @if($event->status)
-          <span class="inline-flex items-center gap-1">
-            <i class="bi bi-circle-fill text-[6px]"></i>
-            {{ $event->status }}
-          </span>
-        @endif
-      </div>
-    </div>
-  </div>
-</div>
+{{-- ════════════════════════════════════════════════════════════════
+     2-COLUMN LAYOUT — drop zone left, sidebar right
+     ════════════════════════════════════════════════════════════════ --}}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
 
-{{-- ────────────────────────────────────────────────────────────────
-    NSFW status banner (when client prefilter is enabled)
-    ──────────────────────────────────────────────────────────────── --}}
-@if($nsfwEnabled)
-<div id="nsfwBanner"
-     class="flex items-center gap-2 mb-5 px-4 py-2.5 rounded-xl text-xs bg-indigo-500/10 text-indigo-600 border border-indigo-500/20 dark:text-indigo-300 dark:border-indigo-400/20">
-  <i class="bi bi-shield-check text-base"></i>
-  <span id="nsfwStatus">กำลังโหลดระบบตรวจสอบภาพอัตโนมัติ (AI)…</span>
-</div>
-@endif
+  {{-- ── LEFT (col-span-2): drop zone + progress + recent ─────────── --}}
+  <div class="lg:col-span-2 space-y-5">
 
-{{-- ────────────────────────────────────────────────────────────────
-    Drop zone — primary upload surface
-    ──────────────────────────────────────────────────────────────── --}}
-<div class="mb-5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-white/5 shadow-sm overflow-hidden">
-  <div id="dropZone"
-       class="relative cursor-pointer transition-all duration-200 px-6 py-12 sm:py-14 text-center
-              bg-gradient-to-b from-gray-50/50 to-white dark:from-slate-900/40 dark:to-slate-800
-              border-2 border-dashed border-gray-200 dark:border-white/10
-              hover:border-blue-500/60 hover:bg-blue-50/30 dark:hover:bg-blue-500/5
-              m-4 rounded-xl">
-    <div id="dropIcon" class="mb-4 transition-transform">
-      <div class="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-blue-500/10 text-blue-500 dark:text-blue-400">
-        <i class="bi bi-cloud-arrow-up text-3xl sm:text-4xl"></i>
-      </div>
-    </div>
-    <h3 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100 mb-1">ลากรูปภาพมาวางที่นี่</h3>
-    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-      หรือคลิกเพื่อเลือกไฟล์
-      <span class="inline-flex items-center gap-1 ml-1">
-        <span class="text-gray-300 dark:text-gray-600">·</span>
-        กด
-        <kbd class="inline-block px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-white/10 text-[11px] font-mono text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-white/10">Ctrl</kbd>
-        <span>+</span>
-        <kbd class="inline-block px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-white/10 text-[11px] font-mono text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-white/10">V</kbd>
-        เพื่อวางจากคลิปบอร์ด
-      </span>
-    </p>
-
-    {{-- Feature pills --}}
-    <div class="flex flex-wrap items-center justify-center gap-2 text-xs">
-      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300">
-        <i class="bi bi-file-earmark-image"></i> JPG, PNG, WebP, GIF
-      </span>
-      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300">
-        <i class="bi bi-hdd"></i> ≤ 20MB / ไฟล์
-      </span>
-      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300">
-        <i class="bi bi-collection"></i> หลายไฟล์พร้อมกัน
-      </span>
-      @if($clientCompress)
-      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-        <i class="bi bi-lightning-charge-fill"></i> บีบอัดในเบราว์เซอร์
-      </span>
-      @endif
-    </div>
-
-    <input type="file" id="fileInput" multiple accept="image/jpeg,image/png,image/webp,image/gif" class="hidden">
-  </div>
-</div>
-
-{{-- ────────────────────────────────────────────────────────────────
-    Upload progress panel (shown while uploading)
-    ──────────────────────────────────────────────────────────────── --}}
-<div id="progressSection"
-     class="mb-5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-white/5 shadow-sm overflow-hidden"
-     style="display:none;">
-  {{-- Header --}}
-  <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-slate-900/40">
-    <h3 class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
-      <i class="bi bi-upload text-blue-600 dark:text-blue-400"></i>
-      กำลังอัพโหลด
-      <span id="progressCount" class="text-gray-500 dark:text-gray-400 font-normal"></span>
-    </h3>
-    <div class="flex items-center gap-2">
-      <button id="btnPause" type="button" onclick="togglePause()"
-              class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors bg-amber-500/10 text-amber-600 hover:bg-amber-500/15 dark:text-amber-400 dark:bg-amber-400/10 dark:hover:bg-amber-400/20">
-        <i class="bi bi-pause-fill"></i> หยุดชั่วคราว
-      </button>
-      <button id="btnCancel" type="button" onclick="cancelAll()"
-              class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors bg-red-500/10 text-red-600 hover:bg-red-500/15 dark:text-red-400 dark:bg-red-400/10 dark:hover:bg-red-400/20">
-        <i class="bi bi-x-lg"></i> ยกเลิก
-      </button>
-    </div>
-  </div>
-
-  {{-- Item list --}}
-  <div id="uploadList" class="max-h-[420px] overflow-y-auto divide-y divide-gray-100 dark:divide-white/5"></div>
-
-  {{-- Footer: aggregate stats + progress bar --}}
-  <div class="px-5 py-3 border-t border-gray-100 dark:border-white/5 bg-gray-50/30 dark:bg-slate-900/30">
-    <div class="flex flex-wrap items-center gap-3">
-      <div class="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
-        <span id="successCount" class="font-semibold text-emerald-600 dark:text-emerald-400">0</span> สำเร็จ
-        <span class="text-gray-300 dark:text-gray-600 mx-1">·</span>
-        <span id="failCount" class="font-semibold text-red-600 dark:text-red-400">0</span> ล้มเหลว
-      </div>
-      <div class="flex-1 min-w-[160px] h-1.5 rounded-full bg-gray-200 dark:bg-white/10 overflow-hidden">
-        <div id="totalProgress" class="h-full bg-blue-600 dark:bg-blue-500 transition-all duration-300" style="width:0%;"></div>
-      </div>
-      <span id="totalPercent" class="text-xs text-gray-600 dark:text-gray-400 font-medium tabular-nums min-w-[36px] text-right">0%</span>
-      <span id="etaLabel" class="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 tabular-nums" style="display:none;">
-        <i class="bi bi-clock"></i> <span id="etaText">—</span>
-      </span>
-      <button id="btnRetry" type="button" onclick="retryFailed()"
-              class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-600/10 text-blue-600 hover:bg-blue-600/15 dark:text-blue-400 dark:bg-blue-500/15 dark:hover:bg-blue-500/25"
-              style="display:none;">
-        <i class="bi bi-arrow-clockwise"></i> ลองใหม่
-      </button>
-    </div>
-    @if($clientCompress)
-    <div id="compressionSummary" class="mt-2.5 text-xs text-gray-500 dark:text-gray-400 inline-flex items-center gap-1.5" style="display:none;">
-      <i class="bi bi-file-earmark-zip text-emerald-600 dark:text-emerald-400"></i>
-      <span>บีบอัดแล้ว: <span id="compressedOrig" class="font-medium tabular-nums">0</span> → <span id="compressedNew" class="font-medium tabular-nums">0</span></span>
-      <span class="text-gray-300 dark:text-gray-600">·</span>
-      <span>ประหยัด <span id="compressedSaved" class="font-semibold text-emerald-600 dark:text-emerald-400">0%</span></span>
+    {{-- ⚡ NSFW status banner (compact) --}}
+    @if($nsfwEnabled)
+    <div id="nsfwBanner"
+         class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs bg-indigo-500/10 text-indigo-700 border border-indigo-200 dark:text-indigo-300 dark:border-indigo-500/20">
+      <i class="bi bi-shield-check text-base"></i>
+      <span id="nsfwStatus">กำลังโหลดระบบตรวจสอบภาพอัตโนมัติ (AI)…</span>
     </div>
     @endif
+
+    {{-- ⬆ DROP ZONE — bigger, friendlier, animated --}}
+    <div class="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-white/5 shadow-sm overflow-hidden">
+      <div id="dropZone"
+           class="relative cursor-pointer transition-all duration-300 px-6 py-14 sm:py-16 text-center
+                  bg-gradient-to-br from-blue-50/40 via-violet-50/30 to-pink-50/40
+                  dark:from-blue-500/[0.04] dark:via-violet-500/[0.04] dark:to-pink-500/[0.04]
+                  border-2 border-dashed border-gray-200 dark:border-white/10
+                  hover:border-blue-400 hover:bg-gradient-to-br hover:from-blue-50/80 hover:via-violet-50/50 hover:to-pink-50/60
+                  dark:hover:border-blue-400/50
+                  m-4 rounded-2xl group">
+
+        {{-- Decorative floating gradient blobs (CSS-only, very subtle) --}}
+        <div class="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl">
+          <div class="absolute -top-12 -left-12 w-48 h-48 rounded-full bg-blue-300/20 blur-3xl"></div>
+          <div class="absolute -bottom-12 -right-12 w-48 h-48 rounded-full bg-violet-300/20 blur-3xl"></div>
+        </div>
+
+        <div class="relative">
+          {{-- Animated icon stack --}}
+          <div id="dropIcon" class="mb-5 transition-all duration-300 group-hover:-translate-y-1">
+            <div class="relative inline-flex items-center justify-center">
+              {{-- Soft glow ring --}}
+              <div class="absolute inset-0 rounded-3xl bg-gradient-to-br from-blue-400 to-violet-500 blur-xl opacity-30 group-hover:opacity-50 transition-opacity"></div>
+              {{-- Main icon container --}}
+              <div class="relative inline-flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-xl shadow-blue-500/30 group-hover:shadow-2xl group-hover:shadow-violet-500/40 transition-shadow">
+                <i class="bi bi-cloud-arrow-up-fill text-3xl sm:text-4xl"></i>
+              </div>
+            </div>
+          </div>
+
+          <h3 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2 tracking-tight">
+            ลากรูปมาวางที่นี่
+          </h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mb-5">
+            หรือคลิกเพื่อเลือกไฟล์
+            <span class="hidden sm:inline">
+              · กด
+              <kbd class="inline-block px-1.5 py-0.5 rounded-md bg-white dark:bg-slate-900 text-[11px] font-mono font-semibold text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-white/10 shadow-sm">⌘ V</kbd>
+              เพื่อวางจากคลิปบอร์ด
+            </span>
+          </p>
+
+          {{-- Feature pills (centered, modern) --}}
+          <div class="flex flex-wrap items-center justify-center gap-1.5">
+            <span class="inline-flex items-center gap-1 rounded-full bg-white/80 backdrop-blur dark:bg-white/5 border border-gray-200 dark:border-white/10 px-2.5 py-1 text-[11px] font-medium text-gray-700 dark:text-gray-300">
+              <i class="bi bi-image text-blue-500"></i> JPG · PNG · WebP · GIF
+            </span>
+            <span class="inline-flex items-center gap-1 rounded-full bg-white/80 backdrop-blur dark:bg-white/5 border border-gray-200 dark:border-white/10 px-2.5 py-1 text-[11px] font-medium text-gray-700 dark:text-gray-300">
+              <i class="bi bi-hdd text-amber-500"></i> ≤ 20MB
+            </span>
+            <span class="inline-flex items-center gap-1 rounded-full bg-white/80 backdrop-blur dark:bg-white/5 border border-gray-200 dark:border-white/10 px-2.5 py-1 text-[11px] font-medium text-gray-700 dark:text-gray-300">
+              <i class="bi bi-collection text-violet-500"></i> หลายไฟล์
+            </span>
+            @if($clientCompress)
+            <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+              <i class="bi bi-lightning-charge-fill"></i> บีบอัดเร็วในเบราว์เซอร์
+            </span>
+            @endif
+          </div>
+        </div>
+
+        <input type="file" id="fileInput" multiple accept="image/jpeg,image/png,image/webp,image/gif" class="hidden">
+      </div>
+    </div>
+
+    {{-- ⏳ UPLOAD PROGRESS panel (hidden until first file added) --}}
+    <div id="progressSection"
+         class="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-white/5 shadow-sm overflow-hidden"
+         style="display:none;">
+
+      {{-- Header with title + actions --}}
+      <div class="px-5 py-4 border-b border-gray-100 dark:border-white/5 bg-gradient-to-r from-blue-50/50 to-violet-50/50 dark:from-blue-500/[0.04] dark:to-violet-500/[0.04]">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <i class="bi bi-arrow-up-circle-fill"></i>
+            </div>
+            <div>
+              <h3 class="font-semibold text-gray-900 dark:text-gray-100 text-sm">กำลังอัพโหลด</h3>
+              <p id="progressCount" class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5"></p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="btnPause" type="button" onclick="togglePause()"
+                    class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-300 dark:bg-amber-400/10 dark:hover:bg-amber-400/20">
+              <i class="bi bi-pause-fill"></i>
+              <span class="hidden sm:inline">หยุดชั่วคราว</span>
+            </button>
+            <button id="btnCancel" type="button" onclick="cancelAll()"
+                    class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition bg-red-500/10 text-red-700 hover:bg-red-500/20 dark:text-red-300 dark:bg-red-400/10 dark:hover:bg-red-400/20">
+              <i class="bi bi-x-lg"></i>
+              <span class="hidden sm:inline">ยกเลิก</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {{-- Aggregate stats strip (4 mini-KPI tiles) --}}
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-px bg-gray-100 dark:bg-white/5 border-b border-gray-100 dark:border-white/5">
+        <div class="bg-white dark:bg-slate-800 p-3">
+          <div class="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-semibold tracking-wider">ทั้งหมด</div>
+          <div id="totalCountTile" class="text-lg font-bold text-gray-900 dark:text-gray-100 tabular-nums mt-0.5">0</div>
+        </div>
+        <div class="bg-white dark:bg-slate-800 p-3">
+          <div class="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase font-semibold tracking-wider">สำเร็จ</div>
+          <div id="successCount" class="text-lg font-bold text-emerald-600 dark:text-emerald-400 tabular-nums mt-0.5">0</div>
+        </div>
+        <div class="bg-white dark:bg-slate-800 p-3">
+          <div class="text-[10px] text-red-600 dark:text-red-400 uppercase font-semibold tracking-wider">ล้มเหลว</div>
+          <div id="failCount" class="text-lg font-bold text-red-600 dark:text-red-400 tabular-nums mt-0.5">0</div>
+        </div>
+        <div class="bg-white dark:bg-slate-800 p-3">
+          <div class="text-[10px] text-blue-600 dark:text-blue-400 uppercase font-semibold tracking-wider">ความคืบหน้า</div>
+          <div id="totalPercent" class="text-lg font-bold text-blue-600 dark:text-blue-400 tabular-nums mt-0.5">0%</div>
+        </div>
+      </div>
+
+      {{-- Main progress bar (gradient-fill, animated) --}}
+      <div class="relative h-2.5 bg-gray-100 dark:bg-white/5 overflow-hidden">
+        <div id="totalProgress" class="h-full bg-gradient-to-r from-blue-500 via-violet-500 to-pink-500 transition-all duration-300 relative" style="width:0%;">
+          {{-- Shimmer animation on top --}}
+          <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer"></div>
+        </div>
+      </div>
+
+      {{-- Item list (scrollable) --}}
+      <div id="uploadList" class="max-h-[420px] overflow-y-auto"></div>
+
+      {{-- Footer: ETA + retry + compression summary --}}
+      <div class="px-5 py-3 border-t border-gray-100 dark:border-white/5 bg-gray-50/30 dark:bg-slate-900/30">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div class="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-400">
+            <span id="etaLabel" class="inline-flex items-center gap-1 tabular-nums" style="display:none;">
+              <i class="bi bi-clock"></i>
+              <span>เหลือ <span id="etaText">—</span></span>
+            </span>
+            @if($clientCompress)
+            <span id="compressionSummary" class="inline-flex items-center gap-1.5" style="display:none;">
+              <i class="bi bi-file-earmark-zip text-emerald-500"></i>
+              <span><span id="compressedOrig" class="font-medium tabular-nums">0</span> → <span id="compressedNew" class="font-medium tabular-nums">0</span></span>
+              <span class="text-gray-300 dark:text-gray-600">·</span>
+              <span>ประหยัด <span id="compressedSaved" class="font-bold text-emerald-600 dark:text-emerald-400">0%</span></span>
+            </span>
+            @endif
+          </div>
+          <button id="btnRetry" type="button" onclick="retryFailed()"
+                  class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-600/10 text-blue-700 hover:bg-blue-600/20 dark:text-blue-300 dark:bg-blue-500/15 dark:hover:bg-blue-500/25 transition"
+                  style="display:none;">
+            <i class="bi bi-arrow-clockwise"></i> ลองใหม่
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {{-- 🎉 RECENT UPLOADS — bigger thumbs grid --}}
+    <div id="recentSection"
+         class="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-white/5 shadow-sm overflow-hidden"
+         style="display:none;">
+      <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-gray-100 dark:border-white/5 bg-gradient-to-r from-emerald-50/50 to-teal-50/50 dark:from-emerald-500/[0.04] dark:to-teal-500/[0.04]">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+            <i class="bi bi-check2-circle"></i>
+          </div>
+          <h3 class="font-semibold text-gray-900 dark:text-gray-100 text-sm">อัพโหลดสำเร็จล่าสุด</h3>
+        </div>
+        <a href="{{ route('photographer.events.photos.index', $event) }}"
+           class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-600/10 text-blue-700 hover:bg-blue-600/20 dark:text-blue-300 dark:bg-blue-500/15 dark:hover:bg-blue-500/25 transition">
+          <i class="bi bi-images"></i> ดูทั้งหมด
+        </a>
+      </div>
+      <div class="p-4">
+        <div id="recentGrid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5"></div>
+      </div>
+    </div>
   </div>
+
+  {{-- ── RIGHT (col-span-1): event card + tips + safety ───────────── --}}
+  <aside class="lg:col-span-1 space-y-4">
+
+    {{-- 🎫 EVENT CARD --}}
+    <div class="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-white/5 shadow-sm overflow-hidden">
+      {{-- Cover image full-bleed --}}
+      <div class="relative aspect-[16/9] bg-gradient-to-br from-blue-100 to-violet-100 dark:from-slate-700 dark:to-slate-900 overflow-hidden">
+        @if($event->cover_image_url)
+          <img src="{{ $event->cover_image_url }}" alt="{{ $event->name }}"
+               class="w-full h-full object-cover">
+          <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
+        @else
+          <div class="w-full h-full flex items-center justify-center text-blue-300">
+            <i class="bi bi-camera text-5xl"></i>
+          </div>
+        @endif
+        {{-- Photo count badge floating bottom-right --}}
+        <div class="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-white/95 dark:bg-slate-900/95 backdrop-blur px-3 py-1 text-xs font-bold text-gray-900 dark:text-gray-100 shadow-md">
+          <i class="bi bi-images text-blue-500"></i>
+          <span id="photoCountBadge" class="tabular-nums">{{ number_format($photoCount) }}</span> รูป
+        </div>
+      </div>
+
+      <div class="p-4">
+        <h2 class="font-bold text-gray-900 dark:text-gray-100 text-base leading-tight line-clamp-2 mb-2">{{ $event->name }}</h2>
+        <div class="space-y-1.5">
+          @if($event->shoot_date)
+          <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+            <i class="bi bi-calendar-event w-4 text-center text-blue-500"></i>
+            <span>วันถ่าย: <strong class="text-gray-900 dark:text-gray-100">{{ \Carbon\Carbon::parse($event->shoot_date)->format('d M Y') }}</strong></span>
+          </div>
+          @endif
+          @if($event->status)
+          <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+            <i class="bi bi-circle-fill w-4 text-center text-emerald-500 text-[8px]"></i>
+            <span>สถานะ: <strong class="text-gray-900 dark:text-gray-100">{{ $event->status }}</strong></span>
+          </div>
+          @endif
+        </div>
+      </div>
+    </div>
+
+    {{-- 💡 UPLOAD TIPS --}}
+    <div class="bg-gradient-to-br from-blue-50 to-violet-50 dark:from-blue-500/[0.06] dark:to-violet-500/[0.06] rounded-3xl border border-blue-100 dark:border-blue-500/20 p-4">
+      <div class="flex items-center gap-2 mb-3">
+        <div class="w-8 h-8 rounded-lg bg-white/80 dark:bg-white/5 text-amber-500 flex items-center justify-center">
+          <i class="bi bi-lightbulb-fill"></i>
+        </div>
+        <h3 class="font-semibold text-gray-900 dark:text-gray-100 text-sm">เคล็ดลับ</h3>
+      </div>
+      <ul class="space-y-2 text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
+        <li class="flex items-start gap-2">
+          <i class="bi bi-check-circle-fill text-emerald-500 text-[12px] mt-0.5 shrink-0"></i>
+          <span>อัพโหลดทีละ <strong>หลายไฟล์</strong> ได้เลย — ระบบจะคิวให้เอง</span>
+        </li>
+        <li class="flex items-start gap-2">
+          <i class="bi bi-check-circle-fill text-emerald-500 text-[12px] mt-0.5 shrink-0"></i>
+          <span>กด <kbd class="px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-gray-200 dark:border-white/10 text-[10px] font-mono">⌘ V</kbd> เพื่อวาง screenshot</span>
+        </li>
+        @if($clientCompress)
+        <li class="flex items-start gap-2">
+          <i class="bi bi-check-circle-fill text-emerald-500 text-[12px] mt-0.5 shrink-0"></i>
+          <span>ระบบ <strong>บีบอัดให้อัตโนมัติ</strong> ก่อนอัพโหลด — ประหยัดเน็ต</span>
+        </li>
+        @endif
+        <li class="flex items-start gap-2">
+          <i class="bi bi-check-circle-fill text-emerald-500 text-[12px] mt-0.5 shrink-0"></i>
+          <span>ถ้าอัพโหลดล้มเหลว กดปุ่ม <i class="bi bi-arrow-clockwise"></i> เพื่อลองใหม่</span>
+        </li>
+      </ul>
+    </div>
+
+    {{-- 🛡 SAFETY/MODERATION CARD --}}
+    @if($nsfwEnabled)
+    <div class="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-white/5 shadow-sm p-4">
+      <div class="flex items-center gap-2 mb-2">
+        <div class="w-8 h-8 rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+          <i class="bi bi-shield-check-fill"></i>
+        </div>
+        <h3 class="font-semibold text-gray-900 dark:text-gray-100 text-sm">การคัดกรอง AI</h3>
+      </div>
+      <p class="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+        ระบบตรวจสอบเนื้อหาภาพอัตโนมัติด้วย AI ก่อนอัพโหลด — ภาพไม่เหมาะสมจะถูกปฏิเสธทันที
+      </p>
+    </div>
+    @endif
+
+    {{-- 📊 LIMITS CARD --}}
+    <div class="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-white/5 shadow-sm p-4">
+      <h3 class="text-[11px] uppercase tracking-wider font-bold text-gray-500 dark:text-gray-400 mb-2">ข้อกำหนดไฟล์</h3>
+      <div class="grid grid-cols-2 gap-2 text-xs">
+        <div class="rounded-xl bg-gray-50 dark:bg-white/5 p-2.5">
+          <div class="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">ขนาดสูงสุด</div>
+          <div class="font-bold text-gray-900 dark:text-gray-100">20 MB</div>
+        </div>
+        <div class="rounded-xl bg-gray-50 dark:bg-white/5 p-2.5">
+          <div class="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">รูปแบบ</div>
+          <div class="font-bold text-gray-900 dark:text-gray-100">JPG/PNG/WebP</div>
+        </div>
+      </div>
+    </div>
+
+  </aside>
 </div>
 
-{{-- ────────────────────────────────────────────────────────────────
-    Recently uploaded thumbs — lives below the progress panel
-    ──────────────────────────────────────────────────────────────── --}}
-<div id="recentSection"
-     class="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-white/5 shadow-sm overflow-hidden"
-     style="display:none;">
-  <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-slate-900/40">
-    <h3 class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
-      <i class="bi bi-check2-circle text-emerald-600 dark:text-emerald-400"></i>
-      อัพโหลดสำเร็จ
-    </h3>
-    <a href="{{ route('photographer.events.photos.index', $event) }}"
-       class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-600/10 text-blue-600 hover:bg-blue-600/15 dark:text-blue-400 dark:bg-blue-500/15 dark:hover:bg-blue-500/25">
-      <i class="bi bi-images"></i> ดูรูปทั้งหมด
-    </a>
-  </div>
-  <div class="p-4">
-    <div id="recentGrid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2"></div>
-  </div>
 </div>
-
 @endsection
 
 @push('styles')
 <style>
-/* Drop-zone hover/drag states (Tailwind can't target drag-over from JS easily) */
+/* ── Drop-zone drag-over state ──────────────────────────────── */
 #dropZone.drag-over {
-  border-color: rgb(37 99 235) !important;                 /* blue-600 */
-  background: rgba(37, 99, 235, 0.05) !important;
+  border-color: rgb(59 130 246) !important;
+  background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.06), rgba(236,72,153,0.08)) !important;
+  transform: scale(1.005);
 }
 .dark #dropZone.drag-over {
-  background: rgba(59, 130, 246, 0.08) !important;         /* blue-500 / darker */
+  border-color: rgb(96 165 250) !important;
+  background: linear-gradient(135deg, rgba(96,165,250,0.10), rgba(167,139,250,0.08), rgba(244,114,182,0.10)) !important;
 }
 #dropZone.drag-over #dropIcon {
-  transform: scale(1.05);
+  transform: scale(1.1) translateY(-4px);
+}
+#dropZone.drag-over #dropIcon > div > div:last-child {
+  animation: bounce-light 0.6s ease-in-out infinite;
 }
 
-/* Upload-row primitives — kept as plain classes because the JS
-   template strings reference them by name. We style them with Tailwind
-   utilities applied via @apply so dark mode + utilities still work. */
+@keyframes bounce-light {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+/* Shimmer animation on the main progress bar */
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.animate-shimmer {
+  animation: shimmer 1.8s linear infinite;
+}
+
+/* ── Upload-item rows ─────────────────────────────────────────
+   Redesigned with bigger thumb (52px), cleaner spacing,
+   smoother color transitions per status. JS template strings
+   reference these classes by name — keep the names stable. */
 .upload-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1.25rem;
+  gap: 0.875rem;
+  padding: 0.875rem 1.25rem;
+  border-bottom: 1px solid rgb(243 244 246);
+  transition: background 0.15s;
 }
+.dark .upload-item {
+  border-bottom-color: rgba(255,255,255,0.04);
+}
+.upload-item:hover {
+  background: rgb(249 250 251);
+}
+.dark .upload-item:hover {
+  background: rgba(255,255,255,0.02);
+}
+.upload-item:last-child {
+  border-bottom: none;
+}
+
 .upload-item-thumb {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
   object-fit: cover;
-  background: #f1f5f9;
+  background: linear-gradient(135deg, rgb(241 245 249), rgb(226 232 240));
   flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
-.dark .upload-item-thumb { background: rgba(255,255,255,0.05); }
+.dark .upload-item-thumb {
+  background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+}
 
 .upload-item-progress {
-  height: 4px;
-  border-radius: 2px;
-  background: #e2e8f0;
+  height: 5px;
+  border-radius: 6px;
+  background: rgb(229 231 235);
   flex-grow: 1;
   overflow: hidden;
+  position: relative;
 }
-.dark .upload-item-progress { background: rgba(255,255,255,0.08); }
+.dark .upload-item-progress {
+  background: rgba(255,255,255,0.08);
+}
 
 .upload-item-progress .bar {
   height: 100%;
-  border-radius: 2px;
-  background: #2563eb;
-  transition: width 0.15s;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  transition: width 0.2s ease, background 0.3s ease;
+  position: relative;
 }
 
-/* Status chip sits at the end of each row */
+/* ── Status chip at end of row ────────────────────────────────
+   Bigger (32px), more distinct colors per status. Styles applied
+   inline by JS via .style.background/.color assignments so we
+   keep the visual contract here as just "round chip". */
 .upload-item .status-icon {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 
-/* Recent-upload thumb — square, clickable, gentle zoom on hover */
+/* Status pill — visual badge text per upload state, sits between thumb + progress */
+.upload-item .status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* ── Recent-uploads grid thumbs ───────────────────────────────
+   Bigger, with gentle hover lift + checkmark overlay. */
+.recent-thumb-wrap {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.recent-thumb-wrap:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.12);
+}
 .recent-thumb {
   width: 100%;
-  aspect-ratio: 1;
+  height: 100%;
   object-fit: cover;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: transform 0.2s;
 }
-.recent-thumb:hover { transform: scale(1.03); }
+.recent-thumb-wrap::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #10b981 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='white' d='M13.485 1.929a1 1 0 011.41 1.41L6 12.243 1.105 7.348a1 1 0 011.41-1.41L6 9.422l7.485-7.493z'/%3E%3C/svg%3E") center/10px no-repeat;
+  box-shadow: 0 2px 4px rgba(16,185,129,0.4);
+}
 </style>
 @endpush
 
@@ -651,18 +858,24 @@ document.addEventListener('DOMContentLoaded', function() {
       <div class="upload-item" id="${item.id}">
         <img src="${thumbUrl}" class="upload-item-thumb" alt="">
         <div class="grow min-w-0">
-          <div class="flex justify-between items-center gap-2 mb-1">
-            <span class="text-xs font-medium truncate text-gray-700 dark:text-gray-200" style="max-width:220px;">${escHtml(item.originalFile.name)}</span>
+          <div class="flex justify-between items-center gap-2 mb-1.5">
+            <span class="text-sm font-medium truncate text-gray-800 dark:text-gray-100" style="max-width:280px;">${escHtml(item.originalFile.name)}</span>
             <span class="text-[11px] text-gray-500 dark:text-gray-400 item-size tabular-nums whitespace-nowrap">${formatSize(item.originalFile.size)}</span>
           </div>
-          <div class="upload-item-progress">
-            <div class="bar" style="width:0%"></div>
+          <div class="flex items-center gap-2">
+            <div class="upload-item-progress">
+              <div class="bar" style="width:0%"></div>
+            </div>
+            <span class="status-pill item-pill" style="background:rgba(99,102,241,0.10);color:#6366f1;">
+              <i class="bi bi-file-earmark-zip"></i> เตรียม
+            </span>
           </div>
         </div>
         <div class="status-icon" style="background:rgba(99,102,241,0.10);color:#6366f1;">
           <i class="bi bi-file-earmark-zip"></i>
         </div>
-        <button type="button" class="btn-retry" style="display:none;background:rgba(37,99,235,0.08);color:#2563eb;border:none;padding:4px 10px;border-radius:8px;font-size:12px;cursor:pointer;" data-id="${item.id}" title="ลองใหม่">
+        <button type="button" class="btn-retry" style="display:none;background:rgba(37,99,235,0.10);color:#2563eb;border:none;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer;transition:background 0.15s;" data-id="${item.id}" title="ลองใหม่"
+                onmouseover="this.style.background='rgba(37,99,235,0.18)'" onmouseout="this.style.background='rgba(37,99,235,0.10)'">
           <i class="bi bi-arrow-clockwise"></i>
         </button>
       </div>`;
@@ -679,43 +892,77 @@ document.addEventListener('DOMContentLoaded', function() {
     const icon   = el.querySelector('.status-icon');
     const size   = el.querySelector('.item-size');
     const retry  = el.querySelector('.btn-retry');
+    const pill   = el.querySelector('.item-pill');
 
     bar.style.width = item.progress + '%';
     if (size && item.newSize && item.newSize !== item.originalSize) {
-      size.innerHTML = `<span style="text-decoration:line-through;opacity:0.5;">${formatSize(item.originalSize)}</span> → ${formatSize(item.newSize)}`;
+      size.innerHTML = `<span style="text-decoration:line-through;opacity:0.5;">${formatSize(item.originalSize)}</span> <span style="color:#10b981;font-weight:600;">${formatSize(item.newSize)}</span>`;
     } else if (size) {
       size.textContent = formatSize(item.file.size);
     }
 
     if (retry) retry.style.display = (item.status === 'error') ? 'inline-block' : 'none';
 
-    if (item.status === 'compressing') {
-      bar.style.background = '#6366f1';
-      icon.style.background = 'rgba(99,102,241,0.10)';
-      icon.style.color = '#6366f1';
-      icon.innerHTML = '<i class="bi bi-file-earmark-zip"></i>';
-    } else if (item.status === 'queued') {
-      icon.style.background = 'rgba(37,99,235,0.08)';
-      icon.style.color = '#2563eb';
-      icon.innerHTML = '<i class="bi bi-hourglass-split"></i>';
-    } else if (item.status === 'uploading') {
-      bar.style.background = '#2563eb';
-      icon.innerHTML = '<i class="bi bi-arrow-up"></i>';
-    } else if (item.status === 'done') {
-      bar.style.background = '#10b981';
-      icon.style.background = 'rgba(16,185,129,0.10)';
-      icon.style.color = '#10b981';
-      icon.innerHTML = '<i class="bi bi-check-lg"></i>';
-    } else if (item.status === 'error') {
-      bar.style.background = '#ef4444';
-      icon.style.background = 'rgba(239,68,68,0.10)';
-      icon.style.color = '#ef4444';
-      icon.innerHTML = '<i class="bi bi-exclamation-triangle"></i>';
-    } else if (item.status === 'cancelled') {
-      bar.style.background = '#6b7280';
-      icon.style.background = 'rgba(107,114,128,0.10)';
-      icon.style.color = '#6b7280';
-      icon.innerHTML = '<i class="bi bi-dash-lg"></i>';
+    // Status visual mapping. Keeps the inline-style pattern from the
+    // original — JS template strings rely on direct DOM manipulation
+    // for tight FPS during rapid status changes.
+    const states = {
+      compressing: {
+        barBg: 'linear-gradient(90deg, #6366f1, #818cf8)',
+        iconBg: 'rgba(99,102,241,0.12)',
+        iconColor: '#6366f1',
+        icon: 'bi-file-earmark-zip',
+        pillText: 'กำลังบีบอัด',
+      },
+      queued: {
+        barBg: 'linear-gradient(90deg, #94a3b8, #cbd5e1)',
+        iconBg: 'rgba(37,99,235,0.10)',
+        iconColor: '#2563eb',
+        icon: 'bi-hourglass-split',
+        pillText: 'รอคิว',
+      },
+      uploading: {
+        barBg: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+        iconBg: 'rgba(59,130,246,0.12)',
+        iconColor: '#3b82f6',
+        icon: 'bi-arrow-up',
+        pillText: 'กำลังอัพโหลด',
+      },
+      done: {
+        barBg: 'linear-gradient(90deg, #10b981, #34d399)',
+        iconBg: 'rgba(16,185,129,0.12)',
+        iconColor: '#10b981',
+        icon: 'bi-check-lg',
+        pillText: 'สำเร็จ',
+      },
+      error: {
+        barBg: 'linear-gradient(90deg, #ef4444, #f87171)',
+        iconBg: 'rgba(239,68,68,0.12)',
+        iconColor: '#ef4444',
+        icon: 'bi-exclamation-triangle-fill',
+        pillText: 'ล้มเหลว',
+      },
+      cancelled: {
+        barBg: 'linear-gradient(90deg, #6b7280, #9ca3af)',
+        iconBg: 'rgba(107,114,128,0.12)',
+        iconColor: '#6b7280',
+        icon: 'bi-dash-lg',
+        pillText: 'ยกเลิก',
+      },
+    };
+
+    const s = states[item.status];
+    if (!s) return;
+
+    bar.style.background = s.barBg;
+    icon.style.background = s.iconBg;
+    icon.style.color = s.iconColor;
+    icon.innerHTML = `<i class="bi ${s.icon}"></i>`;
+
+    if (pill) {
+      pill.style.background = s.iconBg;
+      pill.style.color = s.iconColor;
+      pill.innerHTML = `<i class="bi ${s.icon}"></i> ${s.pillText}`;
     }
   }
 
@@ -819,9 +1066,11 @@ document.addEventListener('DOMContentLoaded', function() {
   //  ETA / stats / compression summary
   // ═════════════════════════════════════════════════════════════
   function updateStats() {
-    document.getElementById('progressCount').textContent = `(${stats.done}/${stats.total})`;
+    document.getElementById('progressCount').textContent = `${stats.done} / ${stats.total} ไฟล์`;
     document.getElementById('successCount').textContent = stats.success;
     document.getElementById('failCount').textContent = stats.fail;
+    const totalTile = document.getElementById('totalCountTile');
+    if (totalTile) totalTile.textContent = stats.total;
 
     const pct = stats.total > 0 ? Math.round(stats.done / stats.total * 100) : 0;
     document.getElementById('totalProgress').style.width = pct + '%';
@@ -875,10 +1124,16 @@ document.addEventListener('DOMContentLoaded', function() {
     recentSec.style.display = 'block';
     if (photo.thumbnail_url) {
       const html = `
-        <div>
+        <div class="recent-thumb-wrap">
           <img src="${photo.thumbnail_url}" class="recent-thumb" alt="${escHtml(photo.filename || '')}" title="${escHtml(photo.filename || '')} (${photo.file_size_human || ''})" loading="lazy" decoding="async">
         </div>`;
       recentGrid.insertAdjacentHTML('beforeend', html);
+    }
+    // Bump the photo count badge in the sidebar event card
+    const badge = document.getElementById('photoCountBadge');
+    if (badge) {
+      const current = parseInt(badge.textContent.replace(/,/g, ''), 10) || 0;
+      badge.textContent = (current + 1).toLocaleString();
     }
   }
 
