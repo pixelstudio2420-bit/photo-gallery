@@ -579,6 +579,30 @@
       </div>
 
       <div class="p-5 space-y-4">
+        {{-- ── OA Basic ID — required for friend-add popup deep-link ── --}}
+        <div class="rounded-lg p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
+          <label class="block text-xs font-semibold text-emerald-800 dark:text-emerald-300 mb-1.5" for="lineOaBasicId">
+            <i class="bi bi-person-plus-fill mr-1"></i>
+            LINE OA Basic ID (สำหรับ popup เพิ่มเพื่อน)
+            <span class="ml-1 text-emerald-600 dark:text-emerald-400">★</span>
+          </label>
+          <input type="text" id="lineOaBasicId"
+                 name="line_oa_basic_id"
+                 value="{{ $settings['line_oa_basic_id'] ?? '' }}"
+                 placeholder="เช่น @yourbrand (เริ่มต้นด้วย @)"
+                 class="w-full px-3.5 py-2.5 rounded-lg text-sm font-mono
+                        bg-white dark:bg-slate-800
+                        border border-emerald-300 dark:border-emerald-500/40
+                        text-slate-900 dark:text-slate-100
+                        placeholder-slate-400 dark:placeholder-slate-500
+                        focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition">
+          <p class="mt-1.5 text-[11px] text-emerald-700 dark:text-emerald-300/80 leading-relaxed">
+            ดูได้ที่ <strong>LINE OA Manager → Settings → Account → Basic ID</strong> ·
+            ใช้สำหรับ popup ขอเพิ่มเพื่อนใน loadroop.com
+            <span class="block mt-0.5 opacity-75">หากเว้นว่าง popup จะไม่แสดงให้ลูกค้าเห็น</span>
+          </p>
+        </div>
+
         {{-- Channel ID --}}
         <div>
           <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5" for="lineChannelId">Messaging Channel ID</label>

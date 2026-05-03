@@ -34,7 +34,12 @@
 --}}
 @auth
 @php
-  $_lineOaId = (string) \App\Models\AppSetting::get('marketing_line_oa_id', '');
+  // Read OA Basic ID from line_oa_basic_id (the key the admin LINE
+  // settings page saves to). Older field name marketing_line_oa_id is
+  // checked as a backwards-compat fallback in case any seed/migration
+  // data lives under the old key.
+  $_lineOaId = (string) \App\Models\AppSetting::get('line_oa_basic_id', '')
+            ?: (string) \App\Models\AppSetting::get('marketing_line_oa_id', '');
   $_isFriend = (bool) (Auth::user()->line_is_friend ?? false);
   $_show     = !$_isFriend && $_lineOaId !== '';
 

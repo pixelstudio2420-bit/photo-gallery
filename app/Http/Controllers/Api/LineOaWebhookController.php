@@ -37,7 +37,11 @@ class LineOaWebhookController extends Controller
 {
     public function handle(Request $request)
     {
-        $secret = (string) AppSetting::get('marketing_line_channel_secret', '');
+        // Settings page saves Messaging API credentials under line_channel_*;
+        // marketing_line_channel_secret is a backwards-compat fallback for
+        // any older config rows.
+        $secret = (string) AppSetting::get('line_channel_secret', '')
+               ?: (string) AppSetting::get('marketing_line_channel_secret', '');
         if ($secret === '') {
             // Channel not configured — we MUST refuse rather than silently
             // accept anything, since unsigned events would let any caller

@@ -380,6 +380,11 @@ trait HandlesMedia
             'line_channel_secret', 'line_channel_access_token',
             'line_admin_user_ids',
 
+            // OA Basic ID (e.g. @yourbrand) — used for the friend-add popup
+            // deep-link (line.me/R/ti/p/{id}). Without this, the popup will
+            // not render at all.
+            'line_oa_basic_id',
+
             // Webhook + auto-reply behaviour
             'line_webhook_log', 'line_webhook_auto_reply',
 
@@ -421,6 +426,8 @@ trait HandlesMedia
             'line_channel_id', 'line_channel_secret', 'line_channel_access_token',
             // Admin LINE userIds for system alerts (replaces dead Notify token)
             'line_admin_user_ids',
+            // OA Basic ID for friend-add popup
+            'line_oa_basic_id',
         ];
 
         $items = [];
