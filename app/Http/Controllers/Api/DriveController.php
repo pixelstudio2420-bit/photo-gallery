@@ -121,86 +121,44 @@ class DriveController extends Controller
         if (ctype_digit((string) $fileId)) {
             $photo = \App\Models\EventPhoto::find((int) $fileId);
             if ($photo) {
-                if ($size <= 500) {
-                    // Thumbnail size: prefer baked thumbnail (small,
-                    // un-watermarked is OK at this size). If missing,
-                    // try watermarked. NEVER fall through to original_url
-                    // — that's the leak the model accessor used to have.
-                    if ($photo->thumbnail_url) {
-                        return redirect()->away($photo->thumbnail_url, 302);
-                    }
-                    if ($photo->watermarked_url) {
-                        return redirect()->away($photo->watermarked_url, 302);
-                    }
-                    // No baked variant — fall through to the inline
-                    // watermark path so we generate one on-the-fly from
-                    // the original bytes instead of leaking the raw file.
-                } else {
-                    // Preview size: prefer baked watermarked variant
-                    // (cheap CDN redirect, already protected). If missing,
-                    // we MUST NOT serve the original even when admin has
-                    // watermarking disabled — fall through to the inline
-                    // watermark generator (or, with watermark off, a
-                    // shrunk JPEG of the original — still small + low-q,
-                    // not the full-res file).
-                    if ($photo->watermarked_url) {
-                        return redirect()->away($photo->watermarked_url, 302);
-                    }
-                    // Fall-through continuation: the inline watermark
-                    // pipeline below will pull the bytes from R2/Drive
-                    // and serve a watermarked (or downscaled) preview.
+                // Strategy: ALWAYS redirect to a baked variant on the CDN.
+                // Never fetch + watermark + return bytes inline — that
+                // path was tried in commit f8a58ff and 502'd under load
+                // because Drive/R2 fetch + GD compositing blew past the
+                // PHP-FPM memory + edge timeouts.
+                //
+                // Resolution priority by size:
+                //   ≤500px (gallery thumb)  → thumbnail → watermarked
+                //   >500px (lightbox/etc)   → watermarked → thumbnail
+                //
+                // Originals are NEVER served from this endpoint — that
+                // route is reserved for the buyer's signed download
+                // token (see DownloadController). If the only file
+                // available is the original, we serve a tiny placeholder
+                // GIF and log so the admin can re-run reprocess.
+                $url = $size <= 500
+                    ? ($photo->thumbnail_url ?: $photo->watermarked_url)
+                    : ($photo->watermarked_url ?: $photo->thumbnail_url);
+
+                if (!empty($url)) {
+                    return redirect()->away($url, 302);
                 }
 
-                // ── Inline-watermark path for EventPhoto rows whose
-                //    baked watermarked/thumbnail variant is missing
-                //    (processing failed, row predates the pipeline,
-                //    or watermark toggle just got turned on for an
-                //    older event). Pull the source bytes via Laravel
-                //    Storage so this works for R2 / S3 / local disks.
-                $sourceBytes = '';
-                try {
-                    $sourceBytes = $photo->storage_disk
-                        ? \Illuminate\Support\Facades\Storage::disk($photo->storage_disk)->get($photo->original_path)
-                        : '';
-                } catch (\Throwable $e) {
-                    Log::warning('proxyImage: source fetch failed', [
-                        'photo_id' => $photo->id,
-                        'disk'     => $photo->storage_disk,
-                        'error'    => $e->getMessage(),
-                    ]);
-                }
-                if (empty($sourceBytes)) {
-                    // Nothing we can serve safely — return a 1x1
-                    // transparent gif placeholder rather than 404 so
-                    // the gallery doesn't render broken-image icons.
-                    return response(base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'), 200, [
-                        'Content-Type'  => 'image/gif',
-                        'Cache-Control' => 'public, max-age=300',
-                        'X-Source'      => 'placeholder-missing-variant',
-                    ]);
-                }
-
-                // Always watermark on this fall-through — we're serving
-                // the original bytes, so we MUST overlay a watermark to
-                // protect the photographer's IP regardless of the admin
-                // toggle. The toggle controls whether NEW gallery views
-                // are watermarked; here we're recovering from a missing
-                // baked variant and the safe default is "always protect".
-                if ($watermarkSvc->isEnabled()) {
-                    $tmp = tempnam(sys_get_temp_dir(), 'pxywm_');
-                    try {
-                        file_put_contents($tmp, $sourceBytes);
-                        $watermarked = $watermarkSvc->apply($tmp);
-                        if (!empty($watermarked)) $sourceBytes = $watermarked;
-                    } finally {
-                        if (is_string($tmp) && is_file($tmp)) @unlink($tmp);
-                    }
-                }
-
-                return response($sourceBytes, 200, [
-                    'Content-Type'  => 'image/jpeg',
-                    'Cache-Control' => 'public, max-age=3600',
-                    'X-Source'      => 'inline-watermark-recovery',
+                // Variant truly missing — admin needs to reprocess this
+                // photo (queue ReprocessPhotosCommand). Return a 1x1
+                // transparent GIF so the gallery doesn't render a
+                // broken-image icon, and log once per request.
+                Log::warning('proxyImage: no baked variant available', [
+                    'photo_id'         => $photo->id,
+                    'event_id'         => $photo->event_id,
+                    'thumbnail_path'   => $photo->thumbnail_path,
+                    'watermarked_path' => $photo->watermarked_path,
+                    'requested_size'   => $size,
+                ]);
+                return response(base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'), 200, [
+                    'Content-Type'  => 'image/gif',
+                    'Cache-Control' => 'public, max-age=300',
+                    'X-Source'      => 'placeholder-missing-variant',
                 ]);
             }
         }

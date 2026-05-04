@@ -2023,11 +2023,22 @@ const lbCache = new Map();
 let lbThumbsBuilt = false;
 
 function lbGetFullUrl(photo) {
+  // Lightbox uses the SAME baked file the gallery thumbnail uses — the
+  // watermarked variant is already a self-contained, small (1200-1600px),
+  // watermark-baked JPEG that can be displayed enlarged via CSS.
+  // We deliberately DO NOT request a fresh sz=1200 from the proxy here
+  // because that path would invoke the inline-watermark recovery
+  // (DriveController::proxyImage), which fetches the original from R2,
+  // composites a watermark in PHP/GD, and returns the bytes — a heavy
+  // operation that 502'd under any concurrent load.
   if (photo.watermarked) return photo.watermarked;
   const thumb = photo.thumbnailLink ?? photo.thumbnail_link ?? '';
   if (thumb && !thumb.includes('googleusercontent.com') && !thumb.includes('drive.google.com')) return thumb;
   const fileId = photo.id ?? photo.file_id ?? '';
-  return `/api/drive/image/${fileId}?sz=${LB_FULL_SIZE}`;
+  // sz=400 hits the proxy's redirect-only branch (size ≤ 500), so the
+  // proxy just 302s to the existing thumbnail/watermarked CDN URL — no
+  // server-side watermarking, no 502.
+  return `/api/drive/image/${fileId}?sz=400`;
 }
 
 function lbGetSmallUrl(photo) {
