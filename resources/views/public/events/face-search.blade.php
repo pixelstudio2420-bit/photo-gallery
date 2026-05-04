@@ -1278,7 +1278,18 @@ async function startSearch() {
       const message = statusMap[resp.status]
         || serverMsg
         || `เกิดข้อผิดพลาด (HTTP ${resp.status}) กรุณาลองใหม่อีกครั้ง`;
-      console.error('[face-search] request failed', { status: resp.status, body: raw.slice(0, 500) });
+
+      // Severity split: 4xx codes are user/input errors (selfie has no
+      // face, rate limited, session expired) — these are EXPECTED business
+      // responses and shouldn't render as red `console.error` in DevTools,
+      // because they're not bugs and bug-trackers / Sentry pick up on
+      // error-level logs as alerts. Use `warn` so the entry is still
+      // visible during debugging but doesn't masquerade as a server bug.
+      // 5xx + unrecognised failures keep the error-level log so real
+      // production incidents stand out.
+      const isClientError = resp.status >= 400 && resp.status < 500;
+      const logFn = isClientError ? console.warn : console.error;
+      logFn('[face-search] request failed', { status: resp.status, body: raw.slice(0, 500) });
       showToast(message);
       return;
     }

@@ -177,9 +177,15 @@ class FaceSearchController extends Controller
                     'duration_ms' => (int) ((microtime(true) - $requestStart) * 1000),
                     'status'      => 'no_face',
                 ]);
+                // 422 = entity (the selfie) couldn't be processed because it
+                // doesn't contain a face Rekognition can index. Common
+                // causes: too dark, blurry, face turned away, mask/sunglasses,
+                // or the photo is of an object instead of a person.
+                // Surface concrete tips so the user can fix the upload
+                // without guessing.
                 return response()->json([
                     'success' => false,
-                    'message' => 'ไม่พบใบหน้าในรูปที่อัพโหลด กรุณาอัพโหลดรูปที่เห็นใบหน้าชัดเจน',
+                    'message' => 'ไม่พบใบหน้าในรูปที่อัพโหลด — ลองรูปที่เห็นใบหน้าชัดเจน หันหน้าตรง แสงเพียงพอ ไม่มีแว่นกันแดดหรือหน้ากากบดบัง',
                 ], 422);
             }
 
