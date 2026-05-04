@@ -299,12 +299,30 @@ Schedule::command('credits:grant-monthly-free')
 // ────────────────────────────────────────────────────────────────────
 
 // Subscription renewals — hourly check for subs whose current_period_end
-// lands within the next 24h. Creates renewal invoices + orders that the
-// photographer's payment method will settle. Idempotent: rerunning doesn't
-// duplicate invoices because each sub only gets one pending renewal at a
-// time (the status flip to 'active' on the new period clears the flag).
+// lands within the next 24h. Creates a single renewal invoice + Order
+// that the photographer's payment method will settle. Idempotent: a
+// second run in the same period reuses the existing pending Order
+// instead of duplicating it (see SubscriptionService::renew()).
+//
+// Note (Phase A): until auto-charge of saved payment methods is wired
+// up, the Order created here is a manual-pay link. The
+// `subscriptions:expire-overdue` cron below is what actually enforces
+// the plan period — it flips active subs whose period_end has passed
+// to `expired` regardless of whether this renewal Order was paid.
 Schedule::command('subscriptions:renew-due --hours=24')
     ->hourlyAt(10)
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Subscription period enforcement — hourly sweep at :25 to downgrade
+// any active sub whose `current_period_end` has already passed but
+// hasn't been picked up by the renewal-paid path. Without this, a
+// one-time payment grants paid-tier features permanently because no
+// other code transitions `status='active'` away from active after
+// period_end. Runs OFFSET from renew-due (:10) so a sub freshly
+// renewed at :10 isn't second-guessed in the same hour.
+Schedule::command('subscriptions:expire-overdue --quiet-if-none')
+    ->hourlyAt(25)
     ->withoutOverlapping()
     ->runInBackground();
 
@@ -312,7 +330,9 @@ Schedule::command('subscriptions:renew-due --hours=24')
 // photographers whose grace window ran out (no successful payment within
 // N days of the first failure). Sets them to the free plan, which
 // immediately shrinks their storage_quota_bytes — enforced on next
-// upload attempt by EnforceStorageQuota middleware.
+// upload attempt by EnforceStorageQuota middleware. Phase B (auto-charge
+// retries via markRenewalFailed) will populate this command's input set;
+// Phase A relies primarily on `subscriptions:expire-overdue` above.
 Schedule::command('subscriptions:expire-grace')
     ->dailyAt('02:20')
     ->withoutOverlapping()
@@ -372,6 +392,17 @@ Schedule::command('user-storage:renew-due --hours=24')
 // uploads are blocked until usage fits the 5 GB free quota.
 Schedule::command('user-storage:expire-grace')
     ->dailyAt('02:25')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Consumer storage period enforcement — hourly at :30 (offset from
+// renew-due at :15). Mirror of `subscriptions:expire-overdue` for the
+// consumer side: flips active subs whose `current_period_end` has
+// passed to `expired` and reverts auth_users.storage_quota_bytes to
+// the free-tier value. Phase A: this is what actually enforces the
+// plan period until auto-charge is wired up in Phase B.
+Schedule::command('user-storage:expire-overdue --quiet-if-none')
+    ->hourlyAt(30)
     ->withoutOverlapping()
     ->runInBackground();
 

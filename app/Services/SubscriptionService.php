@@ -506,6 +506,31 @@ class SubscriptionService
                 ? (float) $plan->price_annual_thb
                 : (float) $plan->price_thb;
 
+            // ─── Idempotency guard ──────────────────────────────────
+            // Without this, the hourly `subscriptions:renew-due` cron
+            // spawned a fresh duplicate invoice + Order every run for
+            // any sub inside the 24h look-ahead window. Reuse an
+            // existing pending invoice whose Order is still alive
+            // (not cancelled/expired) instead of creating a duplicate.
+            // The pending Order auto-cancels 30min after creation
+            // (OrderExpireService); after that we DO create a new
+            // invoice for the next cron tick — but at most one per
+            // ~30min, not one per hour.
+            $existing = SubscriptionInvoice::query()
+                ->where('subscription_id', $sub->id)
+                ->where('status', SubscriptionInvoice::STATUS_PENDING)
+                ->whereDate('period_start', $periodStart)
+                ->whereNotNull('order_id')
+                ->latest('id')
+                ->first();
+            if ($existing) {
+                $existingOrder = Order::find($existing->order_id);
+                if ($existingOrder && in_array($existingOrder->status, ['pending', 'pending_payment'], true)) {
+                    return $existingOrder;
+                }
+            }
+            // ────────────────────────────────────────────────────────
+
             $invoice = SubscriptionInvoice::create([
                 'subscription_id' => $sub->id,
                 'photographer_id' => $sub->photographer_id,
@@ -768,6 +793,85 @@ class SubscriptionService
 
             return ['type' => 'order', 'order' => $order];
         });
+    }
+
+    /**
+     * Expire an active subscription whose `current_period_end` has passed.
+     *
+     * This is the canonical "plan period ran out" path used by the
+     * `subscriptions:expire-overdue` cron. Until auto-charge of the saved
+     * payment method is implemented (Phase B), this is what enforces the
+     * monthly/annual plan period — without this method a one-time payment
+     * granted permanent paid-tier access because nothing else flipped
+     * `status='active'` away from active after period_end.
+     *
+     * Behaviour:
+     *   • Only acts on subs whose status is `active` AND whose
+     *     `current_period_end` is in the past — no-op otherwise (so it's
+     *     safe to call repeatedly from the hourly cron).
+     *   • Status flips to `expired`, `cancelled_at` is stamped.
+     *   • The photographer profile is reverted to the seeded free plan
+     *     via `ensureFreeSubscription()` + `syncProfileCache()`, so
+     *     `storage_quota_bytes`, `commission_rate`,
+     *     `subscription_plan_code` etc. reflect free-tier limits within
+     *     the same transaction (the storage middleware reads these).
+     *   • Lifecycle notification (`subscriptionExpired`) fires AFTER
+     *     commit so the photographer learns "your plan ended, please
+     *     renew" — same notifier expireGrace() uses, so the email/LINE
+     *     copy is consistent.
+     *
+     * Subs with `status='grace'` are deliberately ignored here — they
+     * already took this transition and are waiting for `expire-grace`
+     * to do the final downgrade.
+     */
+    public function expireOverdue(PhotographerSubscription $sub): void
+    {
+        if ($sub->status !== PhotographerSubscription::STATUS_ACTIVE) {
+            return;
+        }
+        if (!$sub->current_period_end || $sub->current_period_end->isFuture()) {
+            return;
+        }
+
+        $previousPlanName = null;
+
+        DB::transaction(function () use ($sub, &$previousPlanName) {
+            // Re-fetch with lock so a concurrent webhook (paid renewal)
+            // can't slip through between our check and the update.
+            $fresh = PhotographerSubscription::where('id', $sub->id)
+                ->lockForUpdate()
+                ->first();
+            if (!$fresh || $fresh->status !== PhotographerSubscription::STATUS_ACTIVE) {
+                return;
+            }
+            if (!$fresh->current_period_end || $fresh->current_period_end->isFuture()) {
+                return;
+            }
+
+            $previousPlanName = $fresh->plan?->name ?? $sub->plan?->name;
+
+            $fresh->update([
+                'status'       => PhotographerSubscription::STATUS_EXPIRED,
+                'cancelled_at' => now(),
+            ]);
+
+            $profile = PhotographerProfile::where('user_id', $fresh->photographer_id)->first();
+            if ($profile) {
+                $freeSub = $this->ensureFreeSubscription($profile);
+                $this->syncProfileCache($profile, $freeSub);
+            }
+        });
+
+        if ($previousPlanName) {
+            try {
+                app(\App\Services\Notifications\PhotographerLifecycleNotifier::class)
+                    ->subscriptionExpired($sub->fresh('plan'), $previousPlanName);
+            } catch (\Throwable $e) {
+                Log::debug('SubscriptionService: expire-overdue notify skipped', [
+                    'sub_id' => $sub->id, 'error' => $e->getMessage(),
+                ]);
+            }
+        }
     }
 
     /**

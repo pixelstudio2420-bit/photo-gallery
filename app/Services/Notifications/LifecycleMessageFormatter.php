@@ -134,14 +134,17 @@ class LifecycleMessageFormatter
         $plan     = $sub->plan;
         $planName = $plan?->name ?? 'แผน';
         $endAt    = $sub->current_period_end;
-        $autoRenew = !$sub->cancel_at_period_end;
 
+        // NOTE: Phase A of the billing system has no auto-charge wired —
+        // every active sub past `current_period_end` is force-expired by
+        // `subscriptions:expire-overdue`. Wording reflects that reality
+        // (no false "we'll charge your card automatically" promise).
+        // When Phase B brings auto-charge online, branch on whether the
+        // sub has a stored payment method and adjust the copy.
         $bullets = [
             "วันที่หมดอายุ: " . ($endAt?->format('d/m/Y') ?? '-'),
             "เหลือเวลา: {$daysLeft} วัน",
-            $autoRenew
-                ? '✓ ตั้งค่าต่ออายุอัตโนมัติไว้แล้ว'
-                : '✗ ไม่ได้ตั้งต่ออายุ — บริการจะปิดเมื่อหมดอายุ',
+            '⚠ กรุณาต่ออายุก่อนหมดเวลา ไม่งั้นบริการจะปิดอัตโนมัติ',
         ];
 
         $severity = $daysLeft <= 1
@@ -154,14 +157,12 @@ class LifecycleMessageFormatter
             headline:  $daysLeft <= 1
                          ? "🚨 {$planName}กำลังจะหมดอายุพรุ่งนี้"
                          : "⏰ {$planName}จะหมดอายุในอีก {$daysLeft} วัน",
-            shortBody: "{$planName}เหลือ {$daysLeft} วัน · " . ($autoRenew ? 'จะต่ออายุอัตโนมัติ' : 'กรุณาต่ออายุ'),
+            shortBody: "{$planName}เหลือ {$daysLeft} วัน · กรุณาต่ออายุ",
             body:      "{$planName}ของคุณจะหมดอายุในอีก {$daysLeft} วัน "
-                     . ($autoRenew
-                          ? 'ระบบจะหักเงินและต่ออายุให้อัตโนมัติ ไม่ต้องดำเนินการอะไร'
-                          : 'หากไม่ต่ออายุก่อนหมดเวลา บริการจะปิดและคุณจะถูกปรับเป็นแผนฟรี'),
+                     . 'กรุณาต่ออายุก่อนหมดเวลา ไม่งั้นบริการจะปิดและบัญชีของคุณจะถูกปรับเป็นแผนฟรีโดยอัตโนมัติ',
             bullets:   $bullets,
             cta:       [
-                'label' => $autoRenew ? 'ดูแผนของฉัน' : 'ต่ออายุเลย',
+                'label' => 'ต่ออายุเลย',
                 'url'   => url('/photographer/subscription'),
             ],
             subject:   "⏰ {$planName}จะหมดอายุในอีก {$daysLeft} วัน",
@@ -170,7 +171,7 @@ class LifecycleMessageFormatter
                 "{$daysLeft} วัน",
                 $bullets,
                 $daysLeft <= 1 ? '#dc2626' : '#f59e0b',
-                $autoRenew ? 'ดูแผนของฉัน' : 'ต่ออายุเลย',
+                'ต่ออายุเลย',
                 url('/photographer/subscription'),
             ),
             refId:     "sub.{$sub->id}.expiring.{$daysLeft}d",

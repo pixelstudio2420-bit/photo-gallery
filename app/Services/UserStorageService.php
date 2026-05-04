@@ -348,6 +348,25 @@ class UserStorageService
                 ? (float) $plan->price_annual_thb
                 : (float) $plan->price_thb;
 
+            // ─── Idempotency guard ──────────────────────────────────
+            // Mirrors SubscriptionService::renew(). Reuse the existing
+            // pending Order rather than spawning a duplicate every time
+            // the hourly `user-storage:renew-due` cron sees this sub.
+            $existing = UserStorageInvoice::query()
+                ->where('subscription_id', $sub->id)
+                ->where('status', UserStorageInvoice::STATUS_PENDING)
+                ->whereDate('period_start', $periodStart)
+                ->whereNotNull('order_id')
+                ->latest('id')
+                ->first();
+            if ($existing) {
+                $existingOrder = Order::find($existing->order_id);
+                if ($existingOrder && in_array($existingOrder->status, ['pending', 'pending_payment'], true)) {
+                    return $existingOrder;
+                }
+            }
+            // ────────────────────────────────────────────────────────
+
             $invoice = UserStorageInvoice::create([
                 'subscription_id' => $sub->id,
                 'user_id'         => $sub->user_id,
@@ -594,6 +613,55 @@ class UserStorageService
             // SubscriptionService.
 
             return ['type' => 'order', 'subscription' => $sub->fresh('plan'), 'order' => $order];
+        });
+    }
+
+    /**
+     * Expire an active storage subscription whose `current_period_end`
+     * has passed. Mirror of `SubscriptionService::expireOverdue()` for
+     * the consumer-side storage plans.
+     *
+     * Until auto-charge is implemented (Phase B), this is what enforces
+     * the consumer plan period — without it a one-time-paid Personal/
+     * Plus/Pro/Max plan kept the elevated quota permanently because no
+     * other code transitioned `status='active'` away from active after
+     * `current_period_end`.
+     *
+     * Idempotent: only acts on `active` subs whose period_end is past.
+     * Files are NOT deleted even if usage now exceeds the free quota —
+     * the file manager's per-upload guard will block new uploads until
+     * the user frees space.
+     */
+    public function expireOverdue(UserStorageSubscription $sub): void
+    {
+        if ($sub->status !== UserStorageSubscription::STATUS_ACTIVE) {
+            return;
+        }
+        if (!$sub->current_period_end || $sub->current_period_end->isFuture()) {
+            return;
+        }
+
+        DB::transaction(function () use ($sub) {
+            $fresh = UserStorageSubscription::where('id', $sub->id)
+                ->lockForUpdate()
+                ->first();
+            if (!$fresh || $fresh->status !== UserStorageSubscription::STATUS_ACTIVE) {
+                return;
+            }
+            if (!$fresh->current_period_end || $fresh->current_period_end->isFuture()) {
+                return;
+            }
+
+            $fresh->update([
+                'status'       => UserStorageSubscription::STATUS_EXPIRED,
+                'cancelled_at' => now(),
+            ]);
+
+            $user = User::find($fresh->user_id);
+            if ($user) {
+                $freeSub = $this->ensureFreeSubscription($user);
+                $this->syncUserCache($user, $freeSub);
+            }
         });
     }
 
