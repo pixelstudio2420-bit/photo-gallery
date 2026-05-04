@@ -1597,7 +1597,15 @@ async function loadPhotos() {
 // ============================================
 const THUMB_SIZE = GALLERY_THUMB_SIZE;                // 1× size (admin-set)
 const THUMB_SIZE_2X = Math.min(GALLERY_THUMB_SIZE * 2, 800);  // retina
-const PLACEHOLDER_SVG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3C/svg%3E";
+// IMPORTANT: this URL is sometimes used inside `srcset="..."`, where the
+// HTML parser treats whitespace as the URL/descriptor separator. The
+// previous version had literal spaces inside the SVG attributes (between
+// `xmlns='...'`, `width='1'`, `height='1'`) — perfectly valid as an
+// `<img src=...>` value but it broke `srcset` parsing with
+// "Failed parsing 'srcset' attribute value since it has an unknown
+// descriptor" + "Dropped srcset candidate". %20 the spaces so the URL is
+// a single token regardless of the attribute it lands in.
+const PLACEHOLDER_SVG = "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='1'%20height='1'%3E%3C/svg%3E";
 
 // Lazy observer with large rootMargin for early preload
 const lazyObserver = new IntersectionObserver((entries) => {
@@ -2246,7 +2254,19 @@ function getThumbUrl(photo, size) {
   const apiThumb = photo.thumbnailLink ?? photo.thumbnail_link ?? photo.fallback ?? '';
   if (apiThumb && !apiThumb.includes('googleusercontent.com') && !apiThumb.includes('drive.google.com')) return apiThumb;
   const fileId = photo.id ?? photo.file_id ?? '';
-  if (/^\d+$/.test(fileId)) return apiThumb || photo.watermarked || PLACEHOLDER_SVG;
+  if (/^\d+$/.test(fileId)) {
+    // R2 photo. Prefer the baked thumbnail/watermarked URL if either is
+    // populated. If both are empty (the model accessors now return ''
+    // when the variant_path is missing — see EventPhoto.php — to avoid
+    // leaking the un-watermarked original), fall through to the proxy
+    // endpoint, which knows how to inline-watermark on the fly from
+    // the R2 source bytes (DriveController::proxyImage recovery path).
+    // Avoid PLACEHOLDER_SVG here: it contains literal spaces inside the
+    // SVG attributes that break <img srcset> parsing in Chrome — the
+    // browser drops the candidate with "Unknown descriptor" and the
+    // gallery image fails to render.
+    return apiThumb || photo.watermarked || `/api/drive/image/${fileId}?sz=${size}`;
+  }
   return `/api/drive/image/${fileId}?sz=${size}`;
 }
 
