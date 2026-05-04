@@ -45,10 +45,11 @@ class ReprocessPhotosCommand extends Command
     protected $signature = 'photos:reprocess
                             {--event= : Only reprocess photos in this event ID}
                             {--include-failed : Also retry photos with status=failed}
+                            {--missing-variants : Also reprocess active rows whose thumbnail_path or watermarked_path is NULL (most common production fix)}
                             {--limit= : Stop after N photos (default: no limit)}
                             {--dry-run : List what would be reprocessed without doing it}';
 
-    protected $description = 'Re-run thumbnail/watermark generation for stuck (processing) or failed photos';
+    protected $description = 'Re-run thumbnail/watermark generation for stuck (processing), failed, or active-with-missing-variants photos';
 
     public function handle(): int
     {
@@ -57,7 +58,31 @@ class ReprocessPhotosCommand extends Command
             $statuses[] = 'failed';
         }
 
-        $query = EventPhoto::whereIn('status', $statuses);
+        // Default to including missing-variants — that's the most common
+        // production scenario. Operators who want only the legacy
+        // status='processing' behaviour can pass --missing-variants=0
+        // (the option is null/true/false; we treat null as true).
+        $includeMissing = $this->option('missing-variants') !== false;
+
+        $query = EventPhoto::query()->where(function ($q) use ($statuses, $includeMissing) {
+            $q->whereIn('status', $statuses);
+            if ($includeMissing) {
+                // Active rows with missing variants — uploaded successfully
+                // but never made it through the watermark pipeline (queue
+                // worker not provisioned, pipeline error, etc.). The proxy
+                // serves a 1×1 placeholder for these and the gallery shows
+                // blank thumbnails. This is what fixes loadroop.com prod.
+                $q->orWhere(function ($qq) {
+                    $qq->where('status', 'active')
+                       ->where(function ($qqq) {
+                           $qqq->whereNull('thumbnail_path')
+                               ->orWhereNull('watermarked_path')
+                               ->orWhere('thumbnail_path', '')
+                               ->orWhere('watermarked_path', '');
+                       });
+                });
+            }
+        });
 
         if ($eventId = $this->option('event')) {
             $query->where('event_id', (int) $eventId);
@@ -68,7 +93,7 @@ class ReprocessPhotosCommand extends Command
             $query->limit((int) $limit);
         }
 
-        $photos = $query->get(['id', 'event_id', 'original_filename', 'status', 'original_path']);
+        $photos = $query->get(['id', 'event_id', 'original_filename', 'status', 'original_path', 'thumbnail_path', 'watermarked_path']);
         $count  = $photos->count();
 
         if ($count === 0) {

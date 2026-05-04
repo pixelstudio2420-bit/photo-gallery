@@ -158,12 +158,12 @@ class DriveController extends Controller
                     );
                 }
 
-                // Variant truly missing — admin needs to reprocess this
-                // photo (queue ReprocessPhotosCommand). Return a 1x1
-                // transparent GIF so the gallery doesn't render a
-                // broken-image icon. Auto-dispatch a debounced reprocess
-                // job so the variant gets baked the next time the queue
-                // worker spins up — no admin intervention needed.
+                // Variant missing — auto-dispatch reprocess (debounced) and
+                // try to give the buyer SOMETHING visible right now. The
+                // 1×1 placeholder we used to return left galleries blank
+                // for hours when queue workers weren't provisioned, which
+                // is what loadroop.com prod was hitting (129 photos all
+                // returning placeholder, gallery completely empty).
                 $debounceKey = "reprocess_dispatched_photo_{$photo->id}";
                 if (!\Illuminate\Support\Facades\Cache::has($debounceKey)) {
                     \Illuminate\Support\Facades\Cache::put($debounceKey, 1, 600); // 10 min debounce
@@ -175,26 +175,46 @@ class DriveController extends Controller
                         'requested_size'   => $size,
                     ]);
                     try {
-                        // Use the photographer-side AI reprocess job if
-                        // available (it knows how to bake all 3 variants).
-                        // Defensive: wrap in class_exists in case the
-                        // job moves namespaces in a future refactor.
                         if (class_exists(\App\Jobs\ProcessUploadedPhotoJob::class)) {
                             \App\Jobs\ProcessUploadedPhotoJob::dispatch($photo->id)
                                 ->onQueue('default');
                         }
                     } catch (\Throwable $e) {
                         // Swallow — admin can still run the reprocess
-                        // command manually; we don't want a queue
-                        // misconfiguration to block the gallery render.
+                        // command manually; queue misconfig shouldn't
+                        // block the gallery from rendering.
                     }
                 }
+
+                // Fallback: redirect to the original until reprocess
+                // completes. This is a deliberate, time-bounded
+                // trade-off: a photographer with broken pipeline gets
+                // images visible (visible = sales possible) at the cost
+                // of exposing the un-watermarked original for the few
+                // minutes the queue worker takes to bake variants.
+                // Once the watermarked_path lands, subsequent hits get
+                // the proper redirect on the line above.
+                //
+                // Cache-Control deliberately SHORT (60s in browser, 60s
+                // at CDN) so the moment reprocess completes, the next
+                // gallery visit picks up the watermarked variant
+                // instead of a stale "redirect to original" cached at
+                // the edge.
+                if (!empty($photo->original_url)) {
+                    return redirect()->away($photo->original_url, 302)->withHeaders([
+                        'Cache-Control' => 'public, max-age=60, s-maxage=60',
+                        'X-Source'      => 'fallback-original-pending-reprocess',
+                    ]);
+                }
+
+                // Truly nothing we can serve — original missing too. This
+                // is a real broken row; placeholder + warning is the only
+                // safe response. Short cache so the recovery is visible
+                // on the next visit.
                 return response(base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'), 200, [
                     'Content-Type'  => 'image/gif',
-                    // Short cache for placeholder so the real image
-                    // appears soon after reprocess completes.
-                    'Cache-Control' => 'public, max-age=120',
-                    'X-Source'      => 'placeholder-missing-variant',
+                    'Cache-Control' => 'public, max-age=60',
+                    'X-Source'      => 'placeholder-no-original',
                 ]);
             }
         }

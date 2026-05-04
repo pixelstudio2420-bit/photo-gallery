@@ -45,13 +45,31 @@ class ProcessUploadedPhotoJob implements ShouldQueue
     {
         $photo = EventPhoto::find($this->photoId);
 
-        if (!$photo || $photo->status === 'active') {
-            return; // Already processed or deleted
+        if (!$photo) {
+            return;
         }
 
         if ($photo->status === 'deleted') {
             Log::info("ProcessUploadedPhotoJob: photo #{$this->photoId} is deleted, skipping.");
             return;
+        }
+
+        // Critical correctness fix: previously this branch bailed whenever
+        // status === 'active', on the assumption that "active = processing
+        // succeeded". That's wrong for photos whose row was inserted via a
+        // pre-pipeline path (older code paths, manual SQL inserts, half-
+        // completed migrations) — they end up active=true but with NULL
+        // thumbnail_path/watermarked_path, and the previous early-return
+        // meant ReprocessPhotosCommand + the proxy's auto-reprocess
+        // dispatch (DriveController.php) silently became no-ops.
+        //
+        // Now: only short-circuit when status='active' AND BOTH variants
+        // are already generated. If either is missing, fall through to
+        // the rest of the handler and bake them.
+        if ($photo->status === 'active'
+            && !empty($photo->thumbnail_path)
+            && !empty($photo->watermarked_path)) {
+            return; // truly processed — nothing to do
         }
 
         $storage  = app(StorageManager::class);
