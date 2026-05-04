@@ -79,6 +79,13 @@
 
 @section('content')
 
+{{-- Sponsored search-page ad — only renders when an active ad_creative
+     with placement='search_inline' exists. Sits between the hero and
+     the filter chips so it's above-the-fold but doesn't push results down. --}}
+<div class="pt-6">
+  <x-ad-slot placement="search_inline" />
+</div>
+
 {{-- ============ Filter + Results (Alpine.js realtime) ============ --}}
 <div class="py-8" x-data="eventSearch()" x-init="init()" @hero-search.window="query = $event.detail.q; fetchEvents()">
 

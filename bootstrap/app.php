@@ -54,6 +54,14 @@ return Application::configure(basePath: dirname(__DIR__))
         //                             and the order ID is in the URL.
         $middleware->validateCsrfTokens(except: [
             'payment/check-expiry/*',
+            // Ad impression beacon — fired by JS in <x-ad-slot/> when the
+            // ad scrolls into view. The component DOES include the CSRF
+            // header from the meta tag for normal flow, but cached pages
+            // (Cloudflare edge / browser back-forward cache) can serve
+            // a stale token, which would silently drop every impression
+            // log. Beacon writes only impressions/clicks (no privileged
+            // state change), so exempt is the right tradeoff.
+            'ads/*/seen',
         ]);
 
         $middleware->alias([

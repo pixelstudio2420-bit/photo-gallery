@@ -185,6 +185,11 @@
   </div>
 </section>
 
+{{-- Sponsored homepage banner — auto-fills only when an active
+     ad_creative with placement='homepage_banner' exists. Renders nothing
+     when no ad pool is available, so it never leaves a hole on the page. --}}
+<x-ad-slot placement="homepage_banner" />
+
 {{-- ════════════════════════════════════════════════════════════════════
      TRUST STRIP — adaptive counters (founding/growing/mature)
      Pulled from App\Support\PlatformStats so the copy stays honest:

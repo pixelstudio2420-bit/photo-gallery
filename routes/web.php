@@ -1168,6 +1168,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/{id}/toggle',  [\App\Http\Controllers\Admin\AddonItemController::class, 'toggle'])->name('toggle');
                 Route::delete('/{id}',       [\App\Http\Controllers\Admin\AddonItemController::class, 'destroy'])->name('destroy');
             });
+
         });
 
         // SEO Management — per-page override CMS (CRUD + bulk + history).
