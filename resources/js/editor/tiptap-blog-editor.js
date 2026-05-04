@@ -193,7 +193,45 @@ document.addEventListener('alpine:init', () => {
                 },
                 onUpdate: ({ editor }) => {
                     this.scheduleRefresh();
-                    this.onChange(editor.getHTML());
+                    const html = editor.getHTML();
+
+                    // Path 1 (primary, always works) — write the HTML to
+                    // the hidden <textarea name="content"> directly and
+                    // fire its input event. Any Alpine x-model bound to
+                    // it picks up the new value via the standard DOM
+                    // change pipeline. This bypasses the closure issue
+                    // with arrow-function `onChange` callbacks defined
+                    // inline in `x-data="..."` (Alpine evaluates those
+                    // expressions through a Function constructor that
+                    // doesn't inherit the parent x-data's scope, so a
+                    // bare `(html) => form.content = html` looks like
+                    // it captures `form` but actually throws on call).
+                    const textarea = document.getElementById('contentEditor');
+                    if (textarea) {
+                        textarea.value = html;
+                        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+
+                    // Path 2 — broadcast a window event so parent
+                    // Alpine scopes can listen with
+                    //   @tiptap:content-changed.window="form.content = $event.detail.html"
+                    // (event listener IS evaluated in the parent's
+                    // proper scope, so this works correctly.)
+                    try {
+                        window.dispatchEvent(new CustomEvent('tiptap:content-changed', {
+                            detail: { html, postId: this.postId },
+                        }));
+                    } catch (_) { /* CustomEvent unsupported on ancient browsers — ignore */ }
+
+                    // Path 3 — legacy onChange callback. Kept for
+                    // any caller that already wires it correctly
+                    // (e.g. via Alpine.closest()), but wrapped in
+                    // try/catch so the broken inline arrow form
+                    // ("form.content = html") fails silently instead
+                    // of breaking the editor.
+                    if (typeof this.onChange === 'function') {
+                        try { this.onChange(html); } catch (_) { /* swallow — paths 1+2 already handled it */ }
+                    }
                 },
                 onSelectionUpdate: () => this.scheduleRefresh(),
                 onTransaction:     () => this.scheduleRefresh(),

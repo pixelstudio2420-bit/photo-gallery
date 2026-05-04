@@ -241,7 +241,14 @@
 </style>
 @endpush
 
-<div x-data="blogPostForm()" x-init="init()">
+{{-- The @tiptap:content-changed.window listener bridges the inner
+     blogTiptapEditor scope to this form's `form.content` state.
+     Without it, the inline arrow-function `onChange` on the editor's
+     x-data wouldn't see `form` (Alpine evaluates child x-data
+     expressions through a Function constructor whose closure
+     doesn't include the parent scope's reactive properties). --}}
+<div x-data="blogPostForm()" x-init="init()"
+     @tiptap:content-changed.window="form.content = $event.detail.html">
     <form method="POST"
           action="{{ $isEdit ? route('admin.blog.posts.update', $post) : route('admin.blog.posts.store') }}"
           enctype="multipart/form-data"
@@ -302,7 +309,6 @@
                         initialContent: @js(old('content', $post->content ?? '')),
                         postId: {{ $isEdit ? $post->id : 0 }},
                         uploadUrl: '{{ route('admin.blog.posts.upload-inline-image') }}',
-                        onChange: (html) => form.content = html,
                      })"
                      x-init="initEditor()"
                      x-on:keydown.ctrl.s.prevent.window="$el.querySelector('form,#postForm') || null">
