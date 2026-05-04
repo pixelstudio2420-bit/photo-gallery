@@ -153,12 +153,21 @@ class SubscriptionService
 
     /**
      * Maximum concurrent published/active events the current plan allows.
-     * Returns null when the plan is unlimited (Business / Studio).
+     * Returns null when the plan is unlimited.
+     *
+     * Treats both `NULL` and any negative integer as "unlimited" — the
+     * canonical sentinel is NULL (Admin form validates `nullable|integer|min:0`)
+     * but defensively accept -1 / -999 / etc. so a future migration that
+     * writes a different unlimited sentinel doesn't silently block every
+     * photographer from creating events. (See 2026_05_19_000009 for the
+     * historical bug fix.)
      */
     public function maxConcurrentEvents(PhotographerProfile $profile): ?int
     {
         $cap = $this->currentPlan($profile)->max_concurrent_events;
-        return is_null($cap) ? null : (int) $cap;
+        if (is_null($cap)) return null;
+        $cap = (int) $cap;
+        return $cap < 0 ? null : $cap;
     }
 
     /**
