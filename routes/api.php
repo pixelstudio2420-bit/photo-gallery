@@ -24,8 +24,23 @@ Route::get('/language/{locale}', [LanguageApiController::class, 'switch'])->name
 // so they can share the web session for authentication.
 
 // Google Drive (photos)
+//
+// Throttle calibration:
+//   /drive/{eventId} (the photo LIST) — one call per gallery page-load,
+//     30/min/IP is generous for the buyer and rejects scrapers.
+//   /drive/image/{fileId} (the per-photo PROXY) — a 60-photo gallery on
+//     a retina screen can fire ~120 requests on first paint (60 × 1x +
+//     60 × 2x via srcset), and lazy-load on scroll adds more. The
+//     previous 120/min cap was hitting 429 mid-gallery, leaving the
+//     bottom rows showing as broken images. Lift to 600/min so a buyer
+//     viewing a 200-photo event can fully load it (with retina + scroll
+//     follow-ups) without a single rate-limit miss, while still blocking
+//     scrape-the-whole-bucket attempts (an attacker would max out around
+//     ~33,000 images/hour at this rate vs. 7,200 before — but most of
+//     those URLs 302 to R2 anyway, so the proxy isn't the bandwidth
+//     bottleneck for an attacker either way).
 Route::get('/drive/{eventId}', [DriveController::class, 'listPhotos'])->name('api.drive.list')->middleware('throttle:30,1');
-Route::get('/drive/image/{fileId}', [DriveController::class, 'proxyImage'])->name('api.drive.image')->middleware('throttle:120,1');
+Route::get('/drive/image/{fileId}', [DriveController::class, 'proxyImage'])->name('api.drive.image')->middleware('throttle:600,1');
 
 // Payment Webhooks (no CSRF, verified by signature)
 Route::prefix('webhooks')->group(function () {

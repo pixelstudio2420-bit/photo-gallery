@@ -141,23 +141,59 @@ class DriveController extends Controller
                     : ($photo->watermarked_url ?: $photo->thumbnail_url);
 
                 if (!empty($url)) {
-                    return redirect()->away($url, 302);
+                    // Aggressive cache so a packed gallery scrolls
+                    // smoothly and a re-visit hits the browser cache.
+                    //   max-age   = 1 day in browser
+                    //   s-maxage  = 7 days at the CDN edge — the
+                    //               variant URL itself never changes
+                    //               for an event_photo row, so the CDN
+                    //               can serve it for as long as we let
+                    //               it (admin reprocessing creates a
+                    //               new path, breaking the cache key).
+                    //   immutable = tells the browser not to revalidate
+                    //               on F5; saves a 304 round-trip.
+                    return redirect()->away($url, 302)->header(
+                        'Cache-Control',
+                        'public, max-age=86400, s-maxage=604800, immutable'
+                    );
                 }
 
                 // Variant truly missing — admin needs to reprocess this
                 // photo (queue ReprocessPhotosCommand). Return a 1x1
                 // transparent GIF so the gallery doesn't render a
-                // broken-image icon, and log once per request.
-                Log::warning('proxyImage: no baked variant available', [
-                    'photo_id'         => $photo->id,
-                    'event_id'         => $photo->event_id,
-                    'thumbnail_path'   => $photo->thumbnail_path,
-                    'watermarked_path' => $photo->watermarked_path,
-                    'requested_size'   => $size,
-                ]);
+                // broken-image icon. Auto-dispatch a debounced reprocess
+                // job so the variant gets baked the next time the queue
+                // worker spins up — no admin intervention needed.
+                $debounceKey = "reprocess_dispatched_photo_{$photo->id}";
+                if (!\Illuminate\Support\Facades\Cache::has($debounceKey)) {
+                    \Illuminate\Support\Facades\Cache::put($debounceKey, 1, 600); // 10 min debounce
+                    Log::warning('proxyImage: no baked variant — auto-queueing reprocess', [
+                        'photo_id'         => $photo->id,
+                        'event_id'         => $photo->event_id,
+                        'thumbnail_path'   => $photo->thumbnail_path,
+                        'watermarked_path' => $photo->watermarked_path,
+                        'requested_size'   => $size,
+                    ]);
+                    try {
+                        // Use the photographer-side AI reprocess job if
+                        // available (it knows how to bake all 3 variants).
+                        // Defensive: wrap in class_exists in case the
+                        // job moves namespaces in a future refactor.
+                        if (class_exists(\App\Jobs\ProcessUploadedPhotoJob::class)) {
+                            \App\Jobs\ProcessUploadedPhotoJob::dispatch($photo->id)
+                                ->onQueue('default');
+                        }
+                    } catch (\Throwable $e) {
+                        // Swallow — admin can still run the reprocess
+                        // command manually; we don't want a queue
+                        // misconfiguration to block the gallery render.
+                    }
+                }
                 return response(base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'), 200, [
                     'Content-Type'  => 'image/gif',
-                    'Cache-Control' => 'public, max-age=300',
+                    // Short cache for placeholder so the real image
+                    // appears soon after reprocess completes.
+                    'Cache-Control' => 'public, max-age=120',
                     'X-Source'      => 'placeholder-missing-variant',
                 ]);
             }

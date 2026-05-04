@@ -12,6 +12,22 @@
 @endsection
 
 @push('styles')
+{{-- Preconnect / DNS-prefetch hints — let the browser open TLS sockets
+     to the image CDNs while it's still parsing this HTML. Saves the
+     ~200ms TLS handshake on the first thumbnail request, which means
+     the gallery's eager batch starts streaming bytes ~one full RTT
+     earlier. The R2 host comes from app_settings (set by admin); we
+     hard-code the Google ones because they're always the same. --}}
+@php
+  $r2Host = parse_url((string) (\App\Models\AppSetting::get('r2_custom_domain', '') ?: \App\Models\AppSetting::get('r2_public_url', '')), PHP_URL_HOST);
+@endphp
+@if(!empty($r2Host))
+  <link rel="preconnect" href="https://{{ $r2Host }}" crossorigin>
+  <link rel="dns-prefetch" href="https://{{ $r2Host }}">
+@endif
+<link rel="preconnect" href="https://lh3.googleusercontent.com" crossorigin>
+<link rel="dns-prefetch" href="https://drive.google.com">
+
 <style>
 /* === Only CSS that Tailwind cannot handle === */
 
@@ -1607,17 +1623,18 @@ const THUMB_SIZE_2X = Math.min(GALLERY_THUMB_SIZE * 2, 800);  // retina
 // a single token regardless of the attribute it lands in.
 const PLACEHOLDER_SVG = "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='1'%20height='1'%3E%3C/svg%3E";
 
-// Lazy observer with large rootMargin for early preload
+// Lazy observer with large rootMargin for early preload.
+// We render each <img> with a 1x1 placeholder + data-src attribute, then
+// swap to the real URL the moment the IO callback says the row is within
+// 800px of the viewport. data-srcset handling was removed in the same
+// commit that dropped 1x/2x srcset duplication — the proxy already
+// serves a retina-resolution variant when the device is retina.
 const lazyObserver = new IntersectionObserver((entries) => {
   for (const entry of entries) {
     if (entry.isIntersecting) {
       const img = entry.target.querySelector('img');
       if (img?.dataset.src) {
         img.src = img.dataset.src;
-        if (img.dataset.srcset) {
-          img.srcset = img.dataset.srcset;
-          img.removeAttribute('data-srcset');
-        }
         img.removeAttribute('data-src');
       }
       lazyObserver.unobserve(entry.target);
@@ -1656,12 +1673,20 @@ function renderGallery(photos) {
     const fragment = document.createDocumentFragment();
     const end = Math.min(rendered + BATCH, photos.length);
 
+    // Pick a single thumbnail URL based on the device pixel ratio.
+    // Previously the gallery emitted `srcset="${1x} 1x, ${2x} 2x"` so the
+    // browser pre-resolved BOTH URLs even though it only used one — that
+    // doubled the request count for retina users and was the proximate
+    // cause of the proxy throttle (120/min) kicking in mid-grid and
+    // dropping the bottom rows. Picking one URL per device upfront cuts
+    // the request count in half with zero visible quality difference.
+    const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+    const useRetina = dpr > 1.4;
+
     for (let idx = rendered; idx < end; idx++) {
       const photo   = photos[idx];
       const name    = photo.name ?? photo.file_name ?? `Photo ${idx + 1}`;
-      const thumb1x = getThumbUrl(photo, THUMB_SIZE);
-      const thumb2x = getThumbUrl(photo, THUMB_SIZE_2X);
-      const srcset  = `${thumb1x} 1x, ${thumb2x} 2x`;
+      const thumb1x = getThumbUrl(photo, useRetina ? THUMB_SIZE_2X : THUMB_SIZE);
       const isEager = idx < EAGER_COUNT;
       const isHighPrio = idx < HIGH_PRIORITY_COUNT;
 
@@ -1674,9 +1699,13 @@ function renderGallery(photos) {
       // render. The square grid cell is enforced by `aspect-square`, but
       // explicit dimensions also let the browser calculate the intrinsic size.
       const dims = `width="${THUMB_SIZE}" height="${THUMB_SIZE}"`;
+      // Single src per <img> — no srcset attribute. Halves request count
+      // vs. the previous 1x+2x duplicate, and removes the "Failed parsing
+      // srcset" warning that fired when the URL contained spaces (data
+      // URLs, Drive thumbnailLinks with embedded params, etc.).
       const imgAttrs = isEager
-        ? `src="${thumb1x}" srcset="${srcset}"`
-        : `src="${PLACEHOLDER_SVG}" data-src="${thumb1x}" data-srcset="${srcset}"`;
+        ? `src="${thumb1x}"`
+        : `src="${PLACEHOLDER_SVG}" data-src="${thumb1x}"`;
       const priorityAttr = isHighPrio ? ' fetchpriority="high"' : '';
 
       item.innerHTML =
