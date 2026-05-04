@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Announcement;
 use App\Models\Event;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -112,7 +113,14 @@ class GeoEventBroadcastService
                     : 'จองสิทธิ์ก่อนใคร — เพิ่งเปิดให้ลงทะเบียน',
                 'body'   => "**{$event->name}**\n\nช่างภาพในจังหวัดของคุณเพิ่งเปิดอีเวนต์ใหม่ — สแกนหน้าอีเวนต์เพื่อดูรายละเอียดและจองที่นั่งก่อนใคร",
                 'cover_image_path'      => $event->cover_image,
-                'audience'              => 'public',
+                // BUG FIX 2026-05-04: was 'public' which is not in
+                // Announcement::AUDIENCE_* constants — the model's
+                // visibleTo() scope filters audience IN ('customer','all')
+                // so 'public' rows were invisible to /announcements
+                // (customer feed) AND to /photographer/announcements.
+                // Use 'customer' since geo broadcasts are marketing
+                // events targeted at end-customers, not photographers.
+                'audience'              => Announcement::AUDIENCE_CUSTOMER,
                 'priority'              => 'normal',
                 'cta_label'             => 'ดูอีเวนต์',
                 'cta_url'               => $eventUrl,
