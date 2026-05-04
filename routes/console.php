@@ -531,3 +531,34 @@ Schedule::call(function () {
     ->name('slip-reverify-sweeper')
     ->withoutOverlapping();
 
+
+// ────────────────────────────────────────────────────────────────────
+//  Photographer promotion expiry sweeper
+//  ─────────────────────────────────────
+//  Flips photographer_promotions rows from 'active' → 'expired' once
+//  ends_at has passed. Without this sweeper the rows stayed 'active'
+//  in the DB indefinitely (the runtime boost calculation already
+//  filters by ends_at >= now() so the actual ranking math was correct,
+//  but admin reports + status pages over-count "active promotions"
+//  and the row's lifecycle never closes).
+//
+//  Cadence: hourly at :15 — fine-grained enough that an expired
+//  daily-boost shows as 'expired' within an hour of its actual end,
+//  cheap (1 UPDATE statement) so hourly is fine.
+// ────────────────────────────────────────────────────────────────────
+Schedule::call(function () {
+    try {
+        $count = app(\App\Services\Monetization\PromotionService::class)->markExpired();
+        if ($count > 0) {
+            \Illuminate\Support\Facades\Log::info('promotions:expired', ['rows_updated' => $count]);
+        }
+    } catch (\Throwable $e) {
+        \Illuminate\Support\Facades\Log::warning('promotion-expire-sweeper failed', [
+            'error' => $e->getMessage(),
+        ]);
+    }
+})
+    ->hourlyAt(15)
+    ->name('promotion-expire-sweeper')
+    ->withoutOverlapping();
+

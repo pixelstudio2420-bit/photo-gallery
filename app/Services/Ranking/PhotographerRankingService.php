@@ -34,7 +34,25 @@ class PhotographerRankingService
     private const CACHE_TTL = 60;
 
     /**
-     * @return array<int, float>  photographer_id ⇒ boost score
+     * Per-photographer boost cap. Mirrors PromotionService::BOOST_CAP so
+     * the ranking layer and the boost-score-for-one-photographer helper
+     * can never disagree on the maximum effective boost.
+     *
+     * Without this cap, a photographer who buys 5 active boosts
+     * simultaneously gets boost_score 5×15 = 75 — which:
+     *   • lets paid placement completely overwhelm organic ranking
+     *     (the original product principle was "boost amplifies, doesn't
+     *     replace, organic merit")
+     *   • diverges from PromotionService::boostScoreFor() which DID
+     *     correctly cap at 30, creating two different boost numbers
+     *     for the same photographer depending on which call site
+     *     consumed them — directly contradicting the design contract
+     *     in PromotionService class doc.
+     */
+    public const BOOST_CAP = 30.0;
+
+    /**
+     * @return array<int, float>  photographer_id ⇒ boost score (capped)
      */
     public function boostMap(): array
     {
@@ -53,7 +71,10 @@ class PhotographerRankingService
                     ->groupBy('photographer_id')
                     ->pluck('total_boost', 'photographer_id')
                     ->all();
-                return array_map(fn ($v) => (float) $v, $rows);
+                // Apply the per-photographer cap in PHP. Doing it here (vs
+                // a LEAST() in SQL) keeps the query portable across pgsql
+                // / mysql / sqlite — LEAST has subtle behavioural diffs.
+                return array_map(fn ($v) => min((float) $v, self::BOOST_CAP), $rows);
             });
         } catch (\Throwable) {
             return [];
@@ -114,12 +135,23 @@ class PhotographerRankingService
         // We use a left join so non-boosted photographers get NULL → 0.
         // SQLite doesn't have NOW() — use CURRENT_TIMESTAMP which is
         // portable across Postgres/MySQL/SQLite.
-        $sub = '(SELECT photographer_id, COALESCE(SUM(boost_score), 0) AS total_boost
+        //
+        // CASE WHEN sum > cap THEN cap ELSE sum END applies BOOST_CAP at
+        // the SQL layer so the DB-driven sort path (this method) agrees
+        // with the in-memory boostMap() path on the maximum boost score.
+        // Using CASE instead of LEAST() because LEAST has different
+        // behaviour with NULLs across pgsql/mysql.
+        $cap = (int) self::BOOST_CAP;
+        $sub = "(SELECT photographer_id,
+                        CASE WHEN COALESCE(SUM(boost_score), 0) > {$cap}
+                             THEN {$cap}
+                             ELSE COALESCE(SUM(boost_score), 0)
+                        END AS total_boost
                    FROM photographer_promotions
-                  WHERE status = \'active\'
+                  WHERE status = 'active'
                     AND (starts_at IS NULL OR starts_at <= CURRENT_TIMESTAMP)
                     AND (ends_at   IS NULL OR ends_at   >= CURRENT_TIMESTAMP)
-                  GROUP BY photographer_id) AS rb';
+                  GROUP BY photographer_id) AS rb";
 
         $q->leftJoin(DB::raw($sub), 'rb.photographer_id', '=', DB::raw($idColumn));
 
