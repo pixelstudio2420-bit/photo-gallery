@@ -115,6 +115,7 @@ class PaymentController extends Controller
             'order_id'       => 'required|integer|exists:orders,id',
             'payment_method' => 'required|string',
             'omise_token'    => 'nullable|string|max:120',
+            'save_card'      => 'nullable|in:0,1',
         ]);
 
         $order = Order::where('id', $request->order_id)
@@ -143,11 +144,20 @@ class PaymentController extends Controller
         // Payment method is tracked via payment_transactions.payment_gateway, not on orders table
 
         // Route to gateway. For Omise we forward the client-side token
-        // captured by Omise.js so the gateway can charge the card AND
-        // (for subscription orders) save a Customer for future renewals.
+        // captured by Omise.js. For SUBSCRIPTION orders the buyer also
+        // chooses (via the "save card for auto-renewal" checkbox)
+        // whether to bind their card to a recurring schedule —
+        // unchecked means a one-shot charge, no Omise customer is
+        // created, and the period-end safety net handles expiry just
+        // like PromptPay/bank-transfer manual-renewal users.
         $extras = [];
         if ($methodType === 'omise' && $request->filled('omise_token')) {
             $extras['omise_token'] = $request->input('omise_token');
+            // Default OFF — only opt INTO auto-renew when checkbox is
+            // explicitly set. Non-subscription orders never see the
+            // checkbox so save_card is always missing for them and
+            // PaymentService skips the customer-creation branch.
+            $extras['save_card'] = $request->input('save_card') === '1';
         }
 
         try {

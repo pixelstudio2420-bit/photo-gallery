@@ -107,20 +107,21 @@
               {{-- Omise inline card form — shown only when "omise" is the
                    selected method AND a public key is configured. Captured
                    token is placed into #omiseTokenInput on form submit by
-                   the JS handler at the bottom of this page. For
-                   subscription orders the backend creates an Omise
-                   Customer with this token first so future renewals can
-                   charge the saved card automatically (Phase B billing). --}}
+                   the JS handler at the bottom of this page.
+
+                   For subscription orders, an opt-in checkbox below the
+                   form lets the buyer decide whether to save the card
+                   for auto-renewal (default ON) or pay one-time and let
+                   the subscription expire at period_end (must re-subscribe
+                   manually next period). Without the checkbox, every
+                   Omise subscription payment would silently turn into a
+                   recurring charge — which conflicts with users who
+                   want simple month-by-month purchases. --}}
               @if(!empty($omisePublicKey))
                 <div id="section-omise" style="display:none;" class="mt-5 p-5 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900/30">
                   <div class="flex items-center gap-2 mb-4 text-sm font-semibold text-slate-700 dark:text-slate-200">
                     <i class="bi bi-credit-card text-indigo-500"></i>
                     ข้อมูลบัตรเครดิต/เดบิต
-                    @if($isSubscriptionOrder)
-                      <span class="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 font-medium">
-                        บันทึกบัตรเพื่อต่ออายุอัตโนมัติ
-                      </span>
-                    @endif
                   </div>
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div class="md:col-span-2">
@@ -154,6 +155,35 @@
                     </div>
                   </div>
                   <div id="omiseError" class="hidden mt-3 p-3 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-300 text-xs"></div>
+
+                  @if($isSubscriptionOrder)
+                    {{-- Save-card opt-in. Default: ON — most users prefer
+                         "set and forget" auto-renew. Unchecking is a
+                         deliberate "month-by-month, no auto-charge" choice.
+                         Backend reads `save_card=1` from the form; missing
+                         or `0` skips Omise customer creation and the
+                         renewal cron skips the sub for lack of an
+                         omise_customer_id, so the period-end safety net
+                         (subscriptions:expire-overdue) takes over. --}}
+                    <label class="mt-4 flex items-start gap-3 p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 cursor-pointer hover:border-indigo-300 transition">
+                      <input type="checkbox" name="save_card" id="saveCardCheckbox" value="1" checked
+                             class="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-2 focus:ring-indigo-500 cursor-pointer">
+                      <div class="flex-1 text-xs">
+                        <div class="font-semibold text-slate-900 dark:text-white text-sm mb-0.5 flex items-center gap-1.5">
+                          <i class="bi bi-arrow-repeat text-indigo-500"></i>
+                          บันทึกบัตรเพื่อต่ออายุอัตโนมัติ
+                        </div>
+                        <div class="text-slate-500 dark:text-slate-400 leading-relaxed">
+                          ระบบจะเก็บข้อมูลบัตรไว้ที่ Omise (ไม่ใช่ที่เซิร์ฟเวอร์เรา) และตัดยอดเองในเดือนถัดไป
+                          <span class="block mt-1 text-amber-700 dark:text-amber-400">
+                            <i class="bi bi-info-circle"></i>
+                            ไม่ติ๊ก = จ่ายเดือนเดียว ไม่ผูกบัตร ครบเดือนถ้าจะใช้ต่อต้องสมัครใหม่เอง
+                          </span>
+                        </div>
+                      </div>
+                    </label>
+                  @endif
+
                   <div class="mt-3 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
                     <i class="bi bi-shield-lock-fill text-emerald-500"></i>
                     ข้อมูลบัตรของคุณถูกส่งตรงไปที่ Omise — ไม่ผ่านเซิร์ฟเวอร์เรา

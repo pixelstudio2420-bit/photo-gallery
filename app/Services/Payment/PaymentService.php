@@ -130,20 +130,34 @@ class PaymentService
 
         // Omise card-on-file path for subscription orders:
         // When Omise.js gave us a card token AND this is a subscription
-        // order (recurring billing target), create an Omise Customer
-        // FIRST so the card is retained on Omise's side for the
+        // order AND the buyer opted INTO auto-renewal (save_card=true,
+        // controlled by the "บันทึกบัตรเพื่อต่ออายุอัตโนมัติ" checkbox
+        // on the checkout page), create an Omise Customer FIRST so the
+        // card is retained on Omise's side for the
         // `subscriptions:charge-pending` cron to use on subsequent
         // periods. The created customer's id is saved on the
         // PhotographerSubscription / UserStorageSubscription row.
-        // Subsequent charges go through the customer (default card),
-        // which means tokens are consumed once but cards live forever.
+        //
+        // When the buyer UNCHECKED the box (save_card=false), we treat
+        // the payment as a one-time charge: no customer is created,
+        // the token is consumed by the single charge, and the next
+        // period's renewal cron skips this sub (no omise_customer_id),
+        // letting the period-end safety net expire it normally. This
+        // matches the manual-renewal experience offered by PromptPay
+        // and bank transfer for buyers who explicitly want
+        // month-by-month / one-shot purchases without binding a card.
         $omiseToken = $extras['omise_token'] ?? null;
+        $saveCard   = (bool) ($extras['save_card'] ?? false);
         $useCustomerForCharge = false;
         $customerId = null;
 
+        $isSubscriptionOrder = $order->isSubscriptionOrder()
+            || $order->order_type === Order::TYPE_USER_STORAGE_SUBSCRIPTION;
+
         if ($methodType === 'omise'
             && !empty($omiseToken)
-            && ($order->isSubscriptionOrder() || $order->order_type === Order::TYPE_USER_STORAGE_SUBSCRIPTION)
+            && $isSubscriptionOrder
+            && $saveCard
         ) {
             try {
                 $customerId = self::ensureOmiseCustomerForSubscriptionOrder($order, $omiseToken);
