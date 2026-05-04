@@ -349,8 +349,13 @@
                    /api/cart/face-bundle/* endpoints require auth). For
                    anonymous browsers, the same button takes them to login
                    first with an `intended` URL back to this event page. --}}
+              {{-- Same fallback pattern as _face_search_hero: prefer the
+                   bundle modal (renders only when an active face_match
+                   bundle exists), otherwise navigate to the standalone
+                   face-search page so the button is never a silent no-op. --}}
               @auth
-                <button type="button" onclick="document.getElementById('face-bundle-modal')?.showModal();"
+                <button type="button"
+                        onclick="(function(){var m=document.getElementById('face-bundle-modal');if(m&&typeof m.showModal==='function'){m.showModal();}else{window.location='{{ route('events.face-search', $event->id) }}';}})();"
                         class="w-full py-2 rounded-xl text-xs md:text-sm font-semibold transition
                                bg-gradient-to-br from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white">
                   <i class="bi bi-search mr-1"></i> ค้นหารูปของฉัน

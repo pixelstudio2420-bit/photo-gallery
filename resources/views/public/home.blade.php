@@ -66,7 +66,16 @@
           <a href="{{ route('events.index') }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-white bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40 hover:-translate-y-0.5 transition-all duration-200">
             <i class="bi bi-grid-3x3-gap-fill"></i> ดูอีเวนต์ทั้งหมด
           </a>
-          <a href="{{ route('events.index') }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold border-2 border-indigo-500/80 dark:border-indigo-300/50 text-indigo-600 dark:text-indigo-200 bg-white/70 dark:bg-white/5 backdrop-blur-sm hover:bg-indigo-50 dark:hover:bg-white/10 hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200">
+          {{-- Face Search button — Face Search runs PER EVENT (route
+               needs an event_id), so this CTA can't go straight to a
+               search form. Instead it lands the buyer on the events
+               index with `?action=face-search`, which renders an
+               instructional banner (see events/index.blade.php) telling
+               them "เลือกอีเวนต์ของคุณ" and what to do next. Previously
+               this href was identical to the "ดูอีเวนต์ทั้งหมด" button
+               next to it — the buyer had no way to know it was the
+               face-search entry-point. --}}
+          <a href="{{ route('events.index') }}?action=face-search" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold border-2 border-indigo-500/80 dark:border-indigo-300/50 text-indigo-600 dark:text-indigo-200 bg-white/70 dark:bg-white/5 backdrop-blur-sm hover:bg-indigo-50 dark:hover:bg-white/10 hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200">
             <i class="bi bi-person-bounding-box"></i> ค้นหาด้วยใบหน้า
           </a>
         </div>

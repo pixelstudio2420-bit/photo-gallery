@@ -79,6 +79,41 @@
 
 @section('content')
 
+{{-- Face Search instructional banner — shown when buyer arrived from
+     the home "ค้นหาด้วยใบหน้า" CTA (which can't link straight to a
+     face-search page because the route needs an event_id). The banner
+     tells them what to do next: pick an event, then use Face Search
+     inside it. Only renders for ?action=face-search to avoid noise on
+     the regular events listing flow. --}}
+@if(request('action') === 'face-search')
+<div class="mt-6">
+  <div class="relative overflow-hidden rounded-2xl border border-amber-300/40 dark:border-amber-400/30
+              bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50
+              dark:from-amber-950/30 dark:via-orange-950/30 dark:to-rose-950/30
+              p-5 sm:p-6 shadow-sm">
+    <div class="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-amber-300/20 blur-3xl pointer-events-none"></div>
+    <div class="absolute -left-8 -bottom-8 w-40 h-40 rounded-full bg-rose-300/20 blur-3xl pointer-events-none"></div>
+    <div class="relative flex flex-col sm:flex-row items-start sm:items-center gap-4">
+      <div class="shrink-0 w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/30">
+        <i class="bi bi-person-bounding-box text-2xl text-white"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <h3 class="font-bold text-base sm:text-lg text-amber-900 dark:text-amber-100 leading-tight">
+          ค้นหารูปด้วยใบหน้า — เลือกอีเวนต์ของคุณก่อน
+        </h3>
+        <p class="mt-1 text-sm text-amber-800/90 dark:text-amber-200/80 leading-relaxed">
+          กดเข้าไปในอีเวนต์ที่คุณเข้าร่วม → ภายในหน้าอีเวนต์จะมีปุ่ม
+          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-200/60 dark:bg-amber-500/20 text-amber-900 dark:text-amber-200 font-semibold text-xs">
+            <i class="bi bi-search"></i> ค้นหารูปของฉัน
+          </span>
+          อัปโหลดเซลฟี่ของคุณ ระบบ AI จะหารูปคุณจากทุกภาพในอีเวนต์ให้
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+@endif
+
 {{-- Sponsored search-page ad — only renders when an active ad_creative
      with placement='search_inline' exists. Sits between the hero and
      the filter chips so it's above-the-fold but doesn't push results down. --}}
