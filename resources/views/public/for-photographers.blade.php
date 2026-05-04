@@ -327,60 +327,96 @@
     </div>
 
     @if($plans->count() > 0)
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+    {{-- Card grid — auto-fits 1/2/3 columns up to 3 plans wide.
+         The previous `xl:grid-cols-6` layout was sized for 5 public plans
+         + 1 spare slot; after the 2026-05-04 migration to 3 tiers it left
+         visible empty space on wide screens. Capping at lg:grid-cols-3
+         with a max-w-5xl container keeps the cards big and centred no
+         matter how many active plans the DB returns (1, 2, or 3). --}}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6 max-w-5xl mx-auto items-stretch"
+         :class="{ 'md:grid-cols-1 max-w-md': false }">
       @foreach($plans as $plan)
         @php
           $isFeatured = !empty($plan->badge);
           $features   = is_array($plan->features_json) ? $plan->features_json : (json_decode((string) $plan->features_json, true) ?: []);
-          $monthlyPriceText = (float) $plan->price_thb === 0.0 ? 'ฟรี' : '฿' . number_format($plan->price_thb, 0);
+          $isFree     = (float) $plan->price_thb === 0.0;
+          $monthlyPriceText = $isFree ? 'ฟรี' : '฿' . number_format($plan->price_thb, 0);
+          $annualPrice = (float) ($plan->price_annual_thb ?? 0);
+          $annualSavings = ($plan->price_thb > 0 && $annualPrice > 0)
+              ? max(0, (int) round((1 - $annualPrice / ($plan->price_thb * 12)) * 100))
+              : 0;
         @endphp
-        <div class="fp-card relative rounded-2xl p-5 flex flex-col {{ $isFeatured ? 'bg-gradient-to-br from-indigo-600 to-violet-600 text-white border-2 border-indigo-400 shadow-2xl shadow-indigo-500/30 lg:scale-105 lg:z-10' : 'bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 shadow-lg' }}">
+        <div class="fp-card relative rounded-3xl p-7 sm:p-8 flex flex-col {{ $isFeatured
+            ? 'bg-gradient-to-br from-indigo-600 to-violet-600 text-white border-2 border-indigo-400 shadow-2xl shadow-indigo-500/30 lg:scale-[1.04] lg:z-10'
+            : 'bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all' }}">
 
           @if($isFeatured)
-          <span class="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-400 text-amber-900 shadow-md">
+          <span class="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 px-3.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide bg-amber-400 text-amber-900 shadow-md whitespace-nowrap">
             <i class="bi bi-star-fill"></i> {{ $plan->badge }}
           </span>
           @endif
 
-          <h3 class="font-bold text-base {{ $isFeatured ? 'text-white' : 'text-slate-900 dark:text-white' }}">
+          {{-- Plan name + tagline --}}
+          <h3 class="font-bold text-xl mt-{{ $isFeatured ? '2' : '0' }} {{ $isFeatured ? 'text-white' : 'text-slate-900 dark:text-white' }}">
             {{ $plan->name }}
           </h3>
           @if($plan->tagline)
-          <p class="text-xs mt-1 mb-3 {{ $isFeatured ? 'text-indigo-100' : 'text-slate-500 dark:text-slate-400' }}">
+          <p class="text-sm mt-1.5 mb-5 min-h-[40px] leading-snug {{ $isFeatured ? 'text-indigo-100' : 'text-slate-500 dark:text-slate-400' }}">
             {{ $plan->tagline }}
           </p>
+          @else
+          <div class="mb-5 min-h-[40px]"></div>
           @endif
 
-          <div class="mt-3 mb-4">
-            <span class="text-3xl font-extrabold {{ $isFeatured ? 'text-white' : 'text-slate-900 dark:text-white' }}">
-              {{ $monthlyPriceText }}
-            </span>
-            @if((float) $plan->price_thb > 0)
-            <span class="text-xs {{ $isFeatured ? 'text-indigo-100' : 'text-slate-500 dark:text-slate-400' }}">/ เดือน</span>
+          {{-- Price block --}}
+          <div class="mb-1">
+            <div class="flex items-baseline gap-1.5">
+              <span class="text-5xl font-extrabold {{ $isFeatured ? 'text-white' : 'text-slate-900 dark:text-white' }}">
+                {{ $monthlyPriceText }}
+              </span>
+              @if(!$isFree)
+              <span class="text-sm {{ $isFeatured ? 'text-indigo-100' : 'text-slate-500 dark:text-slate-400' }}">/ เดือน</span>
+              @endif
+            </div>
+            @if($isFree)
+              <p class="text-xs mt-1 {{ $isFeatured ? 'text-indigo-100' : 'text-slate-500 dark:text-slate-400' }}">ตลอดชีพ · ไม่ใช้บัตรเครดิต</p>
+            @elseif($annualSavings > 0)
+              <p class="text-xs mt-1 {{ $isFeatured ? 'text-amber-200 font-semibold' : 'text-emerald-600 dark:text-emerald-400 font-semibold' }}">
+                💰 รายปี ฿{{ number_format($annualPrice, 0) }} (ประหยัด {{ $annualSavings }}%)
+              </p>
             @endif
           </div>
 
-          <ul class="space-y-1.5 text-xs {{ $isFeatured ? 'text-indigo-50' : 'text-slate-600 dark:text-slate-400' }} mb-5 flex-1">
-            @foreach(array_slice($features, 0, 6) as $feat)
-              <li class="flex items-start gap-1.5">
-                <i class="bi bi-check2 {{ $isFeatured ? 'text-emerald-300' : 'text-emerald-500' }} mt-0.5 flex-shrink-0"></i>
-                <span>{{ $feat }}</span>
+          {{-- Commission badge — front + center, biggest selling point per tier --}}
+          @php $commPct = (float) $plan->commission_pct; @endphp
+          <div class="my-5 px-3 py-2 rounded-xl text-sm flex items-center gap-2 {{ $isFeatured
+              ? 'bg-white/15 border border-white/25 text-white'
+              : ($commPct > 0 ? 'bg-amber-50 dark:bg-amber-500/10 border border-amber-200/70 dark:border-amber-400/20 text-amber-800 dark:text-amber-300' : 'bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/70 dark:border-emerald-400/20 text-emerald-800 dark:text-emerald-300') }}">
+            <i class="bi {{ $commPct > 0 ? 'bi-percent' : 'bi-check-circle-fill' }} shrink-0"></i>
+            <span>commission <strong>{{ $commPct > 0 ? rtrim(rtrim(number_format($commPct, 2), '0'), '.') . '%' : '0% — ได้เต็มทุกบาท' }}</strong></span>
+          </div>
+
+          {{-- Features list — show all 8, more breathing room with 3-card layout --}}
+          <ul class="space-y-2 text-sm mb-7 flex-1 {{ $isFeatured ? 'text-indigo-50' : 'text-slate-600 dark:text-slate-300' }}">
+            @foreach(array_slice($features, 0, 8) as $feat)
+              <li class="flex items-start gap-2">
+                <i class="bi bi-check2 {{ $isFeatured ? 'text-emerald-300' : 'text-emerald-500' }} mt-0.5 shrink-0 text-base"></i>
+                <span class="leading-snug">{{ $feat }}</span>
               </li>
             @endforeach
-            @if(count($features) > 6)
-              <li class="text-[11px] {{ $isFeatured ? 'text-indigo-200' : 'text-slate-400 dark:text-slate-500' }} pl-5">
-                + อีก {{ count($features) - 6 }} ฟีเจอร์
+            @if(count($features) > 8)
+              <li class="text-xs pl-6 {{ $isFeatured ? 'text-indigo-200' : 'text-slate-400 dark:text-slate-500' }}">
+                + อีก {{ count($features) - 8 }} ฟีเจอร์
               </li>
             @endif
           </ul>
 
+          {{-- CTA --}}
           <a href="{{ route('photographer-onboarding.quick') }}?plan={{ $plan->code }}"
-             class="inline-flex items-center justify-center gap-1.5 w-full px-4 py-2.5 rounded-xl font-semibold text-sm transition {{ $isFeatured ? 'bg-white text-indigo-700 hover:bg-indigo-50 shadow-lg' : 'bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400' }}">
-            @if((float) $plan->price_thb === 0.0)
-              เริ่มฟรี
-            @else
-              เลือกแพ็กเกจนี้
-            @endif
+             class="inline-flex items-center justify-center gap-1.5 w-full px-5 py-3 rounded-xl font-bold text-sm transition-all {{ $isFeatured
+                ? 'bg-white text-indigo-700 hover:bg-indigo-50 shadow-lg hover:-translate-y-0.5'
+                : 'bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 hover:-translate-y-0.5 hover:shadow-lg' }}">
+            {{ $isFree ? 'เริ่มฟรีเลย' : 'เลือก ' . $plan->name }}
             <i class="bi bi-arrow-right"></i>
           </a>
         </div>
@@ -390,9 +426,15 @@
     <p class="text-center text-slate-500 dark:text-slate-400">กำลังโหลดข้อมูลแพ็กเกจ…</p>
     @endif
 
-    <p class="text-center mt-8 text-sm text-slate-500 dark:text-slate-400">
+    <p class="text-center mt-10 text-sm text-slate-500 dark:text-slate-400">
       ราคาทุกแพ็กเกจรวม VAT 7% แล้ว · ออก e-Tax invoice อัตโนมัติ · ยกเลิกได้ตลอดไม่มีค่าธรรมเนียม
     </p>
+    <div class="text-center mt-3">
+      <a href="{{ route('pricing') }}" class="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-200 transition">
+        ดูเปรียบเทียบทุก feature ละเอียดในหน้าราคา
+        <i class="bi bi-arrow-right"></i>
+      </a>
+    </div>
   </div>
 </section>
 
