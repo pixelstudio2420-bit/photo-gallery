@@ -8,23 +8,39 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Fires "your plan expires in N days" reminders to photographers.
+ * Fires "your plan expires/will-be-charged in N days" reminders to
+ * photographers, daily at 09:30 (waking hours so the photographer
+ * sees it the same morning, not pre-dawn).
  *
- * Runs daily at 09:30 (during waking hours so the photographer sees it
- * the same morning, not pre-dawn). Hits these milestones:
- *
- *   T-7 days  → soft reminder, "WARN" severity (email + LINE)
+ *   T-7 days  → soft reminder
  *   T-3 days  → escalated reminder
- *   T-1 day   → critical reminder, "CRITICAL" severity
+ *   T-1 day   → critical reminder
  *   Grace T-3 → final warning before downgrade to free
  *   Grace T-1 → last chance
  *
+ * Two separate user journeys, two different messages:
+ *
+ *  • Saved card on file (auto-renew armed)
+ *      Wording: "ระบบจะหัก ฿790 ในอีก N วัน — ไม่ต้องดำเนินการ"
+ *      Notifier: subscriptionAutoChargeReminder()
+ *      Severity: INFO at T-7/T-3, WARN at T-1
+ *
+ *  • No saved card (manual renewal needed)
+ *      Wording: "แผนจะหมดอายุในอีก N วัน — กรุณาต่ออายุ"
+ *      Notifier: subscriptionExpiringSoon()
+ *      Severity: WARN at T-7/T-3, CRITICAL at T-1
+ *
+ * The branch decision is `photographer_subscriptions.omise_customer_id`.
+ * Without this split, auto-renew users got the scary "your plan will
+ * expire if you don't act" copy even though the cron was about to
+ * charge them automatically — confusing UX that ate at credibility.
+ *
  * Idempotency
  * ───────────
- * The notifier's UserNotification::notifyOnce(refId='sub.{id}.expiring.7d')
+ * The notifier's UserNotification::notifyOnce(refId='sub.{id}.{kind}.Nd')
  * stops dupes — running this command twice on the same day is a no-op.
- * We deliberately scope refId by the days-left bucket so each milestone
- * fires exactly once per cycle.
+ * The two paths use distinct refIds (`expiring.Nd` vs `autocharge.Nd`)
+ * so a sub that toggled save-card mid-period could get both.
  *
  * Excludes
  *   • Free plans (nothing to expire)
@@ -57,11 +73,27 @@ class SubscriptionsNotifyExpiringCommand extends Command
                 // Exclude photographers on the seeded "free" default plan.
                 // Reminder makes no sense for ฿0 plans.
                 ->whereHas('plan', fn ($q) => $q->where('is_default_free', false))
+                // cancel_at_period_end users already chose to let the
+                // sub lapse — sending a "renew now / we'll charge"
+                // reminder would be misleading. Their downgrade
+                // notification fires from expireOverdue / expireGrace.
+                ->where(function ($q) {
+                    $q->whereNull('cancel_at_period_end')
+                      ->orWhere('cancel_at_period_end', false);
+                })
                 ->get();
 
             foreach ($subs as $sub) {
                 try {
-                    $notifier->subscriptionExpiringSoon($sub, $days);
+                    // Branch on saved-card-on-file: auto-renew users get
+                    // the courtesy "we'll charge ฿790 on May 5" copy;
+                    // manual-pay users get the existing "expiring soon —
+                    // please renew" warning.
+                    if (!empty($sub->omise_customer_id)) {
+                        $notifier->subscriptionAutoChargeReminder($sub, $days);
+                    } else {
+                        $notifier->subscriptionExpiringSoon($sub, $days);
+                    }
                     $totalFired++;
                 } catch (\Throwable $e) {
                     Log::warning('subscriptions:notify-expiring failed for sub', [

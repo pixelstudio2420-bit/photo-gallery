@@ -4,6 +4,7 @@ namespace App\Services\Notifications;
 
 use App\Models\PhotographerProfile;
 use App\Models\PhotographerSubscription;
+use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Models\UserNotification;
 use App\Services\LineNotifyService;
@@ -72,6 +73,42 @@ class PhotographerLifecycleNotifier
     public function subscriptionExpired(PhotographerSubscription $sub, ?string $previousPlanName = null): void
     {
         $this->dispatch($sub->photographer_id, $this->formatter->subscriptionExpired($sub, $previousPlanName));
+    }
+
+    /**
+     * Pre-charge reminder for buyers with auto-renew armed (saved Omise
+     * card-on-file). Distinct from `subscriptionExpiringSoon` which
+     * targets manual-pay buyers — see the formatter for the wording
+     * difference. Caller is `subscriptions:notify-expiring` cron, which
+     * branches on `omise_customer_id`.
+     */
+    public function subscriptionAutoChargeReminder(PhotographerSubscription $sub, int $daysLeft): void
+    {
+        $this->dispatch($sub->photographer_id, $this->formatter->subscriptionAutoChargeReminder($sub, $daysLeft));
+    }
+
+    /**
+     * Plan upgrade just took effect (prorated charge paid → new plan
+     * active). Fires from `activateFromPaidInvoice()` when the invoice
+     * meta flags it as a plan_change. The previous plan name comes
+     * from the invoice meta (we capture it BEFORE flipping the
+     * subscription's plan_id to the new one).
+     */
+    public function subscriptionPlanChanged(PhotographerSubscription $sub, ?string $previousPlanName = null): void
+    {
+        $this->dispatch($sub->photographer_id, $this->formatter->subscriptionPlanChanged($sub, $previousPlanName));
+    }
+
+    /**
+     * Plan downgrade was scheduled (no immediate charge — takes effect
+     * at period_end). Fires from `changePlan()` when the new plan is
+     * cheaper than the current plan or the user opted out of immediate
+     * proration. Reassures the photographer that they keep their
+     * paid-tier perks until the end of the current period.
+     */
+    public function subscriptionPlanDowngradeScheduled(PhotographerSubscription $sub, SubscriptionPlan $pendingPlan): void
+    {
+        $this->dispatch($sub->photographer_id, $this->formatter->subscriptionPlanDowngradeScheduled($sub, $pendingPlan));
     }
 
     public function subscriptionCancelled(PhotographerSubscription $sub): void

@@ -178,6 +178,165 @@ class LifecycleMessageFormatter
         );
     }
 
+    /* ───────────────── Auto-charge reminder (auto-renew armed) ─────────────────
+     *
+     * Different from `subscriptionExpiringSoon` — that one is for buyers
+     * with NO saved card who must manually renew. This one is for buyers
+     * who opted INTO card-on-file (Phase B+ "save_card" checkbox), and
+     * the message reflects that:
+     *   "We'll automatically charge ฿790 to your card on May 5"
+     * not the false-alarm "your plan is about to expire" copy. The
+     * `subscriptions:notify-expiring` cron picks the right branch by
+     * checking `photographer_subscriptions.omise_customer_id`. */
+
+    public function subscriptionAutoChargeReminder(PhotographerSubscription $sub, int $daysLeft): LifecycleMessage
+    {
+        $plan      = $sub->plan;
+        $planName  = $plan?->name ?? 'แผน';
+        $cycle     = $sub->meta['billing_cycle'] ?? 'monthly';
+        $price     = $cycle === 'annual' && $plan?->price_annual_thb
+            ? (float) $plan->price_annual_thb
+            : (float) ($plan?->price_thb ?? 0);
+        $priceStr  = $this->money($price);
+        $endAt     = $sub->current_period_end;
+
+        // Wording calibrated to feel "informational" not "alarming" — the
+        // user already armed auto-renew, so this is just a heads-up
+        // courtesy. Critical only on T-1 in case they want to update
+        // the card / cancel before charge fires.
+        $bullets = [
+            "ยอดที่จะหัก: {$priceStr}",
+            $endAt ? "วันที่หัก: {$endAt->format('d/m/Y')}" : '-',
+            "ช่องทาง: บัตรเครดิต/เดบิตที่บันทึกไว้",
+            $daysLeft === 1
+                ? '⚠ ถ้าไม่ต้องการต่ออายุ กรุณายกเลิกก่อนวันหัก'
+                : 'ไม่ต้องดำเนินการอะไร — ระบบจะหักให้อัตโนมัติ',
+        ];
+
+        $severity = $daysLeft === 1
+            ? LifecycleMessage::SEVERITY_WARN
+            : LifecycleMessage::SEVERITY_INFO;
+
+        $accent = $daysLeft === 1 ? '#f59e0b' : '#3b82f6';
+
+        return new LifecycleMessage(
+            kind:      LifecycleMessage::KIND_SUBSCRIPTION_EXPIRING,
+            severity:  $severity,
+            headline:  $daysLeft === 1
+                ? "💳 พรุ่งนี้ระบบจะหัก {$priceStr} จากบัตร"
+                : "💳 อีก {$daysLeft} วัน ระบบจะหัก {$priceStr} เพื่อต่ออายุ{$planName}",
+            shortBody: "ต่ออายุอัตโนมัติ {$priceStr} · "
+                     . ($endAt ? "วันที่ {$endAt->format('d/m/Y')}" : "อีก {$daysLeft} วัน"),
+            body:      "ระบบจะหักเงิน {$priceStr} จากบัตรที่คุณบันทึกไว้เพื่อต่ออายุ{$planName} "
+                     . "ในอีก {$daysLeft} วัน "
+                     . "บริการจะใช้งานต่อเนื่องโดยไม่ต้องดำเนินการใด ๆ "
+                     . ($daysLeft === 1
+                          ? 'หากไม่ต้องการต่ออายุ กรุณาเข้าไปยกเลิกก่อนวันที่ระบบจะหักเงิน'
+                          : 'หากต้องการเปลี่ยนวิธีชำระเงินหรือยกเลิก สามารถจัดการได้ที่หน้าแผนของคุณ'),
+            bullets:   $bullets,
+            cta:       ['label' => 'จัดการแผนของฉัน', 'url' => url('/photographer/subscription')],
+            subject:   $daysLeft === 1
+                ? "💳 พรุ่งนี้ระบบจะหัก {$priceStr} เพื่อต่ออายุ{$planName}"
+                : "💳 ระบบจะต่ออายุ{$planName}อัตโนมัติในอีก {$daysLeft} วัน",
+            flexBubble: $this->bubble(
+                $daysLeft === 1
+                    ? "💳 หักพรุ่งนี้"
+                    : "💳 อีก {$daysLeft} วัน",
+                $priceStr,
+                $bullets,
+                $accent,
+                'จัดการแผน',
+                url('/photographer/subscription'),
+            ),
+            // Distinct refId so it doesn't clash with the manual-renew
+            // expiring-soon message — same sub could in theory get both
+            // if the customer card is unbound mid-period.
+            refId:     "sub.{$sub->id}.autocharge.{$daysLeft}d",
+        );
+    }
+
+    /* ───────────────── Plan changed (upgrade just activated) ─────────────────
+     *
+     * Fires the moment a plan-change Order is paid (upgrade with prorated
+     * charge). Distinct from `subscriptionRenewed` which keeps the SAME
+     * plan — this one announces the new plan + its new perks. */
+
+    public function subscriptionPlanChanged(
+        PhotographerSubscription $sub,
+        ?string $previousPlanName = null
+    ): LifecycleMessage {
+        $plan         = $sub->plan;
+        $newPlanName  = $plan?->name ?? 'แผนใหม่';
+        $oldPlanName  = $previousPlanName ?? 'แผนเดิม';
+        $price        = $this->money((float) ($plan?->price_thb ?? 0));
+        $renewsAt     = $sub->current_period_end;
+
+        $bullets = [
+            "เปลี่ยนจาก: {$oldPlanName} → {$newPlanName}",
+            "ราคา: {$price}/" . $this->cycleLabel($sub->meta['billing_cycle'] ?? 'monthly'),
+            $renewsAt ? "ใช้ได้ถึง: {$renewsAt->format('d/m/Y')}" : '-',
+            "พื้นที่: " . $this->bytes((int) ($plan?->storage_bytes ?? 0)),
+            "AI Credits: " . number_format((int) ($plan?->monthly_ai_credits ?? 0)) . '/เดือน',
+        ];
+
+        return new LifecycleMessage(
+            kind:      LifecycleMessage::KIND_SUBSCRIPTION_CHANGED,
+            severity:  LifecycleMessage::SEVERITY_INFO,
+            headline:  "🚀 อัปเกรดเป็น{$newPlanName} เรียบร้อย",
+            shortBody: "{$oldPlanName} → {$newPlanName} · ใช้ฟีเจอร์ใหม่ได้เลย",
+            body:      "ขอบคุณที่อัปเกรดมาใช้{$newPlanName}! "
+                     . "ระบบเปิดใช้งานฟีเจอร์ใหม่ทั้งหมดให้แล้ว "
+                     . "พื้นที่จัดเก็บ commission rate และ AI credits ปรับให้ตามแผนใหม่ทันที",
+            bullets:   $bullets,
+            cta:       ['label' => 'ดูแผนของฉัน', 'url' => url('/photographer/subscription')],
+            subject:   "🚀 อัปเกรดเป็น{$newPlanName} แล้ว",
+            flexBubble: $this->bubble("🚀 อัปเกรดเป็น{$newPlanName}", $price, $bullets, '#8b5cf6',
+                                       'ดูแผนของฉัน', url('/photographer/subscription')),
+            refId:     "sub.{$sub->id}.plan_changed.{$plan?->id}",
+        );
+    }
+
+    /* ───────────────── Plan downgrade scheduled ─────────────────
+     *
+     * Fires the moment a downgrade is requested (no charge, deferred to
+     * period_end). Reassures the photographer that their existing perks
+     * stay until the end of the current paid period. */
+
+    public function subscriptionPlanDowngradeScheduled(
+        PhotographerSubscription $sub,
+        SubscriptionPlan $pendingPlan
+    ): LifecycleMessage {
+        $currentPlanName = $sub->plan?->name ?? 'แผนปัจจุบัน';
+        $newPlanName     = $pendingPlan->name ?? 'แผนใหม่';
+        $effectiveAt     = $sub->current_period_end;
+
+        $bullets = [
+            "เปลี่ยนจาก: {$currentPlanName} → {$newPlanName}",
+            $effectiveAt ? "มีผลวันที่: {$effectiveAt->format('d/m/Y')}" : 'ปลายรอบบิลปัจจุบัน',
+            "ก่อนถึงวันมีผล: ใช้{$currentPlanName}ตามปกติ",
+            "เปลี่ยนใจ: ยกเลิกการเปลี่ยนแผนได้ก่อนถึงวันมีผล",
+        ];
+
+        return new LifecycleMessage(
+            kind:      LifecycleMessage::KIND_SUBSCRIPTION_CHANGED,
+            severity:  LifecycleMessage::SEVERITY_INFO,
+            headline:  "📅 บันทึกการดาวน์เกรดเป็น{$newPlanName}",
+            shortBody: "{$currentPlanName} → {$newPlanName} · "
+                     . ($effectiveAt ? "เริ่ม {$effectiveAt->format('d/m/Y')}" : 'ปลายรอบบิล'),
+            body:      "ระบบบันทึกการดาวน์เกรดเป็น{$newPlanName}แล้ว "
+                     . "คุณยังใช้{$currentPlanName}ได้ตามปกติ"
+                     . ($effectiveAt ? "จนถึง {$effectiveAt->format('d/m/Y')} " : ' จนถึงปลายรอบบิลปัจจุบัน ')
+                     . "หลังจากนั้นบัญชีจะปรับเป็น{$newPlanName}โดยอัตโนมัติ "
+                     . "เพื่อไม่ให้เสียส่วนที่จ่ายไปแล้วในรอบนี้",
+            bullets:   $bullets,
+            cta:       ['label' => 'จัดการแผนของฉัน', 'url' => url('/photographer/subscription')],
+            subject:   "📅 ดาวน์เกรดเป็น{$newPlanName} · มีผล " . ($effectiveAt?->format('d/m/Y') ?? 'ปลายรอบบิล'),
+            flexBubble: $this->bubble("📅 ดาวน์เกรดถูกบันทึก", $newPlanName, $bullets, '#64748b',
+                                       'จัดการแผน', url('/photographer/subscription')),
+            refId:     "sub.{$sub->id}.downgrade_scheduled.{$pendingPlan->id}",
+        );
+    }
+
     /* ───────────────── Subscription expired (downgraded to free) ───────────────── */
 
     public function subscriptionExpired(PhotographerSubscription $sub, ?string $previousPlanName = null): LifecycleMessage

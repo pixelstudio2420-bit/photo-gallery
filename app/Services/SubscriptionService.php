@@ -418,6 +418,18 @@ class SubscriptionService
             // below wouldn't have set it).
             $isFirstActivation = is_null($sub->started_at);
 
+            // Capture the OLD plan name BEFORE we flip plan_id below, so
+            // the post-commit "you upgraded from X to Y" notifier wording
+            // has both names. Reading $sub->plan AFTER update() returns
+            // the new plan because Eloquent re-resolves the relation.
+            $previousPlanName = null;
+            if ($isPlanChange) {
+                $previousPlanName = $sub->plan?->name;
+                if (!$previousPlanName && !empty($invoice->meta['previous_plan_id'])) {
+                    $previousPlanName = SubscriptionPlan::find($invoice->meta['previous_plan_id'])?->name;
+                }
+            }
+
             if ($isPlanChange) {
                 $newPlanId = (int) ($invoice->meta['new_plan_id'] ?? 0);
                 $updates = ['status' => PhotographerSubscription::STATUS_ACTIVE];
@@ -454,9 +466,10 @@ class SubscriptionService
             try {
                 $notifier = app(\App\Services\Notifications\PhotographerLifecycleNotifier::class);
                 if ($isPlanChange) {
-                    // Plan-change uses the renewed wording — same shape,
-                    // photographer just paid for new plan.
-                    $notifier->subscriptionRenewed($fresh);
+                    // Plan-change announces the new plan + perks
+                    // explicitly. The previous plan name was captured
+                    // pre-update so the message can say "Pro → Studio".
+                    $notifier->subscriptionPlanChanged($fresh, $previousPlanName);
                 } elseif ($isFirstActivation) {
                     $notifier->subscriptionStarted($fresh);
                 } else {
@@ -829,7 +842,7 @@ class SubscriptionService
         SubscriptionPlan $newPlan,
         bool $prorateImmediately = true
     ): array {
-        return DB::transaction(function () use ($sub, $newPlan, $prorateImmediately) {
+        $result = DB::transaction(function () use ($sub, $newPlan, $prorateImmediately) {
             $sub->refresh();
             if ($sub->plan_id === $newPlan->id) {
                 return ['type' => 'noop', 'order' => null];
@@ -926,6 +939,26 @@ class SubscriptionService
 
             return ['type' => 'order', 'order' => $order];
         });
+
+        // ── Post-commit lifecycle notification ──
+        // Two paths: 'deferred' (downgrade or sub-20฿ proration) →
+        // photographer gets a "downgrade scheduled, you keep current plan
+        // till period_end" reassurance. 'order' (paid upgrade) → notification
+        // fires later from activateFromPaidInvoice via the webhook (so
+        // the message only goes out AFTER the user actually pays). 'noop'
+        // is silent (same plan as before).
+        if (($result['type'] ?? '') === 'deferred') {
+            try {
+                $notifier = app(\App\Services\Notifications\PhotographerLifecycleNotifier::class);
+                $notifier->subscriptionPlanDowngradeScheduled($sub->fresh('plan'), $newPlan);
+            } catch (\Throwable $e) {
+                Log::debug('SubscriptionService: downgrade-scheduled notify skipped', [
+                    'sub_id' => $sub->id, 'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $result;
     }
 
     /**
