@@ -405,7 +405,14 @@
         ลงทะเบียนช่างภาพในไม่ถึง 5 นาที — เริ่มฟรีตลอดชีพ ไม่ใช้บัตรเครดิต
       </p>
       <div class="flex flex-wrap items-center justify-center gap-3">
-        <a href="{{ route('photographer-onboarding.quick') }}" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold text-indigo-700 bg-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all">
+        {{-- Inline style on background dodges darkmode.css's
+             `[data-bs-theme="dark"] .bg-white` !important rule that
+             would otherwise re-tint this white button to slate-800
+             on dark mode (making the indigo-700 text unreadable).
+             See home.blade.php hero CTA for the same workaround. --}}
+        <a href="{{ route('photographer-onboarding.quick') }}"
+           class="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold ring-1 ring-inset ring-white/40 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+           style="background:rgb(255,255,255);color:#4338ca;">
           <i class="bi bi-camera-fill"></i>ลงทะเบียนช่างภาพ
         </a>
         <a href="{{ route('events.index') }}" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold text-white border-2 border-white/30 hover:border-white/60 hover:bg-white/10 transition-all">

@@ -79,8 +79,12 @@ $_footerBrandName = $siteName ?: config('app.name');
         </div>
       </div>
       <div class="flex flex-wrap gap-2 shrink-0">
+        {{-- Inline style dodges darkmode.css's [data-bs-theme="dark"] .bg-white
+             override that would re-tint this white button to slate-800 on
+             dark mode (making the indigo-700 text unreadable on dark footer). --}}
         <a href="{{ route('photographer-onboarding.quick') }}"
-           class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-indigo-700 bg-white shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
+           class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold ring-1 ring-inset ring-white/40 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all"
+           style="background:rgb(255,255,255);color:#4338ca;">
           <i class="bi bi-rocket-takeoff"></i>ลงทะเบียนช่างภาพ
         </a>
         <a href="{{ route('pricing') }}"
