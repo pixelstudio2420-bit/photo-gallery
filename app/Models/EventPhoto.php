@@ -216,7 +216,15 @@ class EventPhoto extends Model
             return $this->thumbnail_link;
         }
         if (!$this->thumbnail_path) {
-            return $this->original_url;
+            // SECURITY: previously fell through to $this->original_url —
+            // a full-size, un-watermarked copy. If the upload pipeline
+            // failed or the row was inserted before processing finished,
+            // the gallery silently exposed the raw original to anyone
+            // who could see the page. Returning '' forces consumers to
+            // route through DriveController::proxyImage, which applies
+            // an inline watermark when the baked variant is missing
+            // (see proxyImage size-≤500 branch).
+            return '';
         }
         if ($this->storage_disk === 'r2') {
             return app(\App\Services\Cloudflare\R2StorageService::class)->getUrl($this->thumbnail_path);
@@ -230,7 +238,12 @@ class EventPhoto extends Model
     public function getWatermarkedUrlAttribute(): string
     {
         if (!$this->watermarked_path) {
-            return $this->original_url;
+            // SECURITY: same defense as getThumbnailUrlAttribute —
+            // never leak the un-watermarked original through this
+            // accessor, which feeds the lightbox and face-search
+            // result previews. Empty string sends consumers to the
+            // proxy, which composites a watermark inline.
+            return '';
         }
         if ($this->storage_disk === 'r2') {
             return app(\App\Services\Cloudflare\R2StorageService::class)->getUrl($this->watermarked_path);
