@@ -158,12 +158,15 @@ class DriveController extends Controller
                     );
                 }
 
-                // Variant missing — auto-dispatch reprocess (debounced) and
-                // try to give the buyer SOMETHING visible right now. The
-                // 1×1 placeholder we used to return left galleries blank
-                // for hours when queue workers weren't provisioned, which
-                // is what loadroop.com prod was hitting (129 photos all
-                // returning placeholder, gallery completely empty).
+                // Variant missing — auto-dispatch reprocess (debounced)
+                // and serve a placeholder. The previous code redirected
+                // to the un-watermarked original here as a "make it
+                // visible immediately" fallback, but the user explicitly
+                // asked us to NEVER expose the original through these
+                // public surfaces — the gallery and lightbox must only
+                // show the watermarked thumbnail. So we now swallow the
+                // visibility hit during the reprocess window in favour
+                // of strict no-leak guarantees.
                 $debounceKey = "reprocess_dispatched_photo_{$photo->id}";
                 if (!\Illuminate\Support\Facades\Cache::has($debounceKey)) {
                     \Illuminate\Support\Facades\Cache::put($debounceKey, 1, 600); // 10 min debounce
@@ -186,35 +189,18 @@ class DriveController extends Controller
                     }
                 }
 
-                // Fallback: redirect to the original until reprocess
-                // completes. This is a deliberate, time-bounded
-                // trade-off: a photographer with broken pipeline gets
-                // images visible (visible = sales possible) at the cost
-                // of exposing the un-watermarked original for the few
-                // minutes the queue worker takes to bake variants.
-                // Once the watermarked_path lands, subsequent hits get
-                // the proper redirect on the line above.
-                //
-                // Cache-Control deliberately SHORT (60s in browser, 60s
-                // at CDN) so the moment reprocess completes, the next
-                // gallery visit picks up the watermarked variant
-                // instead of a stale "redirect to original" cached at
-                // the edge.
-                if (!empty($photo->original_url)) {
-                    return redirect()->away($photo->original_url, 302)->withHeaders([
-                        'Cache-Control' => 'public, max-age=60, s-maxage=60',
-                        'X-Source'      => 'fallback-original-pending-reprocess',
-                    ]);
-                }
-
-                // Truly nothing we can serve — original missing too. This
-                // is a real broken row; placeholder + warning is the only
-                // safe response. Short cache so the recovery is visible
-                // on the next visit.
+                // Placeholder: 1×1 transparent GIF + short browser cache.
+                // 60s max-age means the moment ProcessUploadedPhotoJob
+                // completes (and writes thumbnail_path/watermarked_path),
+                // the next gallery visit picks up the proper watermarked
+                // redirect within at most a minute — no manual cache
+                // bust needed. Operators who want the variants right now
+                // can run `php artisan photos:reprocess --event={id}`
+                // (synchronous, doesn't depend on queue workers).
                 return response(base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'), 200, [
                     'Content-Type'  => 'image/gif',
                     'Cache-Control' => 'public, max-age=60',
-                    'X-Source'      => 'placeholder-no-original',
+                    'X-Source'      => 'placeholder-pending-reprocess',
                 ]);
             }
         }

@@ -2052,29 +2052,28 @@ const lbCache = new Map();
 let lbThumbsBuilt = false;
 
 function lbGetFullUrl(photo) {
-  // Lightbox uses the SAME baked file the gallery thumbnail uses — the
-  // watermarked variant is already a self-contained, small (1200-1600px),
-  // watermark-baked JPEG that can be displayed enlarged via CSS.
-  // We deliberately DO NOT request a fresh sz=1200 from the proxy here
-  // because that path would invoke the inline-watermark recovery
-  // (DriveController::proxyImage), which fetches the original from R2,
-  // composites a watermark in PHP/GD, and returns the bytes — a heavy
-  // operation that 502'd under any concurrent load.
-  if (photo.watermarked) return photo.watermarked;
+  // Lightbox uses the EXACT SAME 400px watermarked thumbnail file the
+  // gallery card already loaded. Browser scales it up via CSS — no
+  // separate larger fetch, zero extra bandwidth on click. Prefer order:
+  //   1. thumbnailLink   — 400px watermarked variant (after photos:reprocess)
+  //   2. watermarked     — 1200px watermarked preview (defensive fallback)
+  //   3. proxy at sz=400 — handles non-numeric Drive IDs + missing-variant placeholder
+  // The 1200px watermarked variant is intentionally NOT first anymore:
+  // the user explicitly asked for the same image as the gallery so the
+  // page never has to fetch a separate "preview-class" file.
   const thumb = photo.thumbnailLink ?? photo.thumbnail_link ?? '';
   if (thumb && !thumb.includes('googleusercontent.com') && !thumb.includes('drive.google.com')) return thumb;
+  if (photo.watermarked) return photo.watermarked;
   const fileId = photo.id ?? photo.file_id ?? '';
-  // sz=400 hits the proxy's redirect-only branch (size ≤ 500), so the
-  // proxy just 302s to the existing thumbnail/watermarked CDN URL — no
-  // server-side watermarking, no 502.
   return `/api/drive/image/${fileId}?sz=400`;
 }
 
 function lbGetSmallUrl(photo) {
-  const thumb = photo.thumbnailLink ?? photo.thumbnail_link ?? photo.fallback ?? '';
-  if (thumb && !thumb.includes('googleusercontent.com') && !thumb.includes('drive.google.com')) return thumb;
-  const fileId = photo.id ?? photo.file_id ?? '';
-  return `/api/drive/image/${fileId}?sz=400`;
+  // Same source as lbGetFullUrl — the lightbox no longer distinguishes
+  // "small placeholder" vs "full preview" because both surfaces use
+  // the 400px watermarked thumbnail. Kept as a separate function so
+  // the lbShow() / lbPreload() callers don't need to be touched.
+  return lbGetFullUrl(photo);
 }
 
 function lbPreload(idx) {
