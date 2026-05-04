@@ -676,8 +676,8 @@
                         {{-- Scheduled datetime --}}
                         <div x-show="form.status === 'scheduled'" x-cloak x-transition>
                             <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">วันเวลาเผยแพร่</label>
-                            <input type="datetime-local" name="published_at" x-model="form.published_at"
-                                   value="{{ old('published_at', isset($post) && $post->published_at ? $post->published_at->format('Y-m-d\TH:i') : '') }}"
+                            <input type="datetime-local" name="scheduled_at" x-model="form.scheduled_at"
+                                   value="{{ old('scheduled_at', isset($post) && $post->scheduled_at ? $post->scheduled_at->format('Y-m-d\TH:i') : '') }}"
                                    class="w-full text-sm px-3 py-2 border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-slate-700/50 dark:text-white">
                         </div>
 
@@ -694,8 +694,8 @@
                         {{-- Password field --}}
                         <div x-show="form.visibility === 'password'" x-cloak x-transition>
                             <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">รหัสผ่าน</label>
-                            <input type="text" name="password" x-model="form.password"
-                                   value="{{ old('password', $post->password ?? '') }}"
+                            <input type="text" name="post_password" x-model="form.post_password"
+                                   value="{{ old('post_password', $post->post_password ?? '') }}"
                                    class="w-full text-sm px-3 py-2 border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-slate-700/50 dark:text-white">
                         </div>
 
@@ -726,12 +726,12 @@
                         </div>
                     </div>
                     <div class="p-5">
-                        <select name="blog_category_id"
+                        <select name="category_id"
                                 class="w-full text-sm px-3 py-2 border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-slate-700/50 dark:text-white">
                             <option value="">-- เลือกหมวดหมู่ --</option>
                             @foreach($categories ?? [] as $category)
                                 <option value="{{ $category->id }}"
-                                        {{ old('blog_category_id', $post->blog_category_id ?? '') == $category->id ? 'selected' : '' }}>
+                                        {{ old('category_id', $post->category_id ?? '') == $category->id ? 'selected' : '' }}>
                                     {{ $category->name }}
                                 </option>
                             @endforeach
@@ -961,9 +961,9 @@ function blogPostForm() {
             content: @json(old('content', $post->content ?? '')),
             excerpt: @json(old('excerpt', $post->excerpt ?? '')),
             status: @json(old('status', $post->status ?? 'draft')),
-            published_at: @json(old('published_at', isset($post) && $post->published_at ? $post->published_at->format('Y-m-d\TH:i') : '')),
+            scheduled_at: @json(old('scheduled_at', isset($post) && $post->scheduled_at ? $post->scheduled_at->format('Y-m-d\TH:i') : '')),
             visibility: @json(old('visibility', $post->visibility ?? 'public')),
-            password: @json(old('password', $post->password ?? '')),
+            post_password: @json(old('post_password', $post->post_password ?? '')),
             meta_title: @json(old('meta_title', $post->meta_title ?? '')),
             meta_description: @json(old('meta_description', $post->meta_description ?? '')),
             focus_keyword: @json(old('focus_keyword', $post->focus_keyword ?? '')),

@@ -16,11 +16,11 @@
     <p class="text-sm text-gray-500 dark:text-gray-400 ml-11">กรอกข้อมูลบทความที่ต้องการสร้าง</p>
 </div>
 
-@php $post = new \stdClass(); $post->exists = false; @endphp
 @include('admin.blog.posts._form', ['post' => (object) [
     'exists' => false, 'title' => '', 'slug' => '', 'content' => '', 'excerpt' => '',
-    'status' => 'draft', 'published_at' => null, 'visibility' => 'public', 'password' => '',
-    'blog_category_id' => '', 'featured_image' => '', 'meta_title' => '', 'meta_description' => '',
+    'status' => 'draft', 'published_at' => null, 'scheduled_at' => null,
+    'visibility' => 'public', 'post_password' => '',
+    'category_id' => '', 'featured_image' => '', 'meta_title' => '', 'meta_description' => '',
     'focus_keyword' => '', 'canonical_url' => '', 'is_featured' => false, 'is_affiliate_post' => false,
     'allow_comments' => true, 'schema_type' => 'Article', 'seo_score' => null, 'tags' => null,
     'og_image' => null,
