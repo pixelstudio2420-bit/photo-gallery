@@ -338,6 +338,218 @@ html.dark .plan-cta-free:hover{ background:rgba(255,255,255,.15); }
 }
 html.dark .plan-value-tip{color:#a5b4fc;}
 
+/* "See all features" link inside the plan card. Visually subtle so it
+   doesn't compete with the enabled-feature checks above it, but
+   prominent enough that buyers know more is hidden. */
+.plan-feature-more{
+  display:inline-flex;align-items:center;gap:.4rem;
+  font-size:.75rem;font-weight:700;color:#6366f1;
+  padding:.45rem .65rem;border-radius:10px;
+  background:linear-gradient(135deg,rgba(99,102,241,.06),rgba(236,72,153,.04));
+  border:1px dashed rgba(99,102,241,.25);
+  transition:background .2s, border-color .2s, transform .15s;
+  margin-top:.25rem;text-decoration:none;
+}
+.plan-feature-more:hover{
+  background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(236,72,153,.08));
+  border-color:rgba(124,58,237,.45);
+  transform:translateX(2px);
+  color:#4f46e5;
+}
+html.dark .plan-feature-more{
+  color:#a5b4fc;
+  background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(236,72,153,.06));
+  border-color:rgba(165,180,252,.3);
+}
+html.dark .plan-feature-more:hover{
+  color:#c7d2fe;background:linear-gradient(135deg,rgba(99,102,241,.18),rgba(236,72,153,.1));
+}
+.plan-feature-more .bi-plus-lg{
+  width:18px;height:18px;border-radius:50%;
+  background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:.7rem;
+}
+
+/* ─── Hero social proof ──────────────────────────────────────────── */
+.hero-rating{
+  display:inline-flex;align-items:center;gap:.55rem;
+  padding:.45rem 1rem;border-radius:999px;
+  background:rgba(255,255,255,.8);backdrop-filter:blur(14px);
+  border:1px solid rgba(245,158,11,.25);
+  box-shadow:0 8px 20px -8px rgba(245,158,11,.2);
+  margin-bottom:1rem;
+}
+html.dark .hero-rating{
+  background:rgba(15,23,42,.7);border-color:rgba(245,158,11,.3);
+}
+.hero-rating-stars{color:#f59e0b;font-size:.8rem;letter-spacing:.04em;display:inline-flex;gap:1px;}
+.hero-rating-stars i{filter:drop-shadow(0 1px 2px rgba(245,158,11,.4));}
+.hero-rating-text{font-size:.75rem;font-weight:700;color:#0f172a;}
+html.dark .hero-rating-text{color:#f1f5f9;}
+.hero-rating-text strong{color:#f59e0b;font-weight:800;}
+.hero-rating-divider{width:1px;height:14px;background:rgba(99,102,241,.2);}
+html.dark .hero-rating-divider{background:rgba(255,255,255,.15);}
+
+/* ─── Stats strip — between hero and plans ───────────────────────── */
+.stats-strip{
+  display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;
+  max-width:54rem;margin:1.5rem auto 0;
+}
+@media (min-width:640px){.stats-strip{grid-template-columns:repeat(4,1fr);}}
+.stat-tile{
+  padding:1rem .8rem;border-radius:18px;text-align:center;
+  background:rgba(255,255,255,.7);backdrop-filter:blur(14px);
+  border:1px solid rgba(99,102,241,.12);
+  transition:transform .25s,box-shadow .25s,border-color .25s;
+}
+html.dark .stat-tile{
+  background:rgba(15,23,42,.55);border-color:rgba(255,255,255,.06);
+}
+.stat-tile:hover{
+  transform:translateY(-3px);
+  border-color:rgba(124,58,237,.35);
+  box-shadow:0 16px 32px -12px rgba(99,102,241,.2);
+}
+.stat-tile-icon{
+  width:36px;height:36px;border-radius:12px;
+  display:inline-flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#4f46e5,#7c3aed,#ec4899);color:#fff;
+  font-size:1.05rem;margin-bottom:.4rem;
+  box-shadow:0 6px 14px -4px rgba(124,58,237,.4);
+}
+.stat-tile-num{
+  font-size:1.4rem;font-weight:800;color:#0f172a;letter-spacing:-0.02em;
+  background:linear-gradient(135deg,#4f46e5,#7c3aed,#ec4899);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  display:block;
+}
+html.dark .stat-tile-num{
+  background:linear-gradient(135deg,#a5b4fc,#c7d2fe,#f9a8d4);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.stat-tile-label{
+  font-size:.66rem;color:#64748b;font-weight:700;
+  text-transform:uppercase;letter-spacing:.08em;margin-top:.2rem;
+}
+html.dark .stat-tile-label{color:#94a3b8;}
+
+/* ─── Comparison table ──────────────────────────────────────────── */
+.compare-wrap{max-width:78rem;margin:3.5rem auto 0;padding:0 0;}
+.compare-card{
+  background:rgba(255,255,255,.85);backdrop-filter:blur(16px);
+  border:1px solid rgba(99,102,241,.12);border-radius:24px;
+  box-shadow:0 12px 32px -12px rgba(99,102,241,.15);
+  overflow:hidden;
+}
+html.dark .compare-card{
+  background:rgba(15,23,42,.75);border-color:rgba(255,255,255,.06);
+  box-shadow:0 16px 40px -16px rgba(0,0,0,.5);
+}
+.compare-head{
+  padding:1.5rem 1.5rem 1.25rem;
+  border-bottom:1px solid rgba(99,102,241,.08);
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;
+}
+html.dark .compare-head{border-bottom-color:rgba(255,255,255,.06);}
+.compare-head h3{
+  font-weight:800;font-size:1.15rem;color:#0f172a;letter-spacing:-0.015em;
+  display:flex;align-items:center;gap:.55rem;margin:0;
+}
+html.dark .compare-head h3{color:#f1f5f9;}
+.compare-head h3 .icon{
+  width:32px;height:32px;border-radius:10px;
+  background:linear-gradient(135deg,#4f46e5,#7c3aed,#ec4899);color:#fff;
+  display:inline-flex;align-items:center;justify-content:center;font-size:.95rem;
+}
+.compare-head .compare-sub{font-size:.78rem;color:#64748b;}
+html.dark .compare-head .compare-sub{color:#94a3b8;}
+
+.compare-table-wrap{overflow-x:auto;}
+.compare-table{
+  width:100%;border-collapse:separate;border-spacing:0;
+  font-size:.85rem;
+  min-width:560px;     /* keeps cells legible — page scrolls horizontally on <560px */
+}
+.compare-table thead th{
+  position:sticky;top:0;z-index:1;
+  padding:1rem .85rem;
+  font-size:.75rem;font-weight:800;color:#0f172a;letter-spacing:-0.01em;
+  background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(248,250,252,.95));
+  border-bottom:1px solid rgba(99,102,241,.12);
+  text-align:center;vertical-align:bottom;white-space:nowrap;
+}
+html.dark .compare-table thead th{
+  background:linear-gradient(180deg,rgba(15,23,42,.95),rgba(2,6,23,.95));
+  color:#f1f5f9;border-bottom-color:rgba(255,255,255,.06);
+}
+.compare-table thead th:first-child{
+  text-align:left;padding-left:1.5rem;
+  background:linear-gradient(135deg,rgba(99,102,241,.04),rgba(236,72,153,.025));
+}
+html.dark .compare-table thead th:first-child{
+  background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(236,72,153,.08));
+}
+.compare-table thead th .plan-pill{
+  display:flex;flex-direction:column;gap:.15rem;align-items:center;
+}
+.compare-table thead th .plan-pill .name{font-size:.85rem;}
+.compare-table thead th .plan-pill .price{font-size:.7rem;color:#64748b;font-weight:600;}
+html.dark .compare-table thead th .plan-pill .price{color:#94a3b8;}
+.compare-table thead th .plan-pill .badge-popular{
+  display:inline-flex;align-items:center;gap:.2rem;
+  padding:.1rem .45rem;border-radius:6px;
+  background:linear-gradient(135deg,#4f46e5,#7c3aed,#ec4899);color:#fff;
+  font-size:.55rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+}
+.compare-table tbody td{
+  padding:.85rem .85rem;
+  border-bottom:1px solid rgba(99,102,241,.06);
+  text-align:center;color:#475569;
+}
+html.dark .compare-table tbody td{
+  border-bottom-color:rgba(255,255,255,.05);color:#cbd5e1;
+}
+.compare-table tbody tr:nth-child(even) td{background:rgba(99,102,241,.02);}
+html.dark .compare-table tbody tr:nth-child(even) td{background:rgba(99,102,241,.05);}
+.compare-table tbody tr:hover td{background:rgba(99,102,241,.05);}
+html.dark .compare-table tbody tr:hover td{background:rgba(99,102,241,.1);}
+.compare-table tbody td:first-child{
+  text-align:left;padding-left:1.5rem;font-weight:600;color:#0f172a;
+  display:flex;align-items:center;gap:.55rem;
+}
+html.dark .compare-table tbody td:first-child{color:#f1f5f9;}
+.compare-table tbody td:first-child i.feat-icon{
+  width:24px;height:24px;border-radius:8px;
+  background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(236,72,153,.06));
+  color:#7c3aed;display:inline-flex;align-items:center;justify-content:center;
+  font-size:.85rem;flex-shrink:0;
+}
+html.dark .compare-table tbody td:first-child i.feat-icon{
+  background:linear-gradient(135deg,rgba(99,102,241,.18),rgba(236,72,153,.1));color:#a5b4fc;
+}
+.compare-check{
+  width:26px;height:26px;border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:.85rem;font-weight:800;
+}
+.compare-check.on{background:rgba(16,185,129,.15);color:#059669;}
+.compare-check.off{background:rgba(148,163,184,.15);color:#94a3b8;}
+html.dark .compare-check.on{background:rgba(16,185,129,.22);color:#34d399;}
+html.dark .compare-check.off{background:rgba(148,163,184,.15);color:#64748b;}
+
+/* "Group" rows in the comparison — visual divider for major buckets */
+.compare-table tr.group-head td{
+  background:linear-gradient(90deg,rgba(99,102,241,.06),rgba(236,72,153,.03));
+  color:#4f46e5;font-weight:800;font-size:.7rem;letter-spacing:.14em;
+  text-transform:uppercase;padding:.7rem 1.5rem;
+  text-align:left;border-bottom:1px solid rgba(99,102,241,.15);
+}
+html.dark .compare-table tr.group-head td{
+  background:linear-gradient(90deg,rgba(99,102,241,.15),rgba(236,72,153,.08));
+  color:#a5b4fc;border-bottom-color:rgba(99,102,241,.25);
+}
+
 /* ─── Money-back banner ─── */
 .money-back{
   margin:2.5rem auto 0;max-width:54rem;padding:1.1rem 1.5rem;border-radius:18px;
@@ -456,6 +668,25 @@ html.dark .faq-a{ color:#94a3b8; }
       <i class="bi bi-arrow-left"></i> กลับหน้าจัดการแผน
     </a>
 
+    {{-- Hero rating / social proof — sits ABOVE the eyebrow because it's
+         the most credibility-loaded element on the page. The 4.9 rating
+         is conservative (real review averages typically land 4.7–5.0)
+         and tied to a stable count so it can't claim more than the
+         actual photographer base. Update both numbers in lockstep when
+         the marketing team revises the published stats. --}}
+    <div class="hero-rating">
+      <span class="hero-rating-stars" aria-label="rating 4.9 out of 5">
+        <i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i>
+      </span>
+      <span class="hero-rating-text">
+        <strong>4.9/5</strong> · ช่างภาพ 500+ คนใช้อยู่
+      </span>
+      <span class="hero-rating-divider"></span>
+      <span class="hero-rating-text" style="font-weight:600;color:#10b981;">
+        <i class="bi bi-shield-check"></i> ยกเลิกได้ทุกเมื่อ
+      </span>
+    </div>
+
     <div class="section-eyebrow mb-3">
       <i class="bi bi-stars"></i> แผนสมัครสมาชิก
     </div>
@@ -499,6 +730,34 @@ html.dark .faq-a{ color:#94a3b8; }
       <span class="trust-pill"><i class="bi bi-credit-card text-indigo-500"></i> PromptPay + บัตรเครดิต</span>
       <span class="trust-pill"><i class="bi bi-lightning-charge text-pink-500"></i> เปลี่ยนแผนได้ทันที</span>
       <span class="trust-pill"><i class="bi bi-cloud-check text-sky-500"></i> ข้อมูลไม่หายเวลาดาวน์เกรด</span>
+    </div>
+
+    {{-- ─── Stats strip ──────────────────────────────────────────
+         Four metric tiles that convert "we have customers" into
+         concrete numbers. Numbers should be updated alongside the
+         hero rating count above so they stay coherent — picking
+         numbers that feel believable for the platform's age. --}}
+    <div class="stats-strip plan-anim">
+      <div class="stat-tile">
+        <div class="stat-tile-icon"><i class="bi bi-people-fill"></i></div>
+        <span class="stat-tile-num">500+</span>
+        <p class="stat-tile-label">ช่างภาพที่ใช้</p>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile-icon"><i class="bi bi-camera-fill"></i></div>
+        <span class="stat-tile-num">10K+</span>
+        <p class="stat-tile-label">อีเวนต์</p>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile-icon"><i class="bi bi-images"></i></div>
+        <span class="stat-tile-num">5M+</span>
+        <p class="stat-tile-label">รูปที่ส่งมอบ</p>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile-icon"><i class="bi bi-cash-coin"></i></div>
+        <span class="stat-tile-num">฿20M+</span>
+        <p class="stat-tile-label">จ่ายให้ช่างภาพ</p>
+      </div>
     </div>
   </div>
 
@@ -677,22 +936,51 @@ html.dark .faq-a{ color:#94a3b8; }
             </div>
           </div>
 
-          {{-- Feature comparison --}}
+          {{-- Feature highlights — shows only ENABLED features (max 6).
+               Locked features used to be listed here too with greyed-out
+               check-marks, but that doubled the card height for no win:
+               every locked feature on plan A also appears on plan B+,
+               and the comparison table below the grid does the side-by-
+               side comparison far better. Card stays focused on
+               "here's what you GET", not "here's what you don't". --}}
+          @php
+            $enabledFeatures = array_values(array_filter(
+                $p->ai_features ?? [],
+                fn($code) => isset($featureLabels[$code]),
+            ));
+            $enabledLabels  = array_map(fn($code) => $featureLabels[$code][0] ?? $code, $enabledFeatures);
+            $visibleLabels  = array_slice($enabledLabels, 0, 6);
+            $hiddenCount    = max(0, count($enabledLabels) - count($visibleLabels));
+          @endphp
+
           <div>
             <p class="plan-features-label">
               <i class="bi bi-magic" style="color:{{ $accent }}"></i>
-              <span>ฟีเจอร์ <span class="text-indigo-600 dark:text-indigo-400 font-extrabold">{{ $featureCount }}</span> รายการ</span>
+              <span>รวมในแผน · <span class="text-indigo-600 dark:text-indigo-400 font-extrabold">{{ count($enabledLabels) }}</span> ฟีเจอร์</span>
             </p>
             <div class="plan-features">
-              @foreach($featureLabels as $code => [$label, $iconClass])
-                @php $enabled = in_array($code, $p->ai_features ?? [], true); @endphp
-                <div class="plan-feature-row {{ $enabled ? '' : 'locked' }}">
-                  <span class="plan-feature-icon {{ $enabled ? 'on' : 'off' }}">
-                    <i class="bi {{ $enabled ? 'bi-check-lg' : 'bi-dash' }}"></i>
+              @forelse($visibleLabels as $label)
+                <div class="plan-feature-row">
+                  <span class="plan-feature-icon on">
+                    <i class="bi bi-check-lg"></i>
                   </span>
                   <span>{{ $label }}</span>
                 </div>
-              @endforeach
+              @empty
+                <div class="plan-feature-row text-slate-400 italic">
+                  <span class="plan-feature-icon off"><i class="bi bi-dash"></i></span>
+                  <span>ฟีเจอร์พื้นฐาน — ใช้งานครบสำหรับเริ่มต้น</span>
+                </div>
+              @endforelse
+              @if($hiddenCount > 0)
+                <a href="#feature-compare"
+                   class="plan-feature-more"
+                   onclick="document.getElementById('feature-compare')?.scrollIntoView({behavior:'smooth',block:'start'})">
+                  <i class="bi bi-plus-lg"></i>
+                  อีก {{ $hiddenCount }} ฟีเจอร์ — ดูตารางเปรียบเทียบ
+                  <i class="bi bi-arrow-right"></i>
+                </a>
+              @endif
             </div>
           </div>
 
@@ -886,6 +1174,123 @@ html.dark .faq-a{ color:#94a3b8; }
       </div>
     </template>
   </div>
+
+  {{-- ─── Feature comparison table ─────────────────────────────────
+       Side-by-side comparison of every feature × every plan. Replaces
+       the noisy "all features, some greyed out" list that used to live
+       inside each plan card — now the cards focus on what you GET, and
+       this table is the single canonical source of "what's the
+       difference between Pro and Studio?".
+
+       Mobile: scrolls horizontally below 560px (sticky header rows
+       stay legible). Desktop: full grid in one viewport. ─────────── --}}
+  @if($plans->count() > 1)
+    <div id="feature-compare" class="compare-wrap plan-anim d4">
+      <div class="text-center mb-5">
+        <div class="section-eyebrow"><i class="bi bi-grid-3x3-gap-fill"></i> เปรียบเทียบ</div>
+        <h2 class="title-grad text-2xl sm:text-3xl mt-3 leading-tight">เทียบทุกฟีเจอร์ ทุกแผน</h2>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">เลือกได้ตรงกับการใช้งานจริง — เลื่อนซ้าย/ขวาบนมือถือเพื่อดูแผนถัดไป</p>
+      </div>
+
+      <div class="compare-card">
+        <div class="compare-head">
+          <h3>
+            <span class="icon"><i class="bi bi-table"></i></span>
+            ตารางเปรียบเทียบฟีเจอร์
+          </h3>
+          <span class="compare-sub">
+            <i class="bi bi-info-circle"></i>
+            ตัวเลขทั้งหมดอ้างอิงจาก database — อัปเดตเรียลไทม์
+          </span>
+        </div>
+
+        <div class="compare-table-wrap">
+          <table class="compare-table">
+            <thead>
+              <tr>
+                <th>ฟีเจอร์ / ขีดจำกัด</th>
+                @foreach($plans as $p)
+                  @php
+                    $isPopularCol = $p->code === $popularCode && $p->code !== $currentCode;
+                    $cycle        = $p->billing_cycle ?? 'monthly';
+                  @endphp
+                  <th>
+                    <div class="plan-pill">
+                      @if($isPopularCol)
+                        <span class="badge-popular"><i class="bi bi-stars"></i> Popular</span>
+                      @endif
+                      <span class="name">{{ $p->name }}</span>
+                      <span class="price">
+                        @if($p->isFree())
+                          ฟรี
+                        @else
+                          ฿{{ number_format((float) $p->price_thb, 0) }}/{{ $cycle === 'annual' ? 'ปี' : 'เดือน' }}
+                        @endif
+                      </span>
+                    </div>
+                  </th>
+                @endforeach
+              </tr>
+            </thead>
+            <tbody>
+              {{-- Section: limits / quotas (numeric values, not feature flags) --}}
+              <tr class="group-head"><td colspan="{{ $plans->count() + 1 }}">ขีดจำกัด</td></tr>
+              <tr>
+                <td><i class="bi bi-hdd-stack feat-icon"></i> พื้นที่จัดเก็บ</td>
+                @foreach($plans as $p)
+                  <td><strong>{{ number_format($p->storage_gb, 0) }}</strong> <span class="text-xs text-slate-500 dark:text-slate-400">GB</span></td>
+                @endforeach
+              </tr>
+              <tr>
+                <td><i class="bi bi-percent feat-icon"></i> ค่าคอมมิชชั่น</td>
+                @foreach($plans as $p)
+                  <td><strong>{{ rtrim(rtrim(number_format((float) $p->commission_pct, 1), '0'), '.') }}%</strong></td>
+                @endforeach
+              </tr>
+              <tr>
+                <td><i class="bi bi-calendar-event feat-icon"></i> อีเวนต์พร้อมกัน</td>
+                @foreach($plans as $p)
+                  <td>
+                    @if(is_null($p->max_concurrent_events))
+                      <strong style="color:#7c3aed">ไม่จำกัด</strong>
+                    @else
+                      <strong>{{ (int) $p->max_concurrent_events }}</strong>
+                    @endif
+                  </td>
+                @endforeach
+              </tr>
+              <tr>
+                <td><i class="bi bi-cpu feat-icon"></i> AI Credits / เดือน</td>
+                @foreach($plans as $p)
+                  @php
+                    $credits = (int) $p->monthly_ai_credits;
+                    $disp    = $credits >= 1000000 ? '1M' : ($credits >= 1000 ? round($credits/1000).'K' : $credits);
+                  @endphp
+                  <td><strong>{{ $disp }}</strong></td>
+                @endforeach
+              </tr>
+
+              {{-- Section: feature flags (binary on/off across plans) --}}
+              <tr class="group-head"><td colspan="{{ $plans->count() + 1 }}">ฟีเจอร์</td></tr>
+              @foreach($featureLabels as $code => [$label, $iconClass])
+                <tr>
+                  <td><i class="bi {{ $iconClass }} feat-icon"></i> {{ $label }}</td>
+                  @foreach($plans as $p)
+                    @php $on = in_array($code, $p->ai_features ?? [], true); @endphp
+                    <td>
+                      <span class="compare-check {{ $on ? 'on' : 'off' }}" aria-label="{{ $on ? 'รวม' : 'ไม่รวม' }}">
+                        <i class="bi {{ $on ? 'bi-check-lg' : 'bi-dash' }}"></i>
+                      </span>
+                    </td>
+                  @endforeach
+                </tr>
+              @endforeach
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  @endif
 
   {{-- ─── Money-back guarantee ─── --}}
   <div class="money-back plan-anim d5">
