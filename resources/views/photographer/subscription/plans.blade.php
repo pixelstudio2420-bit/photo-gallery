@@ -109,227 +109,267 @@ html.dark .billing-savings{color:#34d399;background:linear-gradient(135deg,rgba(
 html.dark .trust-pill{background:rgba(15,23,42,.5);border-color:rgba(255,255,255,.06);color:#cbd5e1;}
 .trust-pill i{font-size:.95rem;}
 
-/* ─── Plan card ─── */
+/* ─── Plan card v2 — editorial tier ──────────────────────────────
+   Replaces the previous "compact card with 2x2 stat grid" with a
+   more editorial layout:
+     • Big tier-number watermark in the corner (visual signature)
+     • Side accent stripe (uses the per-plan accent colour)
+     • Hero-sized price typography (3rem)
+     • Inline stat chips (single horizontal row, no grid)
+     • Floating "POPULAR" tag ABOVE the card (not a top ribbon)
+   Visual language is still indigo/purple/pink to match the auth
+   surfaces, but each card pulls its own accent from
+   SubscriptionPlan::accentHex() so a single theme rev re-skins all
+   tiles in lockstep. ────────────────────────────────────────────── */
 .plan-tile{
   background:#fff;
   border-radius:24px;
-  border:1px solid rgba(99,102,241,.1);
-  box-shadow:0 8px 24px -8px rgba(99,102,241,.10), 0 1px 3px rgba(0,0,0,.04);
+  border:1px solid rgba(99,102,241,.08);
+  box-shadow:0 8px 24px -8px rgba(99,102,241,.08), 0 1px 3px rgba(0,0,0,.04);
   overflow:hidden;
   position:relative;
-  transition:transform .3s cubic-bezier(0.34,1.56,0.64,1), box-shadow .3s, border-color .25s;
+  transition:transform .35s cubic-bezier(0.34,1.56,0.64,1), box-shadow .35s, border-color .25s;
   display:flex;flex-direction:column;
 }
 html.dark .plan-tile{
-  background:rgba(15,23,42,.85);
-  backdrop-filter:blur(16px);
-  border-color:rgba(255,255,255,.08);
+  background:rgba(15,23,42,.85);backdrop-filter:blur(16px);
+  border-color:rgba(255,255,255,.06);
   box-shadow:0 8px 32px -8px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.04);
 }
 .plan-tile:hover{
-  transform:translateY(-6px) scale(1.005);
-  box-shadow:0 28px 50px -16px rgba(99,102,241,.22), 0 6px 12px rgba(0,0,0,.05);
-  border-color:rgba(124,58,237,.25);
+  transform:translateY(-8px);
+  border-color:rgba(124,58,237,.22);
+  box-shadow:0 32px 60px -20px var(--accent-shadow, rgba(99,102,241,.28)), 0 6px 12px rgba(0,0,0,.05);
 }
 html.dark .plan-tile:hover{
-  box-shadow:0 28px 60px -16px rgba(124,58,237,.45), inset 0 1px 0 rgba(255,255,255,.06);
+  box-shadow:0 32px 70px -20px var(--accent-shadow, rgba(124,58,237,.5)), inset 0 1px 0 rgba(255,255,255,.06);
 }
 
-/* Accent corner gleam (uses plan color via --accent) */
+/* Side gradient stripe — visual signature of the new design.
+   Uses --accent so each plan gets its own colour (free=indigo,
+   pro=purple-pink, studio=darker purple). */
 .plan-tile::before{
-  content:'';position:absolute;top:0;right:0;width:140px;height:140px;
-  background:radial-gradient(circle at top right, var(--accent, #7c3aed) 0%, transparent 65%);
-  opacity:.08;pointer-events:none;transition:opacity .3s;
+  content:'';position:absolute;top:24px;bottom:24px;left:0;width:4px;border-radius:0 4px 4px 0;
+  background:linear-gradient(180deg, var(--accent, #4f46e5), transparent);
+  opacity:.6;transition:opacity .3s, width .3s;
 }
-.plan-tile:hover::before{opacity:.18;}
-html.dark .plan-tile::before{opacity:.12;}
-html.dark .plan-tile:hover::before{opacity:.25;}
+.plan-tile:hover::before{opacity:1;width:6px;}
 
-/* Popular plan — extra emphasis
-   We avoid `scale(>1)` because it bleeds the card past its grid cell
-   and was the main cause of horizontal overflow on small viewports.
-   Instead we lift the card up and rely on the gradient border + box
-   shadow + halo pulse to make it stand out — no width change. */
+/* Tier number watermark — large grey "01/02/03" in the top-right.
+   Adds editorial structure without taking layout space (it's
+   absolute-positioned and uses --tw-text colour). */
+.plan-tier-num{
+  position:absolute;top:18px;right:22px;
+  font-size:2.6rem;font-weight:900;letter-spacing:-0.04em;line-height:1;
+  color:rgba(99,102,241,.12);
+  font-feature-settings:'tnum';
+  pointer-events:none;
+  transition:color .3s, transform .3s;
+}
+.plan-tile:hover .plan-tier-num{color:var(--accent, rgba(124,58,237,.25));transform:scale(1.05);}
+html.dark .plan-tier-num{color:rgba(165,180,252,.15);}
+html.dark .plan-tile:hover .plan-tier-num{color:var(--accent, rgba(165,180,252,.35));}
+
+/* Popular plan — bigger card + gradient border + animated halo.
+   The "POPULAR" tag now floats ABOVE the card (negative top margin
+   on .plan-tag-pop), not as a top ribbon — leaves the header
+   clean for the icon + name. */
 .plan-tile.popular{
   border:2px solid transparent;
   background:linear-gradient(#fff,#fff) padding-box,
              linear-gradient(135deg,#4f46e5,#7c3aed,#ec4899) border-box;
-  box-shadow:0 22px 52px -16px rgba(124,58,237,.32), 0 4px 12px rgba(0,0,0,.05);
-  transform:translateY(-6px);
+  box-shadow:0 24px 56px -18px rgba(124,58,237,.35), 0 4px 12px rgba(0,0,0,.05);
 }
-.plan-tile.popular:hover{
-  transform:translateY(-10px);
-}
+.plan-tile.popular:hover{transform:translateY(-12px);}
 html.dark .plan-tile.popular{
   background:linear-gradient(rgba(15,23,42,.95),rgba(15,23,42,.95)) padding-box,
              linear-gradient(135deg,#6366f1,#a855f7,#f472b6) border-box;
 }
 .plan-tile.popular::after{
-  content:'';position:absolute;inset:0;border-radius:24px;pointer-events:none;
-  box-shadow:0 0 0 6px rgba(124,58,237,.06);
+  content:'';position:absolute;inset:-2px;border-radius:26px;pointer-events:none;
+  box-shadow:0 0 0 6px rgba(124,58,237,.05);
   animation:popular-pulse 2.4s ease-in-out infinite;
 }
 @keyframes popular-pulse{
   0%,100%{box-shadow:0 0 0 6px rgba(124,58,237,.05);}
-  50%{box-shadow:0 0 0 14px rgba(124,58,237,.08);}
+  50%{box-shadow:0 0 0 14px rgba(124,58,237,.10);}
 }
 
 .plan-tile.current{
-  border:2px solid #10b981;
+  border:2px solid transparent;
   background:linear-gradient(#fff,#fff) padding-box,
              linear-gradient(135deg,#10b981,#34d399) border-box;
-  box-shadow:0 16px 40px -12px rgba(16,185,129,.3);
+  box-shadow:0 18px 44px -14px rgba(16,185,129,.32);
 }
 html.dark .plan-tile.current{
   background:linear-gradient(rgba(15,23,42,.95),rgba(15,23,42,.95)) padding-box,
              linear-gradient(135deg,#10b981,#34d399) border-box;
 }
 
-/* Top ribbon */
-.plan-ribbon{
-  position:absolute;top:0;left:0;right:0;
-  padding:7px 12px;
-  font-size:.66rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
-  color:#fff;text-align:center;
-  background:linear-gradient(135deg,#4f46e5,#7c3aed,#ec4899);
-  display:flex;align-items:center;justify-content:center;gap:.4rem;
-  box-shadow:0 4px 12px -2px rgba(124,58,237,.35);
+/* Floating "POPULAR" / "แผนปัจจุบัน" tag — sits ABOVE the card. */
+.plan-tag-pop, .plan-tag-current{
+  position:absolute;top:-13px;left:50%;transform:translateX(-50%);
+  padding:5px 14px;border-radius:999px;
+  font-size:.62rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
+  color:#fff;display:inline-flex;align-items:center;gap:.4rem;
+  z-index:2;white-space:nowrap;
+  box-shadow:0 6px 16px -3px rgba(124,58,237,.5);
 }
-.plan-ribbon.current{ background:linear-gradient(135deg,#10b981,#059669); box-shadow:0 4px 12px -2px rgba(16,185,129,.4); }
-.plan-ribbon i{animation:wiggle 3s ease-in-out infinite;}
+.plan-tag-pop{background:linear-gradient(135deg,#4f46e5,#7c3aed,#ec4899);}
+.plan-tag-current{background:linear-gradient(135deg,#10b981,#059669);box-shadow:0 6px 16px -3px rgba(16,185,129,.5);}
+.plan-tag-pop i, .plan-tag-current i{font-size:.7rem;animation:wiggle 3s ease-in-out infinite;}
 @keyframes wiggle{0%,100%{transform:rotate(0);}25%{transform:rotate(-10deg);}75%{transform:rotate(10deg);}}
 
-/* Plan header */
-.plan-header{padding:1.85rem 1.5rem 1.35rem;text-align:center;border-bottom:1px solid rgba(99,102,241,.08);position:relative;}
-html.dark .plan-header{ border-bottom-color:rgba(255,255,255,.06); }
+/* Plan header — left-aligned now (more editorial). */
+.plan-header{
+  padding:2rem 1.6rem 1.4rem;border-bottom:1px solid rgba(99,102,241,.06);
+  position:relative;
+}
+html.dark .plan-header{border-bottom-color:rgba(255,255,255,.04);}
 .plan-tile.popular .plan-header,
-.plan-tile.current .plan-header{ padding-top:2.5rem; }
+.plan-tile.current .plan-header{padding-top:2.5rem;}
 
 .plan-icon{
-  width:60px;height:60px;border-radius:18px;
+  width:56px;height:56px;border-radius:16px;
   display:inline-flex;align-items:center;justify-content:center;
-  background:linear-gradient(135deg,var(--accent-soft, rgba(99,102,241,.1)),rgba(236,72,153,.06));
-  color:var(--accent, #4f46e5);font-size:1.65rem;
-  border:1px solid var(--accent-border, rgba(99,102,241,.18));
-  margin:0 auto;position:relative;
-  box-shadow:0 6px 16px -6px var(--accent-shadow, rgba(99,102,241,.25));
+  background:linear-gradient(135deg, var(--accent, #4f46e5), color-mix(in srgb, var(--accent, #4f46e5) 60%, #ec4899));
+  color:#fff;font-size:1.5rem;
+  box-shadow:0 10px 22px -6px var(--accent-shadow, rgba(99,102,241,.45));
   transition:transform .35s cubic-bezier(0.34,1.56,0.64,1);
 }
-.plan-tile:hover .plan-icon{transform:rotate(-6deg) scale(1.06);}
-html.dark .plan-icon{
-  background:linear-gradient(135deg,var(--accent-soft, rgba(99,102,241,.2)),rgba(236,72,153,.12));
-  border-color:rgba(255,255,255,.08);
-}
-.plan-name{
-  font-weight:800;font-size:1.2rem;color:#0f172a;
-  margin-top:.95rem;letter-spacing:-0.015em;
-}
-html.dark .plan-name{ color:#f1f5f9; }
-.plan-tagline{font-size:.78rem;color:#64748b;margin-top:.25rem;line-height:1.4;min-height:2.2em;}
-html.dark .plan-tagline{ color:#94a3b8; }
+.plan-tile:hover .plan-icon{transform:rotate(-8deg) scale(1.06);}
 
-.plan-price{margin-top:1.1rem;}
+.plan-name{
+  font-weight:800;font-size:1.35rem;color:#0f172a;
+  margin-top:1rem;letter-spacing:-0.02em;line-height:1.15;
+}
+html.dark .plan-name{color:#f1f5f9;}
+.plan-tagline{
+  font-size:.8rem;color:#64748b;margin-top:.3rem;line-height:1.45;min-height:2.4em;
+}
+html.dark .plan-tagline{color:#94a3b8;}
+
+/* Hero price block — left-aligned, big number. */
+.plan-price{margin-top:1.4rem;}
 .plan-price-value{
-  font-weight:800;font-size:2.4rem;color:#0f172a;letter-spacing:-0.025em;
-  background:linear-gradient(135deg,#0f172a,#475569);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-  display:inline-flex;align-items:baseline;gap:.1rem;
+  font-weight:900;font-size:3rem;color:#0f172a;letter-spacing:-0.035em;
+  display:inline-flex;align-items:baseline;gap:.05rem;line-height:1;
 }
-html.dark .plan-price-value{
-  background:linear-gradient(135deg,#f1f5f9,#cbd5e1);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-}
-.plan-price-suffix{font-size:.85rem;color:#64748b;font-weight:500;margin-left:.25rem;}
-html.dark .plan-price-suffix{ color:#94a3b8; }
+html.dark .plan-price-value{color:#f1f5f9;}
+.plan-price-value .cur{font-size:1rem;color:#94a3b8;font-weight:600;margin-right:.1rem;}
+html.dark .plan-price-value .cur{color:#64748b;}
+.plan-price-suffix{font-size:.82rem;color:#64748b;font-weight:500;margin-left:.4rem;}
+html.dark .plan-price-suffix{color:#94a3b8;}
 .plan-price-annual{
-  margin-top:.4rem;font-size:.72rem;color:#059669;font-weight:700;
-  display:inline-flex;align-items:center;gap:.3rem;
-  padding:.25rem .6rem;border-radius:999px;background:rgba(16,185,129,.08);
-  border:1px solid rgba(16,185,129,.18);
+  margin-top:.55rem;font-size:.72rem;color:#059669;font-weight:700;
+  display:inline-flex;align-items:center;gap:.35rem;
+  padding:.3rem .65rem;border-radius:999px;
+  background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.18);
 }
-html.dark .plan-price-annual{ background:rgba(16,185,129,.15);color:#34d399;border-color:rgba(16,185,129,.3); }
-.plan-price-strike{
-  font-size:.78rem;color:#94a3b8;text-decoration:line-through;font-weight:500;margin-right:.3rem;
-}
+html.dark .plan-price-annual{background:rgba(16,185,129,.15);color:#34d399;border-color:rgba(16,185,129,.3);}
+.plan-price-annual .save{margin-left:.25rem;color:#065f46;font-weight:800;}
+html.dark .plan-price-annual .save{color:#6ee7b7;}
 
 /* Body */
-.plan-body{padding:1.35rem 1.5rem 1.5rem;flex:1;display:flex;flex-direction:column;}
-.plan-stats{
-  display:grid;grid-template-columns:repeat(2,1fr);gap:.55rem;margin-bottom:1.25rem;
+.plan-body{padding:1.4rem 1.6rem 1.6rem;flex:1;display:flex;flex-direction:column;}
+
+/* Inline stat chips — single horizontal row replacing the 2x2 grid.
+   Wraps to 2 lines if container is too narrow. */
+.plan-chips{
+  display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1.25rem;
 }
-.plan-stat-item{
-  padding:.7rem .55rem;border-radius:12px;
-  background:linear-gradient(135deg,rgba(99,102,241,.04),rgba(236,72,153,.025));
+.plan-chip{
+  display:inline-flex;align-items:center;gap:.35rem;
+  padding:.45rem .7rem;border-radius:999px;
+  background:linear-gradient(135deg,rgba(99,102,241,.05),rgba(236,72,153,.025));
   border:1px solid rgba(99,102,241,.1);
-  text-align:center;transition:transform .2s,border-color .2s;
+  font-size:.78rem;color:#334155;font-weight:600;letter-spacing:-0.005em;
+  transition:border-color .2s,background .2s,transform .15s;
 }
-html.dark .plan-stat-item{ background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(236,72,153,.05)); border-color:rgba(255,255,255,.06); }
-.plan-tile:hover .plan-stat-item{border-color:rgba(124,58,237,.25);}
-.plan-stat-icon{font-size:.95rem;color:var(--accent,#4f46e5);margin-bottom:.15rem;}
-html.dark .plan-stat-icon{color:#a5b4fc;}
-.plan-stat-label{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:.1rem;}
-html.dark .plan-stat-label{ color:#94a3b8; }
-.plan-stat-val{font-weight:800;font-size:.98rem;color:#0f172a;letter-spacing:-0.01em;}
-html.dark .plan-stat-val{ color:#f1f5f9; }
-.plan-stat-val small{font-weight:500;color:#64748b;font-size:.7rem;margin-left:.15rem;}
-html.dark .plan-stat-val small{ color:#94a3b8; }
+html.dark .plan-chip{
+  background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(236,72,153,.05));
+  border-color:rgba(255,255,255,.06);color:#cbd5e1;
+}
+.plan-tile:hover .plan-chip{border-color:rgba(124,58,237,.25);}
+.plan-chip i{color:var(--accent, #4f46e5);font-size:.85rem;}
+html.dark .plan-chip i{color:#a5b4fc;}
+.plan-chip .num{font-weight:800;color:#0f172a;font-feature-settings:'tnum';}
+html.dark .plan-chip .num{color:#f1f5f9;}
+.plan-chip .num.inf{font-size:1rem;line-height:1;color:var(--accent, #7c3aed);}
 
+/* Feature list — count badge at top, then chevron-prefixed rows. */
 .plan-features-label{
-  font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.16em;
-  color:#64748b;margin-bottom:.7rem;display:flex;align-items:center;gap:.4rem;
+  font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.16em;
+  color:#64748b;margin-bottom:.85rem;display:flex;align-items:center;gap:.5rem;
+  padding-bottom:.7rem;border-bottom:1px solid rgba(99,102,241,.08);
 }
-html.dark .plan-features-label{ color:#94a3b8; }
-.plan-features{display:flex;flex-direction:column;gap:.45rem;flex:1;margin-bottom:1.25rem;}
+html.dark .plan-features-label{color:#94a3b8;border-bottom-color:rgba(255,255,255,.05);}
+.plan-features-label .count{
+  margin-left:auto;padding:.15rem .55rem;border-radius:6px;
+  background:linear-gradient(135deg, var(--accent, #4f46e5), color-mix(in srgb, var(--accent, #4f46e5) 50%, #ec4899));
+  color:#fff;font-size:.65rem;font-weight:800;letter-spacing:.05em;
+}
+.plan-features{display:flex;flex-direction:column;gap:.55rem;flex:1;margin-bottom:1.4rem;}
 .plan-feature-row{
-  display:flex;align-items:flex-start;gap:.55rem;
-  font-size:.8rem;color:#334155;line-height:1.4;
+  display:flex;align-items:flex-start;gap:.6rem;
+  font-size:.83rem;color:#334155;line-height:1.45;
 }
-html.dark .plan-feature-row{ color:#cbd5e1; }
-.plan-feature-row.locked{ opacity:.35; }
+html.dark .plan-feature-row{color:#cbd5e1;}
 .plan-feature-icon{
-  width:18px;height:18px;border-radius:50%;
+  width:20px;height:20px;border-radius:6px;
   display:inline-flex;align-items:center;justify-content:center;
-  flex-shrink:0;margin-top:.1rem;font-size:.65rem;
+  flex-shrink:0;margin-top:.05rem;font-size:.7rem;
+  background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(52,211,153,.1));
+  color:#059669;
 }
-.plan-feature-icon.on{background:rgba(16,185,129,.14);color:#059669;}
+html.dark .plan-feature-icon{background:linear-gradient(135deg,rgba(16,185,129,.25),rgba(52,211,153,.15));color:#34d399;}
 .plan-feature-icon.off{background:rgba(148,163,184,.15);color:#94a3b8;}
-html.dark .plan-feature-icon.on{ background:rgba(16,185,129,.22); color:#34d399; }
-html.dark .plan-feature-icon.off{ background:rgba(148,163,184,.15); color:#64748b; }
+html.dark .plan-feature-icon.off{background:rgba(148,163,184,.15);color:#64748b;}
 
-/* CTA buttons */
+/* CTA buttons — pill-shaped (24px radius), softer animations. */
 .plan-cta{
-  width:100%;padding:.95rem;border-radius:14px;
+  width:100%;padding:1rem;border-radius:14px;
   font-weight:800;font-size:.92rem;
-  display:inline-flex;align-items:center;justify-content:center;gap:.45rem;
-  transition:transform .15s,box-shadow .25s,filter .2s;cursor:pointer;border:none;
-  letter-spacing:-0.01em;
+  display:inline-flex;align-items:center;justify-content:center;gap:.5rem;
+  transition:transform .15s,box-shadow .25s,filter .2s,background .2s;
+  cursor:pointer;border:none;letter-spacing:-0.01em;
+  position:relative;overflow:hidden;
 }
 .plan-cta-primary{
   background:linear-gradient(135deg,#4f46e5,#7c3aed,#ec4899);
   background-size:200% 200%;
   color:#fff;
-  box-shadow:0 10px 24px -6px rgba(124,58,237,.5);
+  box-shadow:0 12px 28px -6px rgba(124,58,237,.55);
   animation:cta-shine 4s ease-in-out infinite;
 }
 @keyframes cta-shine{0%,100%{background-position:0% 50%;}50%{background-position:100% 50%;}}
-.plan-cta-primary:hover{ transform:translateY(-2px);box-shadow:0 16px 32px -6px rgba(124,58,237,.65);filter:brightness(1.06); }
+.plan-cta-primary:hover{transform:translateY(-3px);box-shadow:0 20px 38px -8px rgba(124,58,237,.7);filter:brightness(1.07);}
+
 .plan-cta-secondary{
-  background:#f1f5f9;color:#334155;border:1px solid rgba(99,102,241,.1);
+  background:#0f172a;color:#fff;
+  box-shadow:0 8px 20px -6px rgba(15,23,42,.4);
 }
-html.dark .plan-cta-secondary{ background:rgba(255,255,255,.06); color:#cbd5e1; border:1px solid rgba(255,255,255,.08); }
-.plan-cta-secondary:hover{ background:#e2e8f0; transform:translateY(-1px); }
-html.dark .plan-cta-secondary:hover{ background:rgba(255,255,255,.1); }
+html.dark .plan-cta-secondary{
+  background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.1);
+  box-shadow:0 8px 22px -6px rgba(0,0,0,.5);
+}
+.plan-cta-secondary:hover{background:#1e293b;transform:translateY(-2px);box-shadow:0 14px 30px -8px rgba(15,23,42,.55);}
+html.dark .plan-cta-secondary:hover{background:rgba(255,255,255,.15);}
+
 .plan-cta-current{
   background:rgba(16,185,129,.1);color:#059669;cursor:not-allowed;
   border:1px dashed rgba(16,185,129,.3);
 }
-html.dark .plan-cta-current{ background:rgba(16,185,129,.15); color:#34d399; border-color:rgba(16,185,129,.4); }
+html.dark .plan-cta-current{background:rgba(16,185,129,.15);color:#34d399;border-color:rgba(16,185,129,.4);}
+
 .plan-cta-free{
-  background:#0f172a;color:#fff;
+  background:#fff;color:#0f172a;
+  border:1.5px solid rgba(99,102,241,.2);
+  box-shadow:0 6px 16px -4px rgba(99,102,241,.12);
 }
-.plan-cta-free:hover{ background:#1e293b;transform:translateY(-1px); }
-html.dark .plan-cta-free{ background:rgba(255,255,255,.1); color:#fff; border:1px solid rgba(255,255,255,.15); }
-html.dark .plan-cta-free:hover{ background:rgba(255,255,255,.15); }
+.plan-cta-free:hover{background:#f8fafc;transform:translateY(-2px);border-color:rgba(124,58,237,.4);}
+html.dark .plan-cta-free{background:rgba(255,255,255,.06);color:#fff;border-color:rgba(255,255,255,.12);}
+html.dark .plan-cta-free:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);}
 
 /* Per-GB indicator */
 .plan-value-tip{
@@ -371,68 +411,37 @@ html.dark .plan-feature-more:hover{
   font-size:.7rem;
 }
 
-/* ─── Hero social proof ──────────────────────────────────────────── */
-.hero-rating{
-  display:inline-flex;align-items:center;gap:.55rem;
-  padding:.45rem 1rem;border-radius:999px;
-  background:rgba(255,255,255,.8);backdrop-filter:blur(14px);
-  border:1px solid rgba(245,158,11,.25);
-  box-shadow:0 8px 20px -8px rgba(245,158,11,.2);
-  margin-bottom:1rem;
-}
-html.dark .hero-rating{
-  background:rgba(15,23,42,.7);border-color:rgba(245,158,11,.3);
-}
-.hero-rating-stars{color:#f59e0b;font-size:.8rem;letter-spacing:.04em;display:inline-flex;gap:1px;}
-.hero-rating-stars i{filter:drop-shadow(0 1px 2px rgba(245,158,11,.4));}
-.hero-rating-text{font-size:.75rem;font-weight:700;color:#0f172a;}
-html.dark .hero-rating-text{color:#f1f5f9;}
-.hero-rating-text strong{color:#f59e0b;font-weight:800;}
-.hero-rating-divider{width:1px;height:14px;background:rgba(99,102,241,.2);}
-html.dark .hero-rating-divider{background:rgba(255,255,255,.15);}
-
-/* ─── Stats strip — between hero and plans ───────────────────────── */
-.stats-strip{
-  display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;
-  max-width:54rem;margin:1.5rem auto 0;
-}
-@media (min-width:640px){.stats-strip{grid-template-columns:repeat(4,1fr);}}
-.stat-tile{
-  padding:1rem .8rem;border-radius:18px;text-align:center;
-  background:rgba(255,255,255,.7);backdrop-filter:blur(14px);
+/* ─── Real-policy guarantees ─────────────────────────────────────── */
+.guarantees{max-width:74rem;margin:3rem auto 0;}
+.guarantee-card{
+  position:relative;padding:1.5rem 1.25rem;border-radius:20px;
+  background:rgba(255,255,255,.85);backdrop-filter:blur(14px);
   border:1px solid rgba(99,102,241,.12);
   transition:transform .25s,box-shadow .25s,border-color .25s;
 }
-html.dark .stat-tile{
-  background:rgba(15,23,42,.55);border-color:rgba(255,255,255,.06);
+html.dark .guarantee-card{
+  background:rgba(15,23,42,.65);border-color:rgba(255,255,255,.06);
 }
-.stat-tile:hover{
-  transform:translateY(-3px);
-  border-color:rgba(124,58,237,.35);
-  box-shadow:0 16px 32px -12px rgba(99,102,241,.2);
+.guarantee-card:hover{
+  transform:translateY(-4px);
+  border-color:rgba(124,58,237,.3);
+  box-shadow:0 20px 40px -16px rgba(99,102,241,.22);
 }
-.stat-tile-icon{
-  width:36px;height:36px;border-radius:12px;
+.guarantee-icon{
+  width:52px;height:52px;border-radius:16px;
   display:inline-flex;align-items:center;justify-content:center;
-  background:linear-gradient(135deg,#4f46e5,#7c3aed,#ec4899);color:#fff;
-  font-size:1.05rem;margin-bottom:.4rem;
-  box-shadow:0 6px 14px -4px rgba(124,58,237,.4);
+  font-size:1.45rem;color:#fff;margin-bottom:1rem;
+  background:var(--icon-bg, linear-gradient(135deg,#4f46e5,#7c3aed));
+  box-shadow:0 10px 22px -8px rgba(0,0,0,.18);
 }
-.stat-tile-num{
-  font-size:1.4rem;font-weight:800;color:#0f172a;letter-spacing:-0.02em;
-  background:linear-gradient(135deg,#4f46e5,#7c3aed,#ec4899);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-  display:block;
+.guarantee-card h4{
+  font-size:1rem;font-weight:800;color:#0f172a;letter-spacing:-0.015em;margin:0 0 .4rem;
 }
-html.dark .stat-tile-num{
-  background:linear-gradient(135deg,#a5b4fc,#c7d2fe,#f9a8d4);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
+html.dark .guarantee-card h4{color:#f1f5f9;}
+.guarantee-card p{
+  font-size:.82rem;color:#475569;line-height:1.55;margin:0;
 }
-.stat-tile-label{
-  font-size:.66rem;color:#64748b;font-weight:700;
-  text-transform:uppercase;letter-spacing:.08em;margin-top:.2rem;
-}
-html.dark .stat-tile-label{color:#94a3b8;}
+html.dark .guarantee-card p{color:#cbd5e1;}
 
 /* ─── Comparison table ──────────────────────────────────────────── */
 .compare-wrap{max-width:78rem;margin:3.5rem auto 0;padding:0 0;}
@@ -550,53 +559,6 @@ html.dark .compare-table tr.group-head td{
   color:#a5b4fc;border-bottom-color:rgba(99,102,241,.25);
 }
 
-/* ─── Money-back banner ─── */
-.money-back{
-  margin:2.5rem auto 0;max-width:54rem;padding:1.1rem 1.5rem;border-radius:18px;
-  background:linear-gradient(135deg,rgba(16,185,129,.08),rgba(52,211,153,.04));
-  border:1px solid rgba(16,185,129,.2);
-  display:flex;align-items:center;gap:1rem;flex-wrap:wrap;
-}
-html.dark .money-back{background:linear-gradient(135deg,rgba(16,185,129,.18),rgba(52,211,153,.1));border-color:rgba(16,185,129,.3);}
-.money-back-icon{
-  width:48px;height:48px;border-radius:14px;flex-shrink:0;
-  background:linear-gradient(135deg,#10b981,#059669);color:#fff;
-  display:inline-flex;align-items:center;justify-content:center;font-size:1.4rem;
-  box-shadow:0 8px 20px -4px rgba(16,185,129,.4);
-}
-.money-back-text{flex:1;min-width:200px;}
-.money-back-title{font-weight:800;color:#065f46;font-size:.95rem;letter-spacing:-0.01em;}
-html.dark .money-back-title{color:#34d399;}
-.money-back-sub{font-size:.78rem;color:#475569;margin-top:.15rem;}
-html.dark .money-back-sub{color:#94a3b8;}
-
-/* ─── Testimonials ─── */
-.tm-card{
-  background:rgba(255,255,255,.7);backdrop-filter:blur(14px);
-  border:1px solid rgba(99,102,241,.12);border-radius:18px;
-  padding:1.25rem;display:flex;flex-direction:column;gap:.75rem;
-  transition:transform .25s,box-shadow .25s;
-}
-html.dark .tm-card{background:rgba(15,23,42,.65);border-color:rgba(255,255,255,.06);}
-.tm-card:hover{transform:translateY(-3px);box-shadow:0 12px 28px -8px rgba(99,102,241,.18);}
-.tm-stars{color:#f59e0b;font-size:.85rem;letter-spacing:.05em;}
-.tm-quote{font-size:.86rem;color:#334155;line-height:1.55;font-style:italic;}
-html.dark .tm-quote{color:#cbd5e1;}
-.tm-quote::before{content:'\201C';font-size:1.4rem;color:#7c3aed;font-weight:800;margin-right:.15rem;line-height:0;}
-.tm-author{display:flex;align-items:center;gap:.6rem;margin-top:auto;padding-top:.5rem;border-top:1px solid rgba(99,102,241,.08);}
-html.dark .tm-author{border-top-color:rgba(255,255,255,.06);}
-.tm-avatar{
-  width:38px;height:38px;border-radius:50%;flex-shrink:0;
-  background:linear-gradient(135deg,#4f46e5,#7c3aed,#ec4899);
-  color:#fff;display:inline-flex;align-items:center;justify-content:center;
-  font-weight:800;font-size:.95rem;letter-spacing:-0.01em;
-  box-shadow:0 4px 10px -2px rgba(124,58,237,.35);
-}
-.tm-name{font-weight:800;color:#0f172a;font-size:.85rem;letter-spacing:-0.01em;}
-html.dark .tm-name{color:#f1f5f9;}
-.tm-role{font-size:.7rem;color:#64748b;}
-html.dark .tm-role{color:#94a3b8;}
-
 /* ─── Section dividers ─── */
 .section-eyebrow{
   display:inline-flex;align-items:center;gap:.4rem;padding:.3rem .8rem;border-radius:999px;
@@ -668,25 +630,6 @@ html.dark .faq-a{ color:#94a3b8; }
       <i class="bi bi-arrow-left"></i> กลับหน้าจัดการแผน
     </a>
 
-    {{-- Hero rating / social proof — sits ABOVE the eyebrow because it's
-         the most credibility-loaded element on the page. The 4.9 rating
-         is conservative (real review averages typically land 4.7–5.0)
-         and tied to a stable count so it can't claim more than the
-         actual photographer base. Update both numbers in lockstep when
-         the marketing team revises the published stats. --}}
-    <div class="hero-rating">
-      <span class="hero-rating-stars" aria-label="rating 4.9 out of 5">
-        <i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i>
-      </span>
-      <span class="hero-rating-text">
-        <strong>4.9/5</strong> · ช่างภาพ 500+ คนใช้อยู่
-      </span>
-      <span class="hero-rating-divider"></span>
-      <span class="hero-rating-text" style="font-weight:600;color:#10b981;">
-        <i class="bi bi-shield-check"></i> ยกเลิกได้ทุกเมื่อ
-      </span>
-    </div>
-
     <div class="section-eyebrow mb-3">
       <i class="bi bi-stars"></i> แผนสมัครสมาชิก
     </div>
@@ -724,40 +667,16 @@ html.dark .faq-a{ color:#94a3b8; }
          x-text="annual ? 'จ่ายปีละ 1 ครั้ง — ฟรี 2 เดือน' : 'จ่ายเดือนละ 1 ครั้ง — ยกเลิกได้ทุกเมื่อ'"></p>
     </div>
 
-    {{-- Trust strip --}}
+    {{-- Trust strip — every claim here is tied to a real code path:
+           • cancel anytime → SubscriptionService::cancel()
+           • PromptPay + card → PaymentMethod active gateways
+           • change plan anytime → SubscriptionService::changePlan()
+           • files stay on downgrade → confirmed in cancel() docstring  --}}
     <div class="trust-row">
-      <span class="trust-pill"><i class="bi bi-shield-check text-emerald-500"></i> ยกเลิกได้ทุกเมื่อ</span>
+      <span class="trust-pill"><i class="bi bi-shield-check text-emerald-500"></i> ยกเลิกได้ทุกเมื่อ ไม่มีค่าธรรมเนียม</span>
       <span class="trust-pill"><i class="bi bi-credit-card text-indigo-500"></i> PromptPay + บัตรเครดิต</span>
       <span class="trust-pill"><i class="bi bi-lightning-charge text-pink-500"></i> เปลี่ยนแผนได้ทันที</span>
-      <span class="trust-pill"><i class="bi bi-cloud-check text-sky-500"></i> ข้อมูลไม่หายเวลาดาวน์เกรด</span>
-    </div>
-
-    {{-- ─── Stats strip ──────────────────────────────────────────
-         Four metric tiles that convert "we have customers" into
-         concrete numbers. Numbers should be updated alongside the
-         hero rating count above so they stay coherent — picking
-         numbers that feel believable for the platform's age. --}}
-    <div class="stats-strip plan-anim">
-      <div class="stat-tile">
-        <div class="stat-tile-icon"><i class="bi bi-people-fill"></i></div>
-        <span class="stat-tile-num">500+</span>
-        <p class="stat-tile-label">ช่างภาพที่ใช้</p>
-      </div>
-      <div class="stat-tile">
-        <div class="stat-tile-icon"><i class="bi bi-camera-fill"></i></div>
-        <span class="stat-tile-num">10K+</span>
-        <p class="stat-tile-label">อีเวนต์</p>
-      </div>
-      <div class="stat-tile">
-        <div class="stat-tile-icon"><i class="bi bi-images"></i></div>
-        <span class="stat-tile-num">5M+</span>
-        <p class="stat-tile-label">รูปที่ส่งมอบ</p>
-      </div>
-      <div class="stat-tile">
-        <div class="stat-tile-icon"><i class="bi bi-cash-coin"></i></div>
-        <span class="stat-tile-num">฿20M+</span>
-        <p class="stat-tile-label">จ่ายให้ช่างภาพ</p>
-      </div>
+      <span class="trust-pill"><i class="bi bi-cloud-check text-sky-500"></i> ดาวน์เกรดไฟล์ยังอยู่ครบ</span>
     </div>
   </div>
 
@@ -777,7 +696,11 @@ html.dark .faq-a{ color:#94a3b8; }
                             genuine horizontal room (~280px per card minimum)
        This avoids 5 columns squeezing onto a 1280px viewport which was
        overflowing the popular-plan transform / accent-border layers. --}}
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-5 max-w-8xl mx-auto">
+  {{-- 5xl 2xl-cols-5 was for the older 5-plan layout where starter+business
+       were public. After the 3-tier restructure (free/pro/studio public),
+       capping at lg-cols-3 + an extra mt-3 for the floating popular tag
+       gives us breathing room without overflow. --}}
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-7 max-w-7xl mx-auto pt-3">
     @foreach($plans as $idx => $p)
       @php
         $isCurrent    = $p->code === $currentCode;
@@ -840,59 +763,61 @@ html.dark .faq-a{ color:#94a3b8; }
            data-plan-code="{{ $p->code }}"
            class="plan-tile plan-anim {{ $delayClass }} {{ $isCurrent ? 'current' : ($isPopular ? 'popular' : '') }}"
            style="--accent: {{ $accent }}; --accent-soft: {{ $accent }}1f; --accent-border: {{ $accent }}35; --accent-shadow: {{ $accent }}55;">
+
+        {{-- Floating tag (sits ABOVE the card via negative top margin).
+             Replaces the previous in-card top ribbon — keeps the
+             header clean for icon + name. --}}
         @if($isCurrent)
-          <div class="plan-ribbon current"><i class="bi bi-check-circle-fill"></i> แผนปัจจุบัน</div>
+          <div class="plan-tag-current"><i class="bi bi-check-circle-fill"></i> แผนปัจจุบัน</div>
         @elseif($isPopular)
-          <div class="plan-ribbon"><i class="bi bi-stars"></i> ขายดีที่สุด</div>
+          <div class="plan-tag-pop"><i class="bi bi-stars"></i> Popular</div>
         @endif
 
-        {{-- Header --}}
+        {{-- Tier number watermark — "01/02/03" — uses 1-based card index.
+             Pure visual, no semantic meaning beyond ordering on the page. --}}
+        <div class="plan-tier-num" aria-hidden="true">{{ str_pad((string)($idx + 1), 2, '0', STR_PAD_LEFT) }}</div>
+
+        {{-- Header: icon + name + tagline + hero price (left-aligned). --}}
         <div class="plan-header">
           <div class="plan-icon"><i class="bi {{ $icon }}"></i></div>
           <h3 class="plan-name">{{ $p->name }}</h3>
           @if($p->tagline)
             <p class="plan-tagline">{{ $p->tagline }}</p>
+          @else
+            <p class="plan-tagline">&nbsp;</p>
           @endif
 
           <div class="plan-price">
             @if($p->isFree())
-              <span class="plan-price-value">ฟรี</span>
-              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">ตลอดไป · ไม่ต้องใช้บัตรเครดิต</p>
+              <span class="plan-price-value">
+                <span class="cur">฿</span>0
+              </span>
+              <span class="plan-price-suffix">ตลอดไป</span>
             @else
               {{-- Live-toggled price between monthly and annual-equiv-per-month --}}
               <span class="plan-price-value">
-                <span class="text-base text-slate-500 dark:text-slate-400 font-semibold">฿</span>
-                <span x-text="annual
+                <span class="cur">฿</span><span x-text="annual
                   ? numberFmt(Math.round(({{ (float) $p->price_annual_thb }} || ({{ (float) $p->price_thb }}*12)) / 12))
                   : numberFmt({{ (float) $p->price_thb }})"></span>
               </span>
               <span class="plan-price-suffix">/เดือน</span>
 
-              <div class="mt-2 flex flex-col items-center gap-1.5">
-                {{-- Annual selected: show "billed annually ฿XX (save ฿YY)" --}}
+              <div class="mt-1.5 flex flex-col items-start gap-1.5">
                 <template x-if="annual && {{ $p->price_annual_thb ? 1 : 0 }}">
                   <span class="plan-price-annual">
                     <i class="bi bi-tag-fill"></i>
                     เก็บปีละ ฿<span x-text="numberFmt({{ (float) ($p->price_annual_thb ?? 0) }})"></span>
                     @if($p->annualSavings() > 0)
-                      <span class="text-emerald-700 dark:text-emerald-300 font-extrabold">· ประหยัด ฿{{ number_format($p->annualSavings(), 0) }}</span>
+                      <span class="save">ประหยัด ฿{{ number_format($p->annualSavings(), 0) }}</span>
                     @endif
                   </span>
                 </template>
-                {{-- Monthly selected: show "save ฿XX with annual" hint --}}
                 <template x-if="!annual && {{ $p->annualSavings() > 0 ? 1 : 0 }}">
                   <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold inline-flex items-center gap-1">
                     <i class="bi bi-arrow-up-right"></i>
-                    เลือกรายปีประหยัด ฿{{ number_format($p->annualSavings(), 0) }}
+                    รายปีประหยัด ฿{{ number_format($p->annualSavings(), 0) }}
                   </span>
                 </template>
-
-                @if($valuePerGb > 0 && $valuePerGb < 100)
-                  <span class="plan-value-tip">
-                    <i class="bi bi-graph-down-arrow"></i>
-                    ฿{{ number_format($valuePerGb, $valuePerGb < 1 ? 2 : 1) }} ต่อ GB
-                  </span>
-                @endif
               </div>
             @endif
           </div>
@@ -900,39 +825,37 @@ html.dark .faq-a{ color:#94a3b8; }
 
         {{-- Body --}}
         <div class="plan-body">
-          {{-- Stats grid --}}
-          <div class="plan-stats">
-            <div class="plan-stat-item">
-              <div class="plan-stat-icon"><i class="bi bi-hdd-stack"></i></div>
-              <div class="plan-stat-label">พื้นที่</div>
-              <div class="plan-stat-val">{{ number_format($p->storage_gb, 0) }}<small>GB</small></div>
+          {{-- Inline stat chips (replaces the old 2x2 grid).
+               Each chip = one number from the database, never invented. --}}
+          @php
+            $credits = (int) $p->monthly_ai_credits;
+            $aiDisp  = $credits >= 1000000 ? '1M' : ($credits >= 1000 ? round($credits/1000).'K' : $credits);
+            $commDisp = rtrim(rtrim(number_format((float) $p->commission_pct, 1), '0'), '.');
+          @endphp
+          <div class="plan-chips">
+            <div class="plan-chip">
+              <i class="bi bi-hdd-stack"></i>
+              <span class="num">{{ number_format($p->storage_gb, 0) }}</span>
+              <span>GB</span>
             </div>
-            <div class="plan-stat-item">
-              <div class="plan-stat-icon"><i class="bi bi-percent"></i></div>
-              <div class="plan-stat-label">ค่าคอม</div>
-              <div class="plan-stat-val">{{ rtrim(rtrim(number_format((float) $p->commission_pct, 1), '0'), '.') }}<small>%</small></div>
+            <div class="plan-chip">
+              <i class="bi bi-percent"></i>
+              <span class="num">{{ $commDisp }}%</span>
+              <span>คอม</span>
             </div>
-            <div class="plan-stat-item">
-              <div class="plan-stat-icon"><i class="bi bi-calendar-event"></i></div>
-              <div class="plan-stat-label">อีเวนต์</div>
-              <div class="plan-stat-val">
-                @if(is_null($p->max_concurrent_events))
-                  <span style="color:{{ $accent }}">∞</span>
-                @else
-                  {{ (int) $p->max_concurrent_events }}
-                @endif
-              </div>
+            <div class="plan-chip">
+              <i class="bi bi-calendar-event"></i>
+              @if(is_null($p->max_concurrent_events))
+                <span class="num inf">∞</span>
+              @else
+                <span class="num">{{ (int) $p->max_concurrent_events }}</span>
+              @endif
+              <span>อีเวนต์</span>
             </div>
-            <div class="plan-stat-item">
-              <div class="plan-stat-icon"><i class="bi bi-cpu"></i></div>
-              <div class="plan-stat-label">AI/เดือน</div>
-              <div class="plan-stat-val">
-                @php
-                  $credits = (int) $p->monthly_ai_credits;
-                  $disp = $credits >= 1000000 ? '1M' : ($credits >= 1000 ? round($credits/1000).'K' : $credits);
-                @endphp
-                {{ $disp }}
-              </div>
+            <div class="plan-chip">
+              <i class="bi bi-cpu"></i>
+              <span class="num">{{ $aiDisp }}</span>
+              <span>AI/เดือน</span>
             </div>
           </div>
 
@@ -955,14 +878,15 @@ html.dark .faq-a{ color:#94a3b8; }
 
           <div>
             <p class="plan-features-label">
-              <i class="bi bi-magic" style="color:{{ $accent }}"></i>
-              <span>รวมในแผน · <span class="text-indigo-600 dark:text-indigo-400 font-extrabold">{{ count($enabledLabels) }}</span> ฟีเจอร์</span>
+              <i class="bi bi-stars" style="color:{{ $accent }}"></i>
+              <span>รวมในแผน</span>
+              <span class="count">{{ count($enabledLabels) }} ฟีเจอร์</span>
             </p>
             <div class="plan-features">
               @forelse($visibleLabels as $label)
                 <div class="plan-feature-row">
-                  <span class="plan-feature-icon on">
-                    <i class="bi bi-check-lg"></i>
+                  <span class="plan-feature-icon">
+                    <i class="bi bi-check2"></i>
                   </span>
                   <span>{{ $label }}</span>
                 </div>
@@ -1292,64 +1216,53 @@ html.dark .faq-a{ color:#94a3b8; }
     </div>
   @endif
 
-  {{-- ─── Money-back guarantee ─── --}}
-  <div class="money-back plan-anim d5">
-    <div class="money-back-icon"><i class="bi bi-shield-fill-check"></i></div>
-    <div class="money-back-text">
-      <p class="money-back-title">ทดลองใช้แบบ Risk-free 7 วัน</p>
-      <p class="money-back-sub">ภายใน 7 วันแรก หากไม่พอใจ ติดต่อทีมเราเพื่อขอเงินคืนเต็มจำนวน · ไม่มีคำถามใดๆ</p>
-    </div>
-    <a href="mailto:support@photogallery.com"
-       class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition">
-      <i class="bi bi-headset"></i> ติดต่อทีม
-    </a>
-  </div>
-
-  {{-- ─── Testimonials ─── --}}
-  <div class="max-w-6xl mx-auto mt-12 plan-anim d6">
+  {{-- ─── Real-policy guarantees ─────────────────────────────────────
+       Every line here is a verifiable code-backed promise:
+         1. cancel: SubscriptionService::cancel() — leaves period intact
+            until period_end, no fee.
+         2. files-on-downgrade: confirmed in cancel() + expireOverdue()
+            — they only flip status + reset profile.storage_quota_bytes;
+            files on R2/disk are untouched.
+         3. grace 7 days: SubscriptionService::DEFAULT_GRACE_DAYS = 7,
+            also overridable via AppSetting subscription_grace_period_days.
+         4. month-by-month: PaymentService::ensureOmiseCustomerForSubscription
+            only saves an Omise customer when save_card=true; PromptPay/
+            bank gateways never bind a card.
+       Replaces the previous "money-back" + fake testimonials section. ─ --}}
+  <div class="guarantees plan-anim d5">
     <div class="text-center mb-6">
-      <div class="section-eyebrow"><i class="bi bi-quote"></i> ผู้ใช้งานจริง</div>
-      <h2 class="title-grad text-2xl sm:text-3xl mt-3 leading-tight">ช่างภาพมืออาชีพไว้ใจเรา</h2>
+      <div class="section-eyebrow"><i class="bi bi-shield-fill-check"></i> เงื่อนไขจริงในระบบ</div>
+      <h2 class="title-grad text-2xl sm:text-3xl mt-3 leading-tight">สิ่งที่เรารับประกัน</h2>
+      <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">ทุกข้อตรงกับโค้ดจริงในระบบ — ไม่ใช่คำสัญญาทางการตลาด</p>
     </div>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div class="tm-card">
-        <div class="tm-stars">
-          <i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="guarantee-card">
+        <div class="guarantee-icon" style="--icon-bg:linear-gradient(135deg,#10b981,#059669);">
+          <i class="bi bi-x-circle-fill"></i>
         </div>
-        <p class="tm-quote">งานวิ่งมาราธอน 5,000 รูป AI ค้นหาด้วยใบหน้าเจอลูกค้าใน 3 วินาที — ขายได้เกือบทุกใบ ก่อนหน้านี้ใช้ Drive ลูกค้าหาเองหลายชั่วโมง</p>
-        <div class="tm-author">
-          <div class="tm-avatar">ช</div>
-          <div>
-            <div class="tm-name">ช่างเอ ฟิตเนส</div>
-            <div class="tm-role">Sport Photographer · Pro plan</div>
-          </div>
-        </div>
+        <h4>ยกเลิกเมื่อไหร่ก็ได้</h4>
+        <p>ไม่มีสัญญาผูกมัด ไม่มีค่าธรรมเนียมยกเลิก ใช้งานได้จนสิ้นรอบบิลปัจจุบัน แล้วค่อย downgrade เป็น Free</p>
       </div>
-      <div class="tm-card">
-        <div class="tm-stars">
-          <i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i>
+      <div class="guarantee-card">
+        <div class="guarantee-icon" style="--icon-bg:linear-gradient(135deg,#3b82f6,#1e40af);">
+          <i class="bi bi-folder-fill"></i>
         </div>
-        <p class="tm-quote">Custom branding ของ Business plan ทำให้ลูกค้าจำเราได้ ไม่ใช่จำแพลตฟอร์ม — ส่งงานออกมาดูมืออาชีพ ราคาเริ่มขายได้สูงขึ้น 30%</p>
-        <div class="tm-author">
-          <div class="tm-avatar">ม</div>
-          <div>
-            <div class="tm-name">มะนาว สตูดิโอ</div>
-            <div class="tm-role">Wedding Studio · Business plan</div>
-          </div>
-        </div>
+        <h4>ไฟล์ทั้งหมดยังอยู่</h4>
+        <p>ดาวน์เกรดหรือยกเลิกแล้ว ระบบแค่ปรับ quota — ไม่ลบไฟล์ของคุณ ใช้ pubic page ขายต่อได้ตามแผน Free</p>
       </div>
-      <div class="tm-card">
-        <div class="tm-stars">
-          <i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i>
+      <div class="guarantee-card">
+        <div class="guarantee-icon" style="--icon-bg:linear-gradient(135deg,#f59e0b,#d97706);">
+          <i class="bi bi-clock-history"></i>
         </div>
-        <p class="tm-quote">เริ่มจาก Free plan ลองระบบ 1 เดือน แล้วอัปเป็น Starter — รายได้เพิ่มขึ้น 3 เท่าจากการขายภาพออนไลน์ คุ้มมากกับ ฿299</p>
-        <div class="tm-author">
-          <div class="tm-avatar">ป</div>
-          <div>
-            <div class="tm-name">ป๊อป Freelance</div>
-            <div class="tm-role">Freelance Photographer · Starter plan</div>
-          </div>
+        <h4>ผ่อนผัน 7 วัน</h4>
+        <p>หากตัดบัตรไม่ผ่าน ระบบให้ใช้งานต่อ 7 วัน เพื่ออัปเดตการชำระ — ก่อน downgrade เป็น Free อัตโนมัติ</p>
+      </div>
+      <div class="guarantee-card">
+        <div class="guarantee-icon" style="--icon-bg:linear-gradient(135deg,#8b5cf6,#6d28d9);">
+          <i class="bi bi-toggle-on"></i>
         </div>
+        <h4>เลือกซื้อรายเดือนได้</h4>
+        <p>ไม่ติ๊ก "บันทึกบัตร" = จ่ายเดือนเดียวจบ ไม่ผูกบัตร ครบเดือนถ้าจะใช้ต่อสมัครใหม่ได้ทุกเมื่อ</p>
       </div>
     </div>
   </div>
