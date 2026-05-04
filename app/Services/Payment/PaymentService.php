@@ -117,7 +117,7 @@ class PaymentService
      * link out of us. The client-side filter at /payment/checkout/{order}
      * is for UX; this is the actual gate.
      */
-    public static function processPayment(Order $order, string $methodType): array
+    public static function processPayment(Order $order, string $methodType, array $extras = []): array
     {
         if (!self::isGatewayEnabled($methodType)) {
             throw new \InvalidArgumentException("ช่องทาง '{$methodType}' ไม่เปิดใช้งานอยู่");
@@ -126,16 +126,125 @@ class PaymentService
         $gateway     = self::createGateway($methodType);
         $transaction = self::createTransaction($order, $methodType);
 
-        $result = $gateway->initiate([
-            'amount'         => $order->net_amount ?? $order->total_amount ?? $order->total,
+        $amount = $order->net_amount ?? $order->total_amount ?? $order->total;
+
+        // Omise card-on-file path for subscription orders:
+        // When Omise.js gave us a card token AND this is a subscription
+        // order (recurring billing target), create an Omise Customer
+        // FIRST so the card is retained on Omise's side for the
+        // `subscriptions:charge-pending` cron to use on subsequent
+        // periods. The created customer's id is saved on the
+        // PhotographerSubscription / UserStorageSubscription row.
+        // Subsequent charges go through the customer (default card),
+        // which means tokens are consumed once but cards live forever.
+        $omiseToken = $extras['omise_token'] ?? null;
+        $useCustomerForCharge = false;
+        $customerId = null;
+
+        if ($methodType === 'omise'
+            && !empty($omiseToken)
+            && ($order->isSubscriptionOrder() || $order->order_type === Order::TYPE_USER_STORAGE_SUBSCRIPTION)
+        ) {
+            try {
+                $customerId = self::ensureOmiseCustomerForSubscriptionOrder($order, $omiseToken);
+                $useCustomerForCharge = !empty($customerId);
+            } catch (\Throwable $e) {
+                Log::warning('PaymentService: Omise customer creation failed, falling back to one-shot token charge', [
+                    'order_id' => $order->id,
+                    'error'    => $e->getMessage(),
+                ]);
+                // Falls through — we still try to charge with the token
+                // directly. User pays this period; future renewal will
+                // require manual re-subscribe (no customer saved).
+            }
+        }
+
+        $initiatePayload = [
+            'amount'         => $amount,
             'description'    => "Order #{$order->order_number}",
             'transaction_id' => $transaction->transaction_id,
             'order_id'       => $order->id,
             'success_url'    => route('payment.success') . "?txn={$transaction->transaction_id}",
             'cancel_url'     => route('orders.show', $order->id),
-        ]);
+        ];
+
+        // For Omise: prefer customer (when we just saved one) over raw
+        // token. Both still flow through OmiseGateway::initiate which
+        // creates a charge — `customer` and `card` are mutually exclusive
+        // in Omise's API but we always pass at most one.
+        if ($methodType === 'omise') {
+            if ($useCustomerForCharge && $customerId) {
+                $initiatePayload['customer'] = $customerId;
+            } elseif (!empty($omiseToken)) {
+                $initiatePayload['token'] = $omiseToken;
+            }
+        }
+
+        $result = $gateway->initiate($initiatePayload);
 
         return array_merge($result, ['transaction' => $transaction]);
+    }
+
+    /**
+     * Create (or reuse) an Omise Customer for a subscription Order's
+     * underlying subscription row, then persist `omise_customer_id` on
+     * the subscription so future renewals can charge without prompting.
+     *
+     * Returns the customer_id, or null when the subscription / invoice
+     * link couldn't be resolved (caller should fall back to one-shot
+     * token charge in that case).
+     *
+     * Idempotent: if the subscription already has an `omise_customer_id`
+     * we reuse it (consuming the token still — but the new card replaces
+     * the old default on the customer if desired).
+     */
+    protected static function ensureOmiseCustomerForSubscriptionOrder(Order $order, string $cardToken): ?string
+    {
+        $sub = null;
+        $userEmail = optional(\App\Models\User::find($order->user_id))->email;
+
+        if ($order->isSubscriptionOrder() && $order->subscription_invoice_id) {
+            $invoice = \App\Models\SubscriptionInvoice::find($order->subscription_invoice_id);
+            if ($invoice) {
+                $sub = \App\Models\PhotographerSubscription::find($invoice->subscription_id);
+            }
+        } elseif ($order->order_type === Order::TYPE_USER_STORAGE_SUBSCRIPTION
+                  && $order->user_storage_invoice_id) {
+            $invoice = \App\Models\UserStorageInvoice::find($order->user_storage_invoice_id);
+            if ($invoice) {
+                $sub = \App\Models\UserStorageSubscription::find($invoice->subscription_id);
+            }
+        }
+
+        if (!$sub) return null;
+
+        // Reuse existing customer if already saved. Skipping the
+        // customers.create call avoids consuming the new token, but we
+        // can't add the new card to the existing customer either —
+        // user just continues paying with whichever card is on file.
+        if (!empty($sub->omise_customer_id)) {
+            return $sub->omise_customer_id;
+        }
+
+        $gateway = app(\App\Services\Payment\OmiseGateway::class);
+        $resp = $gateway->createCustomer(
+            $cardToken,
+            "Subscription: order_id={$order->id} user_id={$order->user_id}",
+            $userEmail,
+            [
+                'order_id'        => (string) $order->id,
+                'user_id'         => (string) $order->user_id,
+                'subscription_id' => (string) $sub->id,
+            ]
+        );
+
+        if (($resp['object'] ?? '') !== 'customer' || empty($resp['id'])) {
+            $errMsg = $resp['message'] ?? $resp['failure_message'] ?? 'unknown';
+            throw new \RuntimeException("Omise customers.create failed: {$errMsg}");
+        }
+
+        $sub->update(['omise_customer_id' => $resp['id']]);
+        return $resp['id'];
     }
 
     // ----------------------------------------------------------------

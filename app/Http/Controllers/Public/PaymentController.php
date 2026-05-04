@@ -79,12 +79,33 @@ class PaymentController extends Controller
             $methodIcons[$method->method_type] = PaymentService::getMethodIcon($method->method_type);
         }
 
+        // Omise public key — used by Omise.js to tokenise the card
+        // client-side. Safe to expose; the secret key never leaves the
+        // server. Only sent to the view when an Omise method is among
+        // the active gateways AND the key is configured (so Omise.js
+        // initialisation logic in the view can short-circuit cleanly
+        // when neither condition is met).
+        $omisePublicKey = '';
+        if ($paymentMethods->contains(fn ($m) => $m->method_type === 'omise')) {
+            $omisePublicKey = (string) AppSetting::get('omise_public_key', '');
+        }
+
+        // The view also needs to know whether this checkout is for a
+        // subscription order — when it is, an Omise charge through this
+        // page should ALSO create a saved customer for future automated
+        // renewals (Phase B billing). For non-subscription orders the
+        // card token is one-shot.
+        $isSubscriptionOrder = $order->isSubscriptionOrder()
+            || ($order->order_type === Order::TYPE_USER_STORAGE_SUBSCRIPTION);
+
         return view('public.payment.checkout', compact(
             'order',
             'paymentMethods',
             'bankAccounts',
             'promptPayNumber',
-            'methodIcons'
+            'methodIcons',
+            'omisePublicKey',
+            'isSubscriptionOrder'
         ));
     }
 
@@ -93,6 +114,7 @@ class PaymentController extends Controller
         $request->validate([
             'order_id'       => 'required|integer|exists:orders,id',
             'payment_method' => 'required|string',
+            'omise_token'    => 'nullable|string|max:120',
         ]);
 
         $order = Order::where('id', $request->order_id)
@@ -120,9 +142,16 @@ class PaymentController extends Controller
 
         // Payment method is tracked via payment_transactions.payment_gateway, not on orders table
 
-        // Route to gateway
+        // Route to gateway. For Omise we forward the client-side token
+        // captured by Omise.js so the gateway can charge the card AND
+        // (for subscription orders) save a Customer for future renewals.
+        $extras = [];
+        if ($methodType === 'omise' && $request->filled('omise_token')) {
+            $extras['omise_token'] = $request->input('omise_token');
+        }
+
         try {
-            $result      = PaymentService::processPayment($order, $methodType);
+            $result      = PaymentService::processPayment($order, $methodType, $extras);
             $transaction = $result['transaction'];
         } catch (\InvalidArgumentException $e) {
             return back()->with('error', 'ช่องทางชำระเงินไม่ถูกต้อง: ' . $e->getMessage());

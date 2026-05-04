@@ -402,6 +402,101 @@ class UserStorageService
     }
 
     /**
+     * Auto-charge a pending storage renewal Order via the user's saved
+     * Omise card-on-file. Mirror of `SubscriptionService::chargeRenewal`
+     * for the consumer-side storage plan system.
+     *
+     * Returns ['ok' => bool, 'reason' => string, 'charge_id' => ?string].
+     */
+    public function chargeRenewal(Order $order): array
+    {
+        $order->refresh();
+        if ($order->status !== 'pending_payment') {
+            return ['ok' => false, 'reason' => 'order_not_pending'];
+        }
+
+        $invoice = UserStorageInvoice::find($order->user_storage_invoice_id);
+        if (!$invoice) {
+            return ['ok' => false, 'reason' => 'invoice_missing'];
+        }
+
+        $sub = UserStorageSubscription::with('plan')->find($invoice->subscription_id);
+        if (!$sub) {
+            return ['ok' => false, 'reason' => 'subscription_missing'];
+        }
+
+        if (empty($sub->omise_customer_id)) {
+            return ['ok' => false, 'reason' => 'no_customer'];
+        }
+
+        $gateway = app(\App\Services\Payment\OmiseGateway::class);
+        if (!$gateway->isAvailable()) {
+            return ['ok' => false, 'reason' => 'omise_disabled'];
+        }
+
+        $transaction = \App\Models\PaymentTransaction::create([
+            'transaction_id'    => 'TXN-' . strtoupper(\Illuminate\Support\Str::random(16)),
+            'order_id'          => $order->id,
+            'user_id'           => $order->user_id,
+            'payment_method_id' => null,
+            'payment_gateway'   => 'omise',
+            'amount'            => $order->total,
+            'currency'          => 'THB',
+            'status'            => 'pending',
+            'metadata'          => [
+                'auto_charge'     => true,
+                'customer_id'     => $sub->omise_customer_id,
+                'subscription_id' => $sub->id,
+                'kind'            => 'user_storage',
+            ],
+        ]);
+
+        $charge = $gateway->chargeCustomer(
+            $sub->omise_customer_id,
+            (float) $order->total,
+            "Storage renewal: " . ($sub->plan->name ?? 'Plan') . " — Order #{$order->order_number}",
+            [
+                'transaction_id' => $transaction->transaction_id,
+                'order_id'       => $order->id,
+                'subscription_id'=> $sub->id,
+                'auto_charge'    => 'true',
+                'kind'           => 'user_storage',
+            ]
+        );
+
+        $object = $charge['object'] ?? '';
+        $status = $charge['status'] ?? '';
+
+        if ($object === 'charge' && $status === 'successful') {
+            \App\Services\Payment\PaymentService::completeTransaction($transaction, $charge['id'] ?? null);
+
+            try {
+                $orderRefreshed = Order::with(['user', 'items', 'event'])->find($order->id);
+                if ($orderRefreshed) {
+                    app(\App\Services\OrderFulfillmentService::class)->fulfill($orderRefreshed);
+                }
+            } catch (\Throwable $e) {
+                Log::error('chargeRenewal (user storage): fulfill() failed', [
+                    'order_id' => $order->id, 'error' => $e->getMessage(),
+                ]);
+            }
+
+            return ['ok' => true, 'reason' => 'charged', 'charge_id' => $charge['id'] ?? null];
+        }
+
+        if ($object === 'charge' && $status === 'pending') {
+            return ['ok' => false, 'reason' => 'charge_pending', 'charge_id' => $charge['id'] ?? null];
+        }
+
+        $failureReason = $charge['failure_message'] ?? $charge['message'] ?? $charge['failure_code'] ?? $status ?: 'unknown';
+        \App\Services\Payment\PaymentService::failTransaction($transaction, "omise_auto_charge: {$failureReason}");
+
+        $this->markRenewalFailed($sub, "auto_charge: {$failureReason}");
+
+        return ['ok' => false, 'reason' => 'charge_failed', 'charge_id' => $charge['id'] ?? null, 'message' => $failureReason];
+    }
+
+    /**
      * Record a failed renewal attempt. Drops into grace once max attempts
      * exceeded. The expire-grace scheduled job handles the final downgrade.
      */

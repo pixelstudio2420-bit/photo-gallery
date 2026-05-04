@@ -566,6 +566,139 @@ class SubscriptionService
     }
 
     /**
+     * Auto-charge a pending renewal Order via the photographer's saved
+     * Omise card-on-file. Called by the `subscriptions:charge-pending`
+     * hourly cron.
+     *
+     * Pre-conditions caller is responsible for:
+     *   • $order->order_type === 'subscription'
+     *   • $order->status === 'pending_payment'
+     *   • $order->payment_expires_at is still in the future (not expired)
+     *
+     * Behaviour:
+     *   • Resolves the Subscription via Order → SubscriptionInvoice →
+     *     PhotographerSubscription. Skips silently if any link is missing.
+     *   • Bails out with reason='no_customer' when the sub has no
+     *     `omise_customer_id` (manual-pay user — they'll renew via the
+     *     hosted checkout link instead).
+     *   • Creates a PaymentTransaction for audit (status='pending').
+     *   • Calls OmiseGateway::chargeCustomer.
+     *   • On Omise charge.successful: completes the transaction +
+     *     dispatches the paid-order side effects (= calls
+     *     activateFromPaidInvoice via OrderFulfillmentService, same path
+     *     the webhook uses). Order moves to 'paid'.
+     *   • On Omise failure or unavailable: fails the transaction +
+     *     calls markRenewalFailed() with the Omise reason.
+     *   • On Omise pending (3DS challenge): we do nothing extra — the
+     *     webhook will catch the eventual outcome. PaymentTransaction
+     *     stays 'pending'.
+     *
+     * Returns ['ok' => bool, 'reason' => string, 'charge_id' => ?string].
+     * Idempotent at the cron level: if called twice on the same Order
+     * we return early on the second pass because the first pass moved
+     * the order to 'paid' (or failed it).
+     */
+    public function chargeRenewal(Order $order): array
+    {
+        // Refresh status to dodge race with a concurrent webhook that
+        // might have just paid this order.
+        $order->refresh();
+        if ($order->status !== 'pending_payment') {
+            return ['ok' => false, 'reason' => 'order_not_pending'];
+        }
+
+        $invoice = SubscriptionInvoice::find($order->subscription_invoice_id);
+        if (!$invoice) {
+            return ['ok' => false, 'reason' => 'invoice_missing'];
+        }
+
+        $sub = PhotographerSubscription::with('plan')->find($invoice->subscription_id);
+        if (!$sub) {
+            return ['ok' => false, 'reason' => 'subscription_missing'];
+        }
+
+        if (empty($sub->omise_customer_id)) {
+            return ['ok' => false, 'reason' => 'no_customer'];
+        }
+
+        $gateway = app(\App\Services\Payment\OmiseGateway::class);
+        if (!$gateway->isAvailable()) {
+            return ['ok' => false, 'reason' => 'omise_disabled'];
+        }
+
+        // Track the attempt as a PaymentTransaction so admin reporting
+        // shows every charge we tried (matching the manual-pay flow).
+        $transaction = \App\Models\PaymentTransaction::create([
+            'transaction_id'    => 'TXN-' . strtoupper(\Illuminate\Support\Str::random(16)),
+            'order_id'          => $order->id,
+            'user_id'           => $order->user_id,
+            'payment_method_id' => null,
+            'payment_gateway'   => 'omise',
+            'amount'            => $order->total,
+            'currency'          => 'THB',
+            'status'            => 'pending',
+            'metadata'          => [
+                'auto_charge'     => true,
+                'customer_id'     => $sub->omise_customer_id,
+                'subscription_id' => $sub->id,
+            ],
+        ]);
+
+        $charge = $gateway->chargeCustomer(
+            $sub->omise_customer_id,
+            (float) $order->total,
+            "Subscription renewal: " . ($sub->plan->name ?? 'Plan') . " — Order #{$order->order_number}",
+            [
+                'transaction_id' => $transaction->transaction_id,
+                'order_id'       => $order->id,
+                'subscription_id'=> $sub->id,
+                'auto_charge'    => 'true',
+            ]
+        );
+
+        $object = $charge['object'] ?? '';
+        $status = $charge['status'] ?? '';
+
+        // ── Successful charge ──────────────────────────────────────
+        if ($object === 'charge' && $status === 'successful') {
+            \App\Services\Payment\PaymentService::completeTransaction($transaction, $charge['id'] ?? null);
+
+            // Reuse the existing post-pay routing: this is what the
+            // webhook would do, just inlined since we know the charge
+            // is already settled. activateFromPaidInvoice + storage
+            // sync run inside fulfill().
+            try {
+                $orderRefreshed = Order::with(['user', 'items', 'event'])->find($order->id);
+                if ($orderRefreshed) {
+                    app(\App\Services\OrderFulfillmentService::class)->fulfill($orderRefreshed);
+                }
+            } catch (\Throwable $e) {
+                Log::error('chargeRenewal: fulfill() failed', [
+                    'order_id' => $order->id, 'error' => $e->getMessage(),
+                ]);
+                // The charge is already paid — don't bubble the error,
+                // the next webhook arrival or admin reconcile will
+                // re-trigger fulfilment.
+            }
+
+            return ['ok' => true, 'reason' => 'charged', 'charge_id' => $charge['id'] ?? null];
+        }
+
+        // ── 3DS / pending — let webhook resolve later ──────────────
+        if ($object === 'charge' && $status === 'pending') {
+            return ['ok' => false, 'reason' => 'charge_pending', 'charge_id' => $charge['id'] ?? null];
+        }
+
+        // ── Failed / declined / Omise unavailable ──────────────────
+        $failureReason = $charge['failure_message'] ?? $charge['message'] ?? $charge['failure_code'] ?? $status ?: 'unknown';
+        \App\Services\Payment\PaymentService::failTransaction($transaction, "omise_auto_charge: {$failureReason}");
+
+        $this->markRenewalFailed($sub, "auto_charge: {$failureReason}");
+
+        return ['ok' => false, 'reason' => 'charge_failed', 'charge_id' => $charge['id'] ?? null, 'message' => $failureReason];
+    }
+
+    /**
      * Mark a failed renewal attempt. If we've exceeded max attempts, drop
      * into grace. If grace has also expired elsewhere, caller should
      * trigger expireGrace() separately.

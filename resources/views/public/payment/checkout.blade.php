@@ -44,6 +44,9 @@
       <form method="POST" action="{{ route('payment.process') }}" id="paymentForm">
         @csrf
         <input type="hidden" name="order_id" value="{{ $order->id }}">
+        {{-- Holds the Omise.js card token before submit (filled by JS).
+             Empty for non-Omise methods. --}}
+        <input type="hidden" name="omise_token" id="omiseTokenInput" value="">
 
         {{-- Payment method selector --}}
         <div class="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 shadow-sm overflow-hidden">
@@ -101,11 +104,68 @@
                 @endforeach
               </div>
 
+              {{-- Omise inline card form — shown only when "omise" is the
+                   selected method AND a public key is configured. Captured
+                   token is placed into #omiseTokenInput on form submit by
+                   the JS handler at the bottom of this page. For
+                   subscription orders the backend creates an Omise
+                   Customer with this token first so future renewals can
+                   charge the saved card automatically (Phase B billing). --}}
+              @if(!empty($omisePublicKey))
+                <div id="section-omise" style="display:none;" class="mt-5 p-5 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900/30">
+                  <div class="flex items-center gap-2 mb-4 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    <i class="bi bi-credit-card text-indigo-500"></i>
+                    ข้อมูลบัตรเครดิต/เดบิต
+                    @if($isSubscriptionOrder)
+                      <span class="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 font-medium">
+                        บันทึกบัตรเพื่อต่ออายุอัตโนมัติ
+                      </span>
+                    @endif
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="md:col-span-2">
+                      <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">ชื่อบนบัตร</label>
+                      <input type="text" id="omiseCardName" autocomplete="cc-name"
+                             class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                             placeholder="JOHN DOE">
+                    </div>
+                    <div class="md:col-span-2">
+                      <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">หมายเลขบัตร</label>
+                      <input type="text" id="omiseCardNumber" autocomplete="cc-number" inputmode="numeric"
+                             class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                             placeholder="1234 5678 9012 3456" maxlength="23">
+                    </div>
+                    <div>
+                      <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">วันหมดอายุ (MM/YY)</label>
+                      <div class="flex gap-2">
+                        <input type="text" id="omiseCardExpMonth" autocomplete="cc-exp-month" inputmode="numeric"
+                               class="w-1/2 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                               placeholder="MM" maxlength="2">
+                        <input type="text" id="omiseCardExpYear" autocomplete="cc-exp-year" inputmode="numeric"
+                               class="w-1/2 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                               placeholder="YY" maxlength="2">
+                      </div>
+                    </div>
+                    <div>
+                      <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">CVV</label>
+                      <input type="text" id="omiseCardCvc" autocomplete="cc-csc" inputmode="numeric"
+                             class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                             placeholder="123" maxlength="4">
+                    </div>
+                  </div>
+                  <div id="omiseError" class="hidden mt-3 p-3 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-300 text-xs"></div>
+                  <div class="mt-3 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                    <i class="bi bi-shield-lock-fill text-emerald-500"></i>
+                    ข้อมูลบัตรของคุณถูกส่งตรงไปที่ Omise — ไม่ผ่านเซิร์ฟเวอร์เรา
+                  </div>
+                </div>
+              @endif
+
               {{-- Submit --}}
               <button type="submit" id="proceedPaymentBtn"
                       class="w-full py-3.5 mt-5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2">
-                <i class="bi bi-lock-fill"></i> ชำระเงิน
-                {{ number_format((float)($order->net_amount ?? $order->total_amount ?? $order->total ?? 0), 0) }} ฿
+                <i class="bi bi-lock-fill"></i> <span id="proceedPaymentBtnLabel">ชำระเงิน
+                {{ number_format((float)($order->net_amount ?? $order->total_amount ?? $order->total ?? 0), 0) }} ฿</span>
               </button>
             @endif
           </div>
@@ -404,7 +464,7 @@
 <script>
 // Payment methods requiring slip upload
 const slipMethods = ['promptpay', 'bank_transfer', 'banktransfer', 'prompt_pay'];
-const inlineSections = ['promptpay', 'bank_transfer'];
+const inlineSections = ['promptpay', 'bank_transfer', 'omise'];
 
 function selectPaymentMethod(radio) {
   document.querySelectorAll('.payment-method-card').forEach(function(card) {
@@ -446,6 +506,124 @@ document.addEventListener('DOMContentLoaded', function() {
   if (checked) toggleSections(checked.value);
 });
 </script>
+
+@if(!empty($omisePublicKey))
+{{-- ── Omise.js card tokenisation ─────────────────────────────────────
+     Loaded only when the Omise gateway is enabled AND a public key is
+     configured. Captures the card client-side, posts the resulting
+     `tokn_xxx` to our backend in a hidden form input. The card details
+     never touch our server — the backend only sees the opaque token.
+
+     For subscription orders, the backend uses the token to ALSO create
+     an Omise Customer object so future renewal cycles can charge
+     without prompting the user again. ──────────────────────────────── --}}
+<script src="https://cdn.omise.co/omise.js"></script>
+<script>
+(function () {
+  if (typeof Omise === 'undefined') return;
+  Omise.setPublicKey(@json($omisePublicKey));
+
+  // Light formatting on the card-number input — groups of 4 digits.
+  const $num = document.getElementById('omiseCardNumber');
+  if ($num) {
+    $num.addEventListener('input', function (e) {
+      const v = e.target.value.replace(/\D/g, '').slice(0, 19);
+      e.target.value = v.replace(/(.{4})/g, '$1 ').trim();
+    });
+  }
+
+  // Strip non-digits in MM / YY / CVV so users can paste freely.
+  ['omiseCardExpMonth', 'omiseCardExpYear', 'omiseCardCvc'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', function (e) {
+      e.target.value = e.target.value.replace(/\D/g, '');
+    });
+  });
+
+  function showError(msg) {
+    const box = document.getElementById('omiseError');
+    if (box) {
+      box.textContent = msg;
+      box.classList.remove('hidden');
+    }
+  }
+  function clearError() {
+    const box = document.getElementById('omiseError');
+    if (box) {
+      box.textContent = '';
+      box.classList.add('hidden');
+    }
+  }
+
+  // Intercept the form submit when Omise is the selected method.
+  // Steps:
+  //   1. Validate inputs are filled in.
+  //   2. Call Omise.createToken (sends card details DIRECTLY to Omise,
+  //      bypassing our server).
+  //   3. Stuff the resulting tokn_xxx into #omiseTokenInput.
+  //   4. Allow the form to actually submit (re-trigger requestSubmit).
+  // If anything fails, we surface the error inline and prevent submit.
+  const form    = document.getElementById('paymentForm');
+  const tokenIn = document.getElementById('omiseTokenInput');
+  if (!form || !tokenIn) return;
+
+  let submittingViaOmise = false;
+  form.addEventListener('submit', function (e) {
+    const method = (document.querySelector('input[name="payment_method"]:checked') || {}).value;
+    if (method !== 'omise') return;
+    if (submittingViaOmise) return;       // already tokenised, allow native submit
+    if (tokenIn.value)        return;     // already have a token (back-button reload)
+
+    e.preventDefault();
+    clearError();
+
+    const number = (document.getElementById('omiseCardNumber').value || '').replace(/\s+/g, '');
+    const month  = (document.getElementById('omiseCardExpMonth').value || '').trim();
+    const year   = (document.getElementById('omiseCardExpYear').value || '').trim();
+    const cvc    = (document.getElementById('omiseCardCvc').value || '').trim();
+    const name   = (document.getElementById('omiseCardName').value || '').trim();
+
+    if (!number || number.length < 13)  return showError('กรุณากรอกหมายเลขบัตรให้ถูกต้อง');
+    if (!month || +month < 1 || +month > 12) return showError('เดือนหมดอายุไม่ถูกต้อง');
+    if (!year || year.length !== 2)     return showError('กรุณากรอกปีหมดอายุ (YY)');
+    if (!cvc || cvc.length < 3)         return showError('CVV ไม่ถูกต้อง');
+    if (!name)                          return showError('กรุณากรอกชื่อบนบัตร');
+
+    const expirationYear = parseInt(year, 10) + 2000;
+
+    const btn = document.getElementById('proceedPaymentBtn');
+    const lbl = document.getElementById('proceedPaymentBtnLabel');
+    if (btn) btn.disabled = true;
+    if (lbl) lbl.textContent = 'กำลังตรวจสอบบัตร…';
+
+    Omise.createToken('card', {
+      name:             name,
+      number:           number,
+      expiration_month: month,
+      expiration_year:  String(expirationYear),
+      security_code:    cvc,
+    }, function (statusCode, response) {
+      if (btn) btn.disabled = false;
+
+      if (statusCode === 200 && response && response.id) {
+        tokenIn.value = response.id;
+        submittingViaOmise = true;
+
+        // Re-submit the form. requestSubmit fires the submit event again,
+        // but submittingViaOmise=true makes us skip the intercept.
+        if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else form.submit();
+      } else {
+        const msg = (response && (response.message || response.failure_message)) || 'ไม่สามารถยืนยันข้อมูลบัตรได้';
+        showError('Omise: ' + msg);
+        if (lbl) lbl.textContent = 'ลองใหม่อีกครั้ง';
+      }
+    });
+  });
+})();
+</script>
+@endif
 
 {{-- ── Branded QR card "Save" — html2canvas + Web Share API ──────────
      Loads only on this page (not via app.js). Capture region is

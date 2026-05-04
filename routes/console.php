@@ -314,13 +314,28 @@ Schedule::command('subscriptions:renew-due --hours=24')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Subscription auto-charge — hourly at :15. Picks up renewal Orders
+// freshly created by `subscriptions:renew-due` at :10 and charges the
+// photographer's saved Omise customer (if `omise_customer_id` is set
+// on the subscription). On Omise success, the order is fulfilled
+// inline (same path the webhook would take); on failure,
+// `markRenewalFailed()` increments the attempt counter and after max
+// attempts drops the sub into grace. No-op for subs without a saved
+// Omise customer — those still rely on manual payment via the
+// hosted checkout link in the renewal reminder email.
+Schedule::command('subscriptions:charge-pending --quiet-if-none')
+    ->hourlyAt(15)
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Subscription period enforcement — hourly sweep at :25 to downgrade
 // any active sub whose `current_period_end` has already passed but
-// hasn't been picked up by the renewal-paid path. Without this, a
-// one-time payment grants paid-tier features permanently because no
-// other code transitions `status='active'` away from active after
-// period_end. Runs OFFSET from renew-due (:10) so a sub freshly
-// renewed at :10 isn't second-guessed in the same hour.
+// hasn't been picked up by the renewal-paid path. Acts as the safety
+// net for both manual-renewal users (no Omise customer) and any sub
+// that auto-charge couldn't recover (grace expired without successful
+// re-charge — though `subscriptions:expire-grace` daily takes that
+// path too). Runs OFFSET from renew-due (:10) and charge-pending
+// (:15) so a sub freshly renewed in this hour isn't second-guessed.
 Schedule::command('subscriptions:expire-overdue --quiet-if-none')
     ->hourlyAt(25)
     ->withoutOverlapping()
@@ -395,12 +410,17 @@ Schedule::command('user-storage:expire-grace')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Consumer storage auto-charge — hourly at :20 (offset from photographer
+// charge-pending at :15). Mirror of `subscriptions:charge-pending`.
+Schedule::command('user-storage:charge-pending --quiet-if-none')
+    ->hourlyAt(20)
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Consumer storage period enforcement — hourly at :30 (offset from
-// renew-due at :15). Mirror of `subscriptions:expire-overdue` for the
-// consumer side: flips active subs whose `current_period_end` has
-// passed to `expired` and reverts auth_users.storage_quota_bytes to
-// the free-tier value. Phase A: this is what actually enforces the
-// plan period until auto-charge is wired up in Phase B.
+// renew-due at :15 and charge-pending at :20). Mirror of
+// `subscriptions:expire-overdue`. Safety net for users without an
+// Omise customer-on-file or whose auto-charge couldn't recover.
 Schedule::command('user-storage:expire-overdue --quiet-if-none')
     ->hourlyAt(30)
     ->withoutOverlapping()

@@ -26,18 +26,29 @@ class OmiseGateway implements PaymentGatewayInterface
             ];
         }
 
+        // Choose `customer` over `card` when both are present. PaymentService
+        // creates a customer for subscription orders BEFORE calling initiate
+        // and forwards the customer_id; in that case the token has already
+        // been consumed by customers.create and using `card` here would
+        // double-fail. For non-subscription orders we still pass `card`.
+        $chargeParams = [
+            'amount'      => (int) (($orderData['amount'] ?? 0) * 100),
+            'currency'    => 'thb',
+            'description' => $orderData['description'] ?? 'Photo Order',
+            'metadata'    => [
+                'transaction_id' => $orderData['transaction_id'] ?? '',
+                'order_id'       => $orderData['order_id'] ?? '',
+            ],
+            'return_uri' => $orderData['success_url'] ?? route('payment.success'),
+        ];
+        if (!empty($orderData['customer'])) {
+            $chargeParams['customer'] = $orderData['customer'];
+        } elseif (!empty($orderData['token'])) {
+            $chargeParams['card'] = $orderData['token'];
+        }
+
         try {
-            $charge = $this->createCharge([
-                'amount'      => (int) (($orderData['amount'] ?? 0) * 100),
-                'currency'    => 'thb',
-                'card'        => $orderData['token'] ?? null,
-                'description' => $orderData['description'] ?? 'Photo Order',
-                'metadata'    => [
-                    'transaction_id' => $orderData['transaction_id'] ?? '',
-                    'order_id'       => $orderData['order_id'] ?? '',
-                ],
-                'return_uri' => $orderData['success_url'] ?? route('payment.success'),
-            ], $secretKey);
+            $charge = $this->createCharge($chargeParams, $secretKey);
 
             if (!empty($charge['authorize_uri'])) {
                 return [
@@ -164,6 +175,117 @@ class OmiseGateway implements PaymentGatewayInterface
                 'status' => 'unavailable',
                 'message' => 'Omise temporarily unavailable',
             ];
+        }
+        return $body;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Card-on-file (Omise Customers API)
+    //
+    // These helpers are used by the subscription auto-charge flow: when a
+    // photographer first pays for a subscription, we create an Omise
+    // Customer object with their card token attached and store the
+    // customer_id on `photographer_subscriptions.omise_customer_id`. The
+    // hourly `subscriptions:charge-pending` cron then uses that customer_id
+    // to charge each renewal without prompting the user.
+    //
+    // Both methods return the raw Omise response body unchanged. Callers
+    // should check `$response['object']` — `'customer'` / `'charge'` for
+    // success, `'error'` (or status='unavailable') for failure.
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Create an Omise Customer with a card token attached.
+     *
+     * The Omise token (tokn_xxx) is one-shot — passing it here consumes
+     * the token but creates a long-lived customer with the card stored.
+     * Subsequent charges via `chargeCustomer()` use the customer's
+     * default card without re-entering details.
+     *
+     * @param  string  $cardToken    Fresh tokn_xxx from Omise.js
+     * @param  string  $description  Free-form, shown in Omise dashboard
+     * @param  string|null  $email
+     * @param  array  $metadata      Stored on the customer for audit
+     * @return array  Raw Omise response. Success when object='customer'.
+     */
+    public function createCustomer(
+        string $cardToken,
+        string $description = '',
+        ?string $email = null,
+        array $metadata = []
+    ): array {
+        $secretKey = AppSetting::get('omise_secret_key', '');
+        if (empty($secretKey)) {
+            return ['object' => 'error', 'status' => 'unconfigured', 'message' => 'Omise secret key not configured'];
+        }
+
+        $payload = array_filter([
+            'card'        => $cardToken,
+            'description' => $description ?: null,
+            'email'       => $email,
+            'metadata'    => $metadata ?: null,
+        ], fn($v) => $v !== null);
+
+        $cb = new CircuitBreaker('omise');
+        $body = $cb->call(
+            fn() => \Illuminate\Support\Facades\Http::withBasicAuth($secretKey, '')
+                ->timeout(15)
+                ->post('https://api.omise.co/customers', $payload)
+                ->json(),
+            fallback: null,
+        );
+
+        if ($body === null) {
+            return ['object' => 'error', 'status' => 'unavailable', 'message' => 'Omise temporarily unavailable'];
+        }
+        return $body;
+    }
+
+    /**
+     * Charge a previously-created Omise Customer's default card.
+     *
+     * Used by the renewal cron — the customer was created at first
+     * subscription signup; this charges their saved card for the next
+     * period without further user interaction. Returns the raw charge
+     * object; check `$response['status']` ('successful' / 'failed' /
+     * 'pending') and route into our PaymentTransaction flow accordingly.
+     *
+     * @param  string  $customerId   cust_xxx returned by createCustomer()
+     * @param  float   $amountThb    THB float (will convert to satang)
+     * @param  string  $description
+     * @param  array   $metadata     transaction_id / order_id for webhook match
+     * @return array
+     */
+    public function chargeCustomer(
+        string $customerId,
+        float $amountThb,
+        string $description = '',
+        array $metadata = []
+    ): array {
+        $secretKey = AppSetting::get('omise_secret_key', '');
+        if (empty($secretKey)) {
+            return ['object' => 'error', 'status' => 'unconfigured', 'message' => 'Omise secret key not configured'];
+        }
+
+        $payload = [
+            'amount'      => (int) round($amountThb * 100),
+            'currency'    => 'thb',
+            'customer'    => $customerId,
+            'description' => $description ?: 'Subscription renewal',
+            'metadata'    => $metadata,
+        ];
+
+        $cb = new CircuitBreaker('omise');
+        $body = $cb->call(
+            fn() => \Illuminate\Support\Facades\Http::withBasicAuth($secretKey, '')
+                ->timeout(15)
+                ->post('https://api.omise.co/charges', $payload)
+                ->json(),
+            fallback: null,
+        );
+
+        if ($body === null) {
+            return ['object' => 'error', 'status' => 'unavailable', 'message' => 'Omise temporarily unavailable'];
         }
         return $body;
     }
