@@ -219,7 +219,11 @@ class PayoutEngine
 
         return [
             'payout_min_amount'    => (int) AppSetting::get('payout_min_amount', 500),
-            'payout_schedule'      => (string) AppSetting::get('payout_schedule', 'weekly_thu'),
+            // Default schedule = Monday — matches public marketing copy
+            // ("ทุกวันจันทร์") in for-photographers/promo/footer FAQ.
+            // Admin can override via /admin/payouts/automation to any of
+            // the scheduleOptions() values (daily / weekly_mon / weekly_thu / monthly).
+            'payout_schedule'      => (string) AppSetting::get('payout_schedule', 'weekly_mon'),
             'payout_day_of_month'  => $day,
             'payout_trigger_logic' => (string) AppSetting::get('payout_trigger_logic', 'either'),
             'payout_delay_hours'   => (int) AppSetting::get('payout_delay_hours', 0),
