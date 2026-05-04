@@ -111,15 +111,42 @@ class ProcessUploadedPhotoJob implements ShouldQueue
                 }
             }
 
-            // 3) Generate thumbnail (admin-configured size + quality)
+            $watermark = new WatermarkService();
+            $watermarkEnabled = $watermark->isEnabled();
+
+            // 3) Generate thumbnail (admin-configured size + quality).
+            //    When admin has watermarking on, we ALSO composite a
+            //    watermark onto the small thumbnail. Previously thumbs
+            //    were left clean — buyers could right-click any gallery
+            //    card (id="gallery-grid" img) and save a free 400px copy
+            //    of the photo, completely undermining the watermark on
+            //    the larger preview. Watermarking the thumb itself
+            //    closes that hole. The GD apply() call on a 400px JPEG
+            //    is sub-50ms so this doesn't slow the pipeline.
             $thumbData = $imgProc->thumbnailWithQuality($tmpOriginal, $thumbSize, $thumbQuality);
             if ($thumbData && $photo->thumbnail_path) {
+                if ($watermarkEnabled) {
+                    $tmpThumb = tempnam(sys_get_temp_dir(), 'photo_thumb_');
+                    file_put_contents($tmpThumb, $thumbData);
+                    $tmpFiles[] = $tmpThumb;
+                    $thumbWatermarked = $watermark->apply($tmpThumb);
+                    // apply() returns the original bytes on any GD
+                    // failure path so we never end up with an empty
+                    // file — but be defensive and only swap when we
+                    // actually got non-empty bytes back.
+                    if (!empty($thumbWatermarked)) {
+                        $thumbData = $thumbWatermarked;
+                    }
+                }
                 $storage->put($photo->thumbnail_path, $thumbData);
             }
 
-            // 4) Generate watermarked preview (admin-configured preview size + quality)
-            $watermark = new WatermarkService();
-            if ($watermark->isEnabled()) {
+            // 4) Generate watermarked preview (admin-configured preview size + quality).
+            //    Same pipeline as before — apply watermark to original,
+            //    then resize to preview dimensions. Preserved verbatim
+            //    so the lightbox / face-search-result behaviour doesn't
+            //    change.
+            if ($watermarkEnabled) {
                 $wmData = $watermark->apply($tmpOriginal);
                 $tmpWm = tempnam(sys_get_temp_dir(), 'photo_wm_');
                 file_put_contents($tmpWm, $wmData);
