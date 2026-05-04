@@ -120,7 +120,7 @@ $_footerBrandName = $siteName ?: config('app.name');
             <i class="bi bi-shield-check"></i>SSL Secured
           </span>
           <span class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-blue-500/10 text-blue-300 border border-blue-500/20">
-            <i class="bi bi-receipt"></i>Verified by SlipOK
+            <i class="bi bi-receipt"></i>AI ตรวจสลิป
           </span>
           <span class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20">
             <i class="bi bi-flag-fill"></i>Made in Thailand

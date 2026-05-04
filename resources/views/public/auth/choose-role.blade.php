@@ -106,7 +106,7 @@
             </div>
             <div class="mt-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-xs text-amber-800 dark:text-amber-300">
               <i class="bi bi-info-circle mr-1"></i>
-              บัญชีช่างภาพต้องรอ Admin อนุมัติก่อนใช้งาน หลังอนุมัติแล้วจะต้องเชื่อมต่อ Stripe เพื่อรับรายได้
+              บัญชีช่างภาพต้องรอ Admin อนุมัติก่อนใช้งาน หลังอนุมัติแล้วจะต้องเชื่อมต่อบัญชีรับเงิน (PromptPay) เพื่อรับรายได้
             </div>
           </div>
         </div>

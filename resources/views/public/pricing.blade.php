@@ -274,7 +274,7 @@
                 <i class="bi bi-shield-check"></i>การรับประกันลูกค้า
               </p>
               <ul class="text-sm text-blue-800/80 dark:text-blue-300/80 space-y-1 list-disc list-inside">
-                <li>ตรวจสลิปอัตโนมัติผ่าน SlipOK — ระบบไม่รับสลิปปลอม</li>
+                <li>AI ตรวจสลิปอัตโนมัติ — ระบบไม่รับสลิปปลอม</li>
                 <li>ส่งรูปเข้า LINE อัตโนมัติหลังจ่าย — ไม่ต้องรอช่างภาพ</li>
                 <li>แชทกับช่างภาพได้ตรงในระบบก่อนตัดสินใจ</li>
                 <li>Money-back นโยบายตามแต่ละช่างภาพกำหนด — ดูในหน้าจอง</li>
@@ -330,7 +330,7 @@
                 ['AI Face Search', true, false, false],
                 ['ระบบจองอัตโนมัติ', true, false, false],
                 ['LINE reminder กันลูกค้าลืม', true, false, false],
-                ['ตรวจสลิปอัตโนมัติ (SlipOK)', true, false, false],
+                ['AI ตรวจสลิปอัตโนมัติ', true, false, false],
                 ['ส่งรูปเข้า LINE หลังจ่าย', true, false, false],
                 ['Watermark + ป้องกันรูปขโมย', true, false, false],
                 ['ใบเสร็จ/e-Tax อัตโนมัติ', true, false, false],

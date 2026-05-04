@@ -263,7 +263,7 @@
         </div>
         <div class="min-w-0">
           <p class="font-bold text-slate-800 dark:text-white text-sm">ตรวจสลิปอัตโนมัติ</p>
-          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">ผ่าน SlipOK ปลอดภัย ปลอมไม่ได้</p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">AI ตรวจสลิปอัจฉริยะ ปลอมไม่ได้</p>
         </div>
       </div>
     </div>
@@ -496,7 +496,7 @@
     @php
       $buyerSteps = [
         ['n' => '1', 'icon' => 'search', 'title' => 'ค้นหารูปงานคุณ', 'desc' => 'พิมพ์ชื่ออีเวนต์ หรือใช้ AI Face Search อัพโหลดรูปตัวเอง — ระบบหาให้ใน 3 วินาที'],
-        ['n' => '2', 'icon' => 'qr-code', 'title' => 'จ่ายผ่าน PromptPay', 'desc' => 'สแกน QR + แนบสลิป — ระบบตรวจสอบอัตโนมัติผ่าน SlipOK'],
+        ['n' => '2', 'icon' => 'qr-code', 'title' => 'จ่ายผ่าน PromptPay', 'desc' => 'สแกน QR + แนบสลิป — ระบบ AI ตรวจสลิปอัตโนมัติใน 3 วินาที'],
         ['n' => '3', 'icon' => 'line', 'title' => 'รับรูปเข้า LINE', 'desc' => 'ภายใน 30 วินาทีหลังจ่าย ภาพต้นฉบับเข้า LINE คุณทันที — ดาวน์โหลดได้ตลอด'],
       ];
     @endphp
