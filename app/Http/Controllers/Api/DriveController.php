@@ -93,6 +93,21 @@ class DriveController extends Controller
         $size = (int) $request->input('sz', 400);
         $size = max(100, min(1600, $size));
 
+        // Watermark policy for this proxy:
+        //   • Apply watermark when admin has it enabled (watermark_enabled=1)
+        //     AND the requested size is "preview-class" (>500px). This is
+        //     the size the lightbox (id="lb-img") asks for — a buyer
+        //     should never see the un-watermarked original until they pay.
+        //   • Skip watermark for thumbnails (≤500px) — they're tiny enough
+        //     that copying them isn't valuable, and watermarking every
+        //     gallery card 1:1 would burn CPU on every page paint.
+        //   • EventPhoto rows with a baked `watermarked_path` already
+        //     short-circuit via the `redirect()->away()` branch below;
+        //     this on-the-fly path is for Drive-sourced events that
+        //     don't have a stored watermarked variant.
+        $watermarkSvc       = app(\App\Services\WatermarkService::class);
+        $applyWatermarkHere = $size > 500 && $watermarkSvc->isEnabled();
+
         // ── 1. R2 / S3 / local — numeric ID ⇒ EventPhoto PK ─────────────
         // The endpoint name is historical ("drive proxy"); it's now the
         // universal image-resolver for gallery & download-page previews,
@@ -106,21 +121,41 @@ class DriveController extends Controller
         if (ctype_digit((string) $fileId)) {
             $photo = \App\Models\EventPhoto::find((int) $fileId);
             if ($photo) {
-                $url = $size <= 500
-                    ? ($photo->thumbnail_url ?: $photo->watermarked_url ?: $photo->original_url)
-                    : ($photo->watermarked_url ?: $photo->thumbnail_url ?: $photo->original_url);
-
-                if (!empty($url)) {
-                    // R2 `pub-xxx.r2.dev` and custom domains are CDN-fronted
-                    // already, so a 302 sends the browser straight to the
-                    // edge — zero app-server bandwidth.
-                    return redirect()->away($url, 302);
+                if ($size <= 500) {
+                    // Thumbnail path — no watermark needed at this size,
+                    // and the redirect saves bandwidth by sending the
+                    // buyer straight to the CDN edge.
+                    $url = $photo->thumbnail_url ?: $photo->watermarked_url ?: $photo->original_url;
+                    if (!empty($url)) return redirect()->away($url, 302);
+                } else {
+                    // Preview path — prefer the baked watermarked variant
+                    // (cheap CDN redirect). If watermarking is enabled
+                    // but no watermarked variant was generated yet (Drive-
+                    // imported events skip the upload-time watermark
+                    // pipeline), fall through below to fetch the original
+                    // and apply the watermark inline.
+                    if ($photo->watermarked_url) {
+                        return redirect()->away($photo->watermarked_url, 302);
+                    }
+                    if (!$applyWatermarkHere) {
+                        $url = $photo->thumbnail_url ?: $photo->original_url;
+                        if (!empty($url)) return redirect()->away($url, 302);
+                    }
+                    // applyWatermarkHere=true + no watermarked_path:
+                    // fetch the original and apply on-the-fly (rare —
+                    // but covers events imported before the watermark
+                    // toggle was turned on). This branch is a fall-through
+                    // continuation: don't return; let the Drive path below
+                    // try fetching by drive_file_id if available.
                 }
             }
         }
 
         // ── 2. Legacy Google Drive path ─────────────────────────────────
-        $cacheKey = "drive_thumb_{$fileId}_{$size}";
+        // Cache key disambiguates watermarked vs raw bodies — without the
+        // _wm suffix a previous unwatermarked cache hit would override
+        // the new watermarked render after admin enables watermarking.
+        $cacheKey = "drive_thumb_{$fileId}_{$size}" . ($applyWatermarkHere ? '_wm' : '');
 
         // Return from cache if available (cached for 1 hour)
         $cached = \Illuminate\Support\Facades\Cache::get($cacheKey);
@@ -149,6 +184,31 @@ class DriveController extends Controller
                         $body = $imgResp->body();
                         $type = $imgResp->header('Content-Type', 'image/jpeg');
 
+                        // Apply watermark inline. The service writes via GD
+                        // and returns JPEG bytes — independent of the source
+                        // type, so we normalise content-type to image/jpeg.
+                        if ($applyWatermarkHere && !empty($body)) {
+                            $tmp = tempnam(sys_get_temp_dir(), 'drvwm_');
+                            try {
+                                file_put_contents($tmp, $body);
+                                $watermarked = $watermarkSvc->apply($tmp);
+                                if (!empty($watermarked)) {
+                                    $body = $watermarked;
+                                    $type = 'image/jpeg';
+                                }
+                            } catch (\Throwable $e) {
+                                Log::warning('Drive proxy: watermark apply failed', [
+                                    'file_id' => $fileId,
+                                    'error'   => $e->getMessage(),
+                                ]);
+                                // Fall through with the raw body — better
+                                // to show the un-watermarked image than
+                                // break the gallery on a transient GD glitch.
+                            } finally {
+                                if (is_string($tmp) && is_file($tmp)) @unlink($tmp);
+                            }
+                        }
+
                         // Cache for 1 hour (only cache small sizes to save memory)
                         if ($size <= 800 && strlen($body) < 500000) {
                             \Illuminate\Support\Facades\Cache::put($cacheKey, ['body' => $body, 'type' => $type], 3600);
@@ -166,7 +226,11 @@ class DriveController extends Controller
             }
         }
 
-        // Fallback: redirect to public thumbnail URL (legacy Drive-only)
+        // Fallback: redirect to public thumbnail URL (legacy Drive-only).
+        // We can't apply watermark on a redirect (we don't see the bytes),
+        // so this path bypasses watermarking — only triggers when the
+        // service account isn't configured, which should be the
+        // exception, not the rule, in any production install.
         return redirect("https://drive.google.com/thumbnail?id={$fileId}&sz=w{$size}");
     }
 
