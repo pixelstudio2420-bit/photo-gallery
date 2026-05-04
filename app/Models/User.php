@@ -8,7 +8,13 @@ class User extends Authenticatable
     protected $fillable = ['username','first_name','last_name','email','password_hash','phone','avatar','auth_provider','provider_id','status','email_verified','email_verified_at','last_login_at','login_count',
         // Geo for personalised popups + email digest (Phase 4)
         'province_id','district_id','subdistrict_id'];
-    protected $hidden = ['password_hash'];
+    // remember_token never needs to leave the server — it's a server-side
+    // cookie-validation secret, not user-facing data. Same treatment as
+    // password_hash: kept on the model for Laravel's auth machinery to
+    // read/write via getRememberToken / setRememberToken, but excluded
+    // from any JSON serialisation (API responses, email templates that
+    // dump the user object, etc.).
+    protected $hidden = ['password_hash', 'remember_token'];
     protected $casts = ['email_verified'=>'boolean','email_verified_at'=>'datetime','last_login_at'=>'datetime','created_at'=>'datetime','updated_at'=>'datetime'];
 
     public function getAuthPassword() { return $this->password_hash; }
