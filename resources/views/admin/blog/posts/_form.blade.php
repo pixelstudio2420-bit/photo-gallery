@@ -308,8 +308,11 @@
                 <div class="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-white/[0.06] p-6">
                     <div class="flex items-center justify-between mb-2">
                         <label class="text-sm font-semibold text-slate-700 dark:text-gray-200">สรุปย่อ (Excerpt)</label>
-                        <span class="char-counter" :class="{ 'warning': form.excerpt.length > 250, 'danger': form.excerpt.length > 300 }"
-                              x-text="form.excerpt.length + '/300'"></span>
+                        {{-- Null-guard with `(form.excerpt || '')` since DB
+                             rows can have NULL excerpt — without the guard
+                             Alpine throws TypeError on the .length read. --}}
+                        <span class="char-counter" :class="{ 'warning': (form.excerpt || '').length > 250, 'danger': (form.excerpt || '').length > 300 }"
+                              x-text="(form.excerpt || '').length + '/300'"></span>
                     </div>
                     <textarea name="excerpt" x-model="form.excerpt" rows="3" maxlength="300"
                               placeholder="สรุปย่อบทความสำหรับแสดงในรายการ..."
