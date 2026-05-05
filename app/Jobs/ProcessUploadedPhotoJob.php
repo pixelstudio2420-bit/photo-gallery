@@ -67,22 +67,38 @@ class ProcessUploadedPhotoJob implements ShouldQueue
             return;
         }
 
-        // Critical correctness fix: previously this branch bailed whenever
-        // status === 'active', on the assumption that "active = processing
-        // succeeded". That's wrong for photos whose row was inserted via a
-        // pre-pipeline path (older code paths, manual SQL inserts, half-
-        // completed migrations) — they end up active=true but with NULL
-        // thumbnail_path/watermarked_path, and the previous early-return
-        // meant ReprocessPhotosCommand + the proxy's auto-reprocess
-        // dispatch (DriveController.php) silently became no-ops.
+        // Decide what work the job actually needs to do.
         //
-        // Now: only short-circuit when status='active' AND BOTH variants
-        // are already generated. If either is missing, fall through to
-        // the rest of the handler and bake them.
-        if ($photo->status === 'active'
+        // $variantsBaked = TRUE  when the photo already has both
+        //                       thumbnail + watermarked paths AND status
+        //                       is active (so the bake step can be skipped)
+        //
+        // Branch matrix:
+        //   fastMode=true,  variantsBaked=true  → nothing to do; return.
+        //   fastMode=true,  variantsBaked=false → run BAKE only (skip
+        //                                        face/moderation/preset
+        //                                        for speed, see fastMode
+        //                                        comment on the constructor).
+        //   fastMode=false, variantsBaked=true  → BAKE skipped, but
+        //                                        STILL run side-effects.
+        //                                        This is the path that
+        //                                        backfills face indexing
+        //                                        for photos that were
+        //                                        JIT-baked from the proxy:
+        //                                        admin runs
+        //                                          php artisan photos:reprocess
+        //                                        and every JIT-baked row
+        //                                        passes through here, with
+        //                                        bake skipped + face index
+        //                                        + moderation + preset run.
+        //   fastMode=false, variantsBaked=false → full pipeline (the
+        //                                        normal upload path).
+        $variantsBaked = $photo->status === 'active'
             && !empty($photo->thumbnail_path)
-            && !empty($photo->watermarked_path)) {
-            return; // truly processed — nothing to do
+            && !empty($photo->watermarked_path);
+
+        if ($this->fastMode && $variantsBaked) {
+            return; // truly nothing to do
         }
 
         $storage  = app(StorageManager::class);
@@ -100,32 +116,36 @@ class ProcessUploadedPhotoJob implements ShouldQueue
             $previewQuality  = max(50,  min(100,  (int) AppSetting::get('photo_preview_quality',   82)));
 
             // 1) Download original to temp file
+            //    Always needed: even when bake is skipped (variantsBaked
+            //    branch) we still need the original on disk for the
+            //    side-effects step (face indexing reads the bytes).
             $originalContents = $this->downloadOriginal($photo);
             $tmpOriginal = tempnam(sys_get_temp_dir(), 'photo_orig_');
             file_put_contents($tmpOriginal, $originalContents);
             $tmpFiles[] = $tmpOriginal;
 
-            // 2) Optionally compress + re-encode the original in-place.
-            // Only writes back to storage when the re-encoded file is
-            // actually smaller — avoids upscaling artifacts or wasting a
-            // write when the source was already well-compressed.
-            if ($compressEnabled) {
-                $result = $imgProc->compressOriginal($tmpOriginal);
-                if (!empty($result['compressed']) && strlen($result['bytes']) > 0 && strlen($result['bytes']) < strlen($originalContents)) {
-                    $storage->put($photo->original_path, $result['bytes']);
-                    // Rewrite temp so downstream thumb/preview use the smaller image
-                    file_put_contents($tmpOriginal, $result['bytes']);
-                    $photo->file_size = strlen($result['bytes']);
-                    Log::info("ProcessUploadedPhotoJob: photo #{$this->photoId} re-encoded", [
-                        'before' => strlen($originalContents),
-                        'after'  => strlen($result['bytes']),
-                        'saved'  => strlen($originalContents) - strlen($result['bytes']),
-                    ]);
-                }
-            }
-
             $watermark = new WatermarkService();
             $watermarkEnabled = $watermark->isEnabled();
+
+            if (!$variantsBaked) {
+                // 2) Optionally compress + re-encode the original in-place.
+                // Only writes back to storage when the re-encoded file is
+                // actually smaller — avoids upscaling artifacts or wasting a
+                // write when the source was already well-compressed.
+                if ($compressEnabled) {
+                    $result = $imgProc->compressOriginal($tmpOriginal);
+                    if (!empty($result['compressed']) && strlen($result['bytes']) > 0 && strlen($result['bytes']) < strlen($originalContents)) {
+                        $storage->put($photo->original_path, $result['bytes']);
+                        // Rewrite temp so downstream thumb/preview use the smaller image
+                        file_put_contents($tmpOriginal, $result['bytes']);
+                        $photo->file_size = strlen($result['bytes']);
+                        Log::info("ProcessUploadedPhotoJob: photo #{$this->photoId} re-encoded", [
+                            'before' => strlen($originalContents),
+                            'after'  => strlen($result['bytes']),
+                            'saved'  => strlen($originalContents) - strlen($result['bytes']),
+                        ]);
+                    }
+                }
 
             // CRITICAL FIX: derive thumbnail_path / watermarked_path from
             // original_path when the row was inserted with NULL placeholders.
@@ -208,16 +228,17 @@ class ProcessUploadedPhotoJob implements ShouldQueue
                 }
             }
 
-            // 5) Get dimensions if not set
-            if (!$photo->width || !$photo->height) {
-                $dims = $imgProc->getDimensions($tmpOriginal);
-                $photo->width  = $dims['width']  ?? 0;
-                $photo->height = $dims['height'] ?? 0;
-            }
+                // 5) Get dimensions if not set
+                if (!$photo->width || !$photo->height) {
+                    $dims = $imgProc->getDimensions($tmpOriginal);
+                    $photo->width  = $dims['width']  ?? 0;
+                    $photo->height = $dims['height'] ?? 0;
+                }
 
-            // 6) Mark as active
-            $photo->status = 'active';
-            $photo->save();
+                // 6) Mark as active
+                $photo->status = 'active';
+                $photo->save();
+            } // end if (!$variantsBaked) — bake-only block
 
             // ─── Post-bake side-effects ───
             // These three steps add 3-8 seconds per photo (face indexing
@@ -238,7 +259,27 @@ class ProcessUploadedPhotoJob implements ShouldQueue
             // face index / moderation / preset, just on a less time-
             // sensitive code path.
             if ($this->fastMode) {
-                Log::info("ProcessUploadedPhotoJob: photo #{$this->photoId} processed (fastMode — face/moderation/preset deferred).");
+                Log::info("ProcessUploadedPhotoJob: photo #{$this->photoId} processed (fastMode — face/moderation/preset deferred to async).");
+
+                // Self-healing: dispatch ourselves AGAIN with fastMode=false
+                // so the side-effects (face indexing in particular) run
+                // asynchronously after the buyer's JIT request is served.
+                // The follow-up sees variantsBaked=true and skips the
+                // bake — it only runs the face/moderation/preset block.
+                //
+                // No recursion risk: the second dispatch is fastMode=false,
+                // its `if ($this->fastMode)` branch never re-fires this
+                // dispatch, so the chain terminates after one extra job.
+                //
+                // If the queue worker isn't running, the job sits in the
+                // queue and `php artisan photos:reprocess` later picks
+                // up the same active+missing-face-index rows via the
+                // synchronous code path in ReprocessPhotosCommand.
+                try {
+                    self::dispatch($this->photoId, false)->onQueue('default');
+                } catch (\Throwable $e) {
+                    Log::debug("ProcessUploadedPhotoJob: async side-effects dispatch failed for photo #{$this->photoId}: " . $e->getMessage());
+                }
             } else {
                 // 7) Index face into AWS Rekognition collection (best-effort, non-fatal).
                 //    Silently skips when AWS is not configured or the photo contains no face.
