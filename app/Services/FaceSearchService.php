@@ -87,18 +87,37 @@ class FaceSearchService
      * IAM/credentials misconfiguration in prod — admin had no way
      * to tell from the user's bug report.
      *
-     * @return array{faces: array, error: ?string, error_code: ?string}
-     *   `faces`      — array of FaceDetail objects (empty if none)
-     *   `error`      — human-readable error (null on success)
-     *   `error_code` — short machine-readable code:
-     *                  null            → success (faces may be empty)
-     *                  'aws_error'     → SDK threw (auth/region/network)
-     *                  'unconfigured'  → AWS keys not set
+     * @return array{
+     *   faces: array,
+     *   error: ?string,
+     *   error_code: ?string,
+     *   error_class: ?string,
+     *   aws_error_code: ?string
+     * }
+     *   `faces`          — array of FaceDetail objects (empty if none)
+     *   `error`          — human-readable error (null on success)
+     *   `error_code`     — short machine-readable code:
+     *                      null            → success (faces may be empty)
+     *                      'aws_error'     → SDK threw (auth/region/network)
+     *                      'unconfigured'  → AWS keys not set
+     *   `error_class`    — fully-qualified exception class (e.g.
+     *                      Aws\Rekognition\Exception\RekognitionException) or null.
+     *                      Useful for diagnostics — admins can tell SDK errors
+     *                      from generic RuntimeException ("not configured").
+     *   `aws_error_code` — AWS-side error code (e.g. AccessDeniedException,
+     *                      InvalidSignatureException) when the SDK populated
+     *                      one; null otherwise.
      */
     public function detectFaces(string $imageBytes): array
     {
         if (!$this->isConfigured()) {
-            return ['faces' => [], 'error' => 'AWS Rekognition not configured', 'error_code' => 'unconfigured'];
+            return [
+                'faces'          => [],
+                'error'          => 'AWS Rekognition not configured',
+                'error_code'     => 'unconfigured',
+                'error_class'    => null,
+                'aws_error_code' => null,
+            ];
         }
 
         try {
@@ -108,9 +127,11 @@ class FaceSearchService
             ]);
 
             return [
-                'faces'      => $result->get('FaceDetails') ?? [],
-                'error'      => null,
-                'error_code' => null,
+                'faces'          => $result->get('FaceDetails') ?? [],
+                'error'          => null,
+                'error_code'     => null,
+                'error_class'    => null,
+                'aws_error_code' => null,
             ];
         } catch (\Throwable $e) {
             // Log the FULL exception for admin debugging — this is
@@ -119,15 +140,19 @@ class FaceSearchService
             //   • AccessDeniedException     — IAM missing rekognition:DetectFaces
             //   • ResourceNotFoundException — wrong region (collection lives elsewhere)
             //   • EndpointConnectionError    — VPC / network / Rekognition not in this region
+            $awsCode = method_exists($e, 'getAwsErrorCode') ? $e->getAwsErrorCode() : null;
             Log::error('Rekognition detectFaces SDK error', [
-                'class'   => get_class($e),
-                'message' => $e->getMessage(),
-                'region'  => $this->resolveRegion(),
+                'class'          => get_class($e),
+                'aws_error_code' => $awsCode,
+                'message'        => $e->getMessage(),
+                'region'         => $this->resolveRegion(),
             ]);
             return [
-                'faces'      => [],
-                'error'      => 'AWS Rekognition error: ' . $e->getMessage(),
-                'error_code' => 'aws_error',
+                'faces'          => [],
+                'error'          => 'AWS Rekognition error: ' . $e->getMessage(),
+                'error_code'     => 'aws_error',
+                'error_class'    => get_class($e),
+                'aws_error_code' => $awsCode,
             ];
         }
     }

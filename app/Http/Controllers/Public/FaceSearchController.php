@@ -188,10 +188,33 @@ class FaceSearchController extends Controller
                     'status'      => 'aws_error',
                     'notes'       => substr((string) ($detectResult['error'] ?? $errorCode), 0, 240),
                 ]);
-                return response()->json([
+                $payload = [
                     'success' => false,
                     'message' => 'ระบบ AI วิเคราะห์ภาพไม่พร้อมใช้งานชั่วคราว · กรุณาลองอีกครั้งภายหลัง หรือติดต่อผู้ดูแลระบบ',
-                ], 503);
+                    'code'    => $errorCode,
+                ];
+                // For authenticated admins/photographers, include the actual
+                // AWS error code + class + diagnostic link in the response so
+                // they can debug from the browser DevTools Network tab without
+                // needing SSH access to laravel.log on Laravel Cloud. Public
+                // buyers (unauthenticated) see only the generic message.
+                $user = Auth::user();
+                $isStaff = $user && (
+                    (method_exists($user, 'isAdmin')        && $user->isAdmin())
+                 || (method_exists($user, 'isPhotographer') && $user->isPhotographer())
+                 || ($user->role ?? null) === 'admin'
+                 || ($user->role ?? null) === 'photographer'
+                );
+                if ($isStaff || config('app.debug')) {
+                    $payload['debug'] = [
+                        'aws_error_code'  => $detectResult['aws_error_code'] ?? null,
+                        'error_class'     => $detectResult['error_class']    ?? null,
+                        'message'         => $detectResult['error']          ?? null,
+                        'diagnostic_url'  => url('/admin/diagnostics/aws'),
+                        'hint'            => 'เปิด diagnostic_url เพื่อดูรายละเอียดเต็ม + ขั้นตอนแก้',
+                    ];
+                }
+                return response()->json($payload, 503);
             }
 
             // ── Genuine no-face — selfie tip ──
