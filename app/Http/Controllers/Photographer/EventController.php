@@ -89,6 +89,29 @@ class EventController extends Controller
             return ['ok' => true, 'status' => $requestedStatus];
         }
 
+        // ── HARD-BLOCK on EXPIRED subscription ────────────────────────────
+        // PlanGate::isPlanActive() returns false when the photographer
+        // HAD a paid sub but its current_period_end has now passed (or
+        // status was force-cancelled). In that case the photographer
+        // expects the "open until renewed" semantics, NOT a silent draft
+        // downgrade — they paid, they assumed they could publish, the
+        // renewal lapsed. Reject loudly so they can renew or cancel
+        // explicitly. The existing soft-downgrade below still applies for
+        // photographers who LEGITIMATELY chose the free tier and hit
+        // create — that's the "portfolio only" upgrade nudge path.
+        $sub = app(SubscriptionService::class)->currentSubscription($profile);
+        $hadPaidPlan = $sub && $sub->plan && !$sub->plan->isFree();
+        $isInactive  = $sub && !$sub->isUsable();
+        if ($hadPaidPlan && $isInactive) {
+            $reason = $sub->current_period_end && $sub->current_period_end->isPast()
+                ? 'แผนของคุณหมดอายุเมื่อ ' . $sub->current_period_end->format('d M Y')
+                : 'แผนของคุณอยู่ในสถานะ ' . $sub->status;
+            return [
+                'ok'      => false,
+                'message' => "{$reason} — กรุณาต่ออายุก่อนเปิดอีเวนต์ใหม่ (ดราฟต์ที่มีอยู่ยังเก็บได้)",
+            ];
+        }
+
         $subs = app(SubscriptionService::class);
         $cap  = $subs->maxConcurrentEvents($profile);
 
@@ -98,7 +121,9 @@ class EventController extends Controller
         }
 
         // Cap = 0 → portfolio-only plan. Don't 422; just downgrade to
-        // draft + nudge so the form save still succeeds.
+        // draft + nudge so the form save still succeeds. (Path only
+        // reached for legitimately-on-free photographers; expired ones
+        // are hard-blocked above.)
         if ($cap === 0) {
             return [
                 'ok'     => true,

@@ -82,8 +82,25 @@ class EnforceStorageQuota
         // ────────────────────────────────────────────────────────────────
         // Storage quota — always enforced when globally enabled.
         // (Legacy commission-mode photographers rely on this exclusively.)
-        // ────────────────────────────────────────────────────────────────
+        //
+        // Heal `storage_quota_bytes` from the photographer's effective plan
+        // BEFORE we read it. Without this step, an expired photographer
+        // could upload at their old paid quota (100 GB cached) for the
+        // window between period_end and the next cron / dashboard view —
+        // because the column is denormalised and only refreshes on those
+        // triggers. Calling resyncStorageQuotaFromPlan() makes the gate
+        // effective the very moment the period rolls over.
         if ($this->quota->enforcementEnabled() && $bytes > 0) {
+            try {
+                app(\App\Services\SubscriptionService::class)
+                    ->resyncStorageQuotaFromPlan($profile);
+                $profile->refresh();
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning(
+                    'storage_middleware_resync_failed: ' . $e->getMessage()
+                );
+            }
+
             if (!$this->quota->canUpload($profile, $bytes)) {
                 return $this->refuse($request, $this->quota->refusalMessage($profile, $bytes), [
                     'mode'        => 'storage',
