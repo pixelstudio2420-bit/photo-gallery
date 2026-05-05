@@ -267,7 +267,24 @@ class SubscriptionService
 
     public function aiCreditsUsed(PhotographerProfile $profile): int
     {
-        return (int) ($profile->ai_credits_used ?? 0);
+        // The platform now has TWO writers that count AI consumption:
+        //   1. UsageMeter::record('ai.face_search'/etc.) — append-ledger
+        //      pattern called from FaceSearchService::indexPhoto and
+        //      FaceSearchController. Source of truth for the modern flow.
+        //   2. SubscriptionService::consumeAiCredits — legacy atomic
+        //      counter on profile.ai_credits_used, called from
+        //      AiTaskService for non-face-search AI features.
+        //
+        // The denorm column never receives writer #1's data, so the
+        // dashboard widget showed 0 AI used even after dozens of
+        // face-search calls. Reading via PlanGate's sum-across-AI-
+        // resources gives the modern flow the right number, and we
+        // max() against the legacy column so AiTaskService consumption
+        // still shows up until that path is migrated to UsageMeter too.
+        if (!$profile->user_id) return 0;
+        $fromCounters = (int) \App\Support\PlanGate::aiCreditsUsedThisMonth((int) $profile->user_id);
+        $fromColumn   = (int) ($profile->ai_credits_used ?? 0);
+        return max($fromCounters, $fromColumn);
     }
 
     public function aiCreditsRemaining(PhotographerProfile $profile): int
