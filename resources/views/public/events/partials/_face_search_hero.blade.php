@@ -96,25 +96,29 @@
               class (not Tailwind utility) because @keyframes can't
               live in arbitrary JIT-class form.
             --}}
-            {{-- Click handler: prefer the bundle modal (which gives the
-                 buyer the discounted "เหมารูปตัวเอง" upsell), but fall
-                 back to the standalone face-search page when the modal
-                 isn't on the DOM. The modal only renders when this event
-                 has an ACTIVE face_match bundle (see _face_bundle_modal
-                 line 27 — `@if($faceBundle)`); for events without one
-                 the previous `?.showModal()` short-circuited silently
-                 and the button looked dead. --}}
+            {{-- CTA goes straight to the dedicated face-search PAGE — that
+                 page now has the full "see photos / pick how many / pay
+                 now" UX (chip strip with face_match bundle, photo grid,
+                 ชำระเงินทันที button). The legacy modal upsold the bundle
+                 with just a quote (no thumbnails, "add to cart" only) so
+                 buyers couldn't see what they were buying or skip the cart
+                 step. We keep the modal in the DOM via show.blade.php's
+                 @include for backwards compatibility, but stop opening it
+                 from this hero — the page has the better UX now.
+
+                 Switched to a real <a> link so middle-click / cmd-click
+                 opens the page in a new tab too, which onclick='window
+                 .location' didn't allow. --}}
             @auth
-              <button type="button"
-                      onclick="(function(){var m=document.getElementById('face-bundle-modal');if(m&&typeof m.showModal==='function'){m.showModal();}else{window.location='{{ route('events.face-search', $event->id) }}';}})();"
-                      class="face-search-cta inline-flex items-center gap-3 px-7 py-3.5 rounded-2xl font-extrabold text-base text-slate-900 transition active:scale-95"
-                      style="background:linear-gradient(135deg,#fde68a 0%,#fbbf24 50%,#f59e0b 100%);box-shadow:0 12px 32px -8px rgba(251,191,36,.55), 0 0 0 0 rgba(251,191,36,.45);">
+              <a href="{{ route('events.face-search', $event->id) }}"
+                 class="face-search-cta inline-flex items-center gap-3 px-7 py-3.5 rounded-2xl font-extrabold text-base text-slate-900 transition active:scale-95"
+                 style="background:linear-gradient(135deg,#fde68a 0%,#fbbf24 50%,#f59e0b 100%);box-shadow:0 12px 32px -8px rgba(251,191,36,.55), 0 0 0 0 rgba(251,191,36,.45);">
                 <span class="inline-flex w-8 h-8 rounded-xl bg-white/30 items-center justify-center shrink-0">
                   <i class="bi bi-search text-lg"></i>
                 </span>
                 <span>ค้นหารูปของฉัน</span>
                 <i class="bi bi-arrow-right text-xl face-search-arrow"></i>
-              </button>
+              </a>
             @else
               <a href="{{ route('login') }}?intended={{ urlencode(request()->fullUrl()) }}"
                  class="face-search-cta inline-flex items-center gap-3 px-7 py-3.5 rounded-2xl font-extrabold text-base text-slate-900 transition active:scale-95"

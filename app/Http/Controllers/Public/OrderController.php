@@ -81,14 +81,52 @@ class OrderController extends Controller
             // Event A's price for A photos and Event B's price for B
             // photos. Without this loop the whole order was priced as if
             // every photo came from the first item's event.
-            $itemEventPrices = [];
-            $subtotal = 0.0;
-            $eventIds = [];
+            //
+            // Bundle rows (added via /api/cart/face-bundle/add) are an
+            // exception: they store one synthetic row at the bundle's total
+            // price plus a list of `bundle_photo_ids`. We trust the bundle
+            // row's price (it was already validated when added) and remember
+            // the photo IDs so the OrderItem creation loop below can expand
+            // the bundle into per-photo rows with real thumbnails — without
+            // that expansion the payment checkout view shows a single line
+            // with no thumbnail, and the bundle's discount disappeared
+            // because the old code overrode every row's price with the
+            // per-photo rate.
+            $itemEventPrices  = [];
+            $subtotal         = 0.0;
+            $eventIds         = [];
+            $appliedPackageId = null;
+
             foreach ($items as $idx => $item) {
-                $itemEventId = !empty($item['event_id']) ? (int) $item['event_id'] : null;
-                $itemPrice   = $itemEventId ? $this->getServerPrice($itemEventId) : 0.0;
-                $itemEventPrices[$idx] = ['event_id' => $itemEventId, 'price' => $itemPrice];
-                $subtotal += $itemPrice;
+                $itemEventId   = !empty($item['event_id']) ? (int) $item['event_id'] : null;
+                $bundlePhotoIds = (array) ($item['bundle_photo_ids'] ?? []);
+                $isBundleRow    = !empty($bundlePhotoIds)
+                               || (($item['price_type'] ?? '') === 'bundle');
+
+                if ($isBundleRow) {
+                    $bundlePrice = (float) ($item['price'] ?? 0);
+                    $itemEventPrices[$idx] = [
+                        'event_id'        => $itemEventId,
+                        'price'           => $bundlePrice,
+                        'is_bundle'       => true,
+                        'bundle_photo_ids'=> $bundlePhotoIds,
+                    ];
+                    $subtotal += $bundlePrice;
+                    // The cart row already carries the package_id for the
+                    // bundle; promote it onto the order header so payment
+                    // checkout / receipts know this was a bundle purchase.
+                    if (!empty($item['package_id']) && !$appliedPackageId) {
+                        $appliedPackageId = (int) $item['package_id'];
+                    }
+                } else {
+                    $itemPrice = $itemEventId ? $this->getServerPrice($itemEventId) : 0.0;
+                    $itemEventPrices[$idx] = [
+                        'event_id'  => $itemEventId,
+                        'price'     => $itemPrice,
+                        'is_bundle' => false,
+                    ];
+                    $subtotal += $itemPrice;
+                }
                 if ($itemEventId) $eventIds[$itemEventId] = true;
             }
 
@@ -98,20 +136,35 @@ class OrderController extends Controller
             // (analytics queries that group by orders.event_id).
             $primaryEventId = !empty($eventIds) ? array_key_first($eventIds) : null;
 
-            // Apply package pricing if a valid package is selected.
-            // Packages are only valid for SINGLE-event carts; cross-event
-            // carts ignore packages (each event has its own pricing).
-            $appliedPackageId = null;
-            if ($packageId && count($eventIds) <= 1) {
+            // Apply explicit package_id from the request when no bundle row
+            // already supplied one. Same dual-shape support as expressCheckout:
+            //   • count / event_all bundle — fixed N for ฿X
+            //   • face_match  bundle      — variable N, percentage off
+            // Packages are only valid for SINGLE-event carts.
+            if ($packageId && !$appliedPackageId && count($eventIds) <= 1) {
                 $package = PricingPackage::where('id', $packageId)->where('is_active', true)->first();
-                if ($package && count($items) <= $package->photo_count) {
-                    $subtotal = (float) $package->price;
-                    $appliedPackageId = $package->id;
-                    // When a package overrides, all items share the package
-                    // price equally for downstream payout split.
-                    $perItemPrice = round($subtotal / max(1, count($items)), 2);
-                    foreach ($itemEventPrices as $k => &$v) { $v['price'] = $perItemPrice; }
-                    unset($v);
+                if ($package) {
+                    if ($package->bundle_type === PricingPackage::TYPE_FACE_MATCH && $primaryEventId) {
+                        $event = \App\Models\Event::find($primaryEventId);
+                        if ($event) {
+                            $quote = app(\App\Services\Pricing\BundleService::class)
+                                ->calculateFaceBundle($event, count($items), $package);
+                            if ($quote && isset($quote['price'])) {
+                                $subtotal = (float) $quote['price'];
+                                $appliedPackageId = $package->id;
+                                $perItemPrice = round($subtotal / max(1, count($items)), 2);
+                                foreach ($itemEventPrices as $k => &$v) { $v['price'] = $perItemPrice; }
+                                unset($v);
+                            }
+                        }
+                    } elseif ((int) $package->photo_count > 0
+                           && count($items) <= (int) $package->photo_count) {
+                        $subtotal = (float) $package->price;
+                        $appliedPackageId = $package->id;
+                        $perItemPrice = round($subtotal / max(1, count($items)), 2);
+                        foreach ($itemEventPrices as $k => &$v) { $v['price'] = $perItemPrice; }
+                        unset($v);
+                    }
                 }
             }
 
@@ -138,8 +191,53 @@ class OrderController extends Controller
                 'delivery_status'  => 'pending',
             ]);
 
+            // Pre-fetch photos referenced by any bundle row so we can stamp
+            // real thumbnails onto the per-photo OrderItems instead of the
+            // empty string the bundle row carries. One query per event
+            // regardless of bundle size.
+            $bundlePhotoLookup = [];
+            foreach ($itemEventPrices as $iep) {
+                if (empty($iep['is_bundle']) || empty($iep['bundle_photo_ids'])) continue;
+                $eid = $iep['event_id'];
+                if (!$eid) continue;
+                $ids = array_map('intval', $iep['bundle_photo_ids']);
+                if (empty($ids)) continue;
+                $rows = \App\Models\EventPhoto::whereIn('id', $ids)
+                    ->where('event_id', $eid)
+                    ->get(['id', 'thumbnail_path', 'storage_disk', 'original_filename']);
+                foreach ($rows as $p) {
+                    $bundlePhotoLookup[$eid][$p->id] = [
+                        'thumbnail' => (string) ($p->thumbnail_url ?? ''),
+                        'name'      => (string) ($p->original_filename ?: ('Photo #' . $p->id)),
+                    ];
+                }
+            }
+
             foreach ($items as $idx => $item) {
                 $iep = $itemEventPrices[$idx];
+
+                if (!empty($iep['is_bundle']) && !empty($iep['bundle_photo_ids'])) {
+                    // Expand bundle row into N per-photo OrderItems so the
+                    // payment checkout can render thumbnails + the customer
+                    // sees what's actually in the bundle. Per-row price is
+                    // bundle_price/N so summing OrderItems still equals
+                    // order.total (helps invoicing + reconciliation).
+                    $bundleIds   = $iep['bundle_photo_ids'];
+                    $bundleCount = max(1, count($bundleIds));
+                    $perItem     = round((float) $iep['price'] / $bundleCount, 2);
+                    foreach ($bundleIds as $photoId) {
+                        $meta = $bundlePhotoLookup[$iep['event_id']][$photoId] ?? null;
+                        OrderItem::create([
+                            'order_id'      => $order->id,
+                            'event_id'      => $iep['event_id'],
+                            'photo_id'      => (string) $photoId,
+                            'thumbnail_url' => $meta['thumbnail'] ?? '',
+                            'price'         => $perItem,
+                        ]);
+                    }
+                    continue;
+                }
+
                 OrderItem::create([
                     'order_id'      => $order->id,
                     'event_id'      => $iep['event_id'],
@@ -375,12 +473,19 @@ class OrderController extends Controller
                 'delivery_status'  => 'pending',
             ]);
 
+            // When a package is applied, OrderItems share the bundle price
+            // equally so the per-row sum equals order.subtotal. Otherwise
+            // each photo carries the per-photo server price.
+            $perItemPrice = $appliedPackageId
+                ? round($subtotal / max(1, count($items)), 2)
+                : $serverPrice;
             foreach ($items as $item) {
                 OrderItem::create([
                     'order_id'      => $order->id,
+                    'event_id'      => !empty($item['event_id']) ? (int) $item['event_id'] : null,
                     'photo_id'      => $item['file_id'] ?? '',
                     'thumbnail_url' => $item['thumbnail'] ?? null,
-                    'price'         => $serverPrice,
+                    'price'         => $perItemPrice,
                 ]);
             }
 
