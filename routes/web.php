@@ -1859,6 +1859,15 @@ Route::prefix('photographer')->name('photographer.')->group(function () {
         // we redirect to the canonical URL — one place, one analytics row.
         Route::get('/dashboard', fn() => redirect()->route('photographer.dashboard'));
 
+        // Live JSON snapshot of the subscription widget — polled by the
+        // dashboard's Alpine component every 30s so storage / AI credits /
+        // event count update without a full page reload. Output is cached
+        // 5s per user so a hot poll loop doesn't hammer the DB. Throttled
+        // to 30/min per user (one poll every 2s ceiling).
+        Route::get('/api/subscription-summary', [\App\Http\Controllers\Photographer\DashboardController::class, 'subscriptionSummaryJson'])
+            ->middleware('throttle:30,1')
+            ->name('api.subscription-summary');
+
         // ── Bookings (job queue) ───────────────────────────────────────
         // Calendar view + per-booking confirm/cancel/complete actions.
         // LINE reminders run via SendBookingReminders cron (every 5 min).

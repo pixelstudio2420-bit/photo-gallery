@@ -362,6 +362,105 @@ class DashboardController extends Controller
     }
 
     /**
+     * Live JSON snapshot of the subscription widget — used by the
+     * dashboard's auto-refresh polling. Returns the same shape the
+     * blade partial consumes (plan + storage + events + AI credits +
+     * featureStatus) so the JS can patch every meter without re-render.
+     *
+     * Cached for 5 seconds at the response layer so a hot poll loop
+     * (5+ tabs open, 30s interval each) doesn't hammer the DB. Cache
+     * is keyed per-user so different photographers don't share state.
+     */
+    public function subscriptionSummaryJson()
+    {
+        $user    = Auth::user();
+        $profile = $user?->photographerProfile ?? null;
+        if (!$profile) {
+            return response()->json(['error' => 'no_profile'], 404);
+        }
+
+        $cacheKey = 'photographer_sub_summary_' . $user->id;
+        $payload = \Illuminate\Support\Facades\Cache::remember(
+            $cacheKey,
+            5, // seconds
+            function () use ($profile) {
+                $svc = app(\App\Services\SubscriptionService::class);
+                $subscriptionInfo = $svc->dashboardSummary($profile);
+                $featureStatus    = $this->buildFeatureStatus($profile, $subscriptionInfo);
+
+                // Slim the payload to fields the JS actually patches.
+                // Plan / subscription model objects can't be JSON-serialised
+                // safely (lazy relations + accessors), so we project them.
+                $plan = $subscriptionInfo['plan'] ?? null;
+                return [
+                    'fetched_at' => now()->toIso8601String(),
+                    'plan'       => $plan ? [
+                        'code'  => $plan->code,
+                        'name'  => $plan->name,
+                        'badge' => $plan->badge,
+                        'icon'  => $plan->iconClass(),
+                        'price_thb' => (float) ($plan->price_thb ?? 0),
+                        'color_hex' => $plan->color_hex,
+                    ] : null,
+                    'storage' => [
+                        'used_bytes'  => (int) ($subscriptionInfo['storage_used_bytes']  ?? 0),
+                        'quota_bytes' => (int) ($subscriptionInfo['storage_quota_bytes'] ?? 0),
+                        'used_gb'     => (float) ($subscriptionInfo['storage_used_gb']  ?? 0),
+                        'quota_gb'    => (float) ($subscriptionInfo['storage_quota_gb'] ?? 0),
+                        'used_pct'    => (float) ($subscriptionInfo['storage_used_pct'] ?? 0),
+                        'warn'        => (bool)  ($subscriptionInfo['storage_warn']     ?? false),
+                        'critical'    => (bool)  ($subscriptionInfo['storage_critical'] ?? false),
+                    ],
+                    'events' => [
+                        'used'      => (int)  ($subscriptionInfo['events_used'] ?? 0),
+                        'cap'       => $subscriptionInfo['events_cap'] ?? null,
+                        'unlimited' => (bool) ($subscriptionInfo['events_unlimited'] ?? false),
+                        'used_pct'  => (float)($subscriptionInfo['events_used_pct']  ?? 0),
+                    ],
+                    'ai_credits' => [
+                        'used'      => (int)($subscriptionInfo['ai_credits_used']      ?? 0),
+                        'cap'       => (int)($subscriptionInfo['ai_credits_cap']       ?? 0),
+                        'remaining' => (int)($subscriptionInfo['ai_credits_remaining'] ?? 0),
+                        'used_pct'  => (float)($subscriptionInfo['ai_credits_used_pct'] ?? 0),
+                    ],
+                    'commission' => [
+                        'platform_pct'     => (float)($subscriptionInfo['commission_pct']         ?? 0),
+                        'photographer_pct' => (float)($subscriptionInfo['photographer_share_pct'] ?? 100),
+                    ],
+                    'state' => [
+                        'is_free'              => (bool) ($subscriptionInfo['is_free']              ?? true),
+                        'has_active_paid'      => (bool) ($subscriptionInfo['has_active_paid']      ?? false),
+                        'in_grace'             => (bool) ($subscriptionInfo['in_grace']             ?? false),
+                        'cancel_at_period_end' => (bool) ($subscriptionInfo['cancel_at_period_end'] ?? false),
+                        'days_until_renewal'   => $subscriptionInfo['days_until_renewal']           ?? null,
+                        'current_period_end'   => optional($subscriptionInfo['current_period_end'])->toIso8601String(),
+                        'grace_ends_at'        => optional($subscriptionInfo['grace_ends_at'])->toIso8601String(),
+                    ],
+                    'features' => array_values(array_map(fn ($r) => [
+                        'code'           => $r['code'],
+                        'label'          => $r['label'],
+                        'icon'           => $r['icon'],
+                        'group'          => $r['group'],
+                        'in_plan'        => $r['in_plan'],
+                        'available'      => $r['available'],
+                        'live_ok'        => $r['live_ok'],
+                        'blocked_reason' => $r['blocked_reason'],
+                        'usage'          => $r['usage'],
+                        'upgrade_to'     => $r['upgrade_to'],
+                    ], $featureStatus)),
+                    'counts' => [
+                        'available' => collect($featureStatus)->filter(fn ($r) => $r['available'] && $r['live_ok'] !== false)->count(),
+                        'blocked'   => collect($featureStatus)->filter(fn ($r) => $r['in_plan'] && $r['live_ok'] === false)->count(),
+                        'locked'    => collect($featureStatus)->filter(fn ($r) => !$r['in_plan'])->count(),
+                    ],
+                ];
+            }
+        );
+
+        return response()->json($payload);
+    }
+
+    /**
      * Build a feature-by-feature status array for the subscription widget.
      *
      * For each registered feature (FeatureFlagController::featureLabels()),

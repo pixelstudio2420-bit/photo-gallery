@@ -165,6 +165,16 @@
 
         $barColor = $critical ? '#ef4444' : ($warn ? '#f59e0b' : '#10b981');
 
+        // Live counter for the feature-status counter strip — bumps on
+        // poll updates so the photographer can see changes flow through
+        // without reloading.
+        $availableCountInit = collect($featureStatus ?? [])
+            ->filter(fn ($r) => $r['available'] && $r['live_ok'] !== false)->count();
+        $blockedCountInit = collect($featureStatus ?? [])
+            ->filter(fn ($r) => $r['in_plan'] && $r['live_ok'] === false)->count();
+        $lockedCountInit = collect($featureStatus ?? [])
+            ->filter(fn ($r) => !$r['in_plan'])->count();
+
         $featureLabels = [
             'face_search'         => ['bi-person-bounding-box', 'Face Search'],
             'quality_filter'      => ['bi-stars', 'Quality Filter'],
@@ -183,7 +193,13 @@
         ];
     @endphp
 
-    <div class="plan-card mb-4">
+    <div class="plan-card mb-4"
+         x-data="subscriptionLiveWidget({
+             endpoint: @js(route('photographer.api.subscription-summary')),
+             intervalMs: 30000
+         })"
+         x-init="start()"
+         x-on:visibilitychange.window="document.hidden ? pause() : resume()">
         {{-- Gradient header — plan name + status badge --}}
         <div class="plan-card-header">
             <div class="flex items-center justify-between gap-3 relative" style="z-index:2;">
@@ -198,21 +214,48 @@
                         <i class="bi {{ $plan?->iconClass() ?? 'bi-camera' }}"></i>
                     </div>
                     <div class="min-w-0">
-                        <p class="text-[10px] font-bold tracking-[0.16em] uppercase opacity-80 m-0">แผนสมัครสมาชิก</p>
-                        <h3 class="text-xl font-bold m-0 truncate" style="letter-spacing:-0.02em;">{{ $plan?->name ?? 'ฟรี' }}</h3>
+                        <p class="text-[10px] font-bold tracking-[0.16em] uppercase opacity-80 m-0 flex items-center gap-2">
+                            แผนสมัครสมาชิก
+                            {{-- Live indicator — pulses green while polling
+                                 is active, amber while a request is in
+                                 flight, red on error. Aria-live so screen
+                                 readers announce status changes. --}}
+                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-normal"
+                                  :class="liveBadgeClass"
+                                  aria-live="polite">
+                                <span class="relative flex h-1.5 w-1.5">
+                                    <span class="absolute inline-flex h-full w-full rounded-full opacity-70"
+                                          :class="livePingClass"
+                                          :style="loading ? '' : 'animation: ping 1.6s cubic-bezier(0,0,0.2,1) infinite;'"></span>
+                                    <span class="relative inline-flex rounded-full h-1.5 w-1.5"
+                                          :class="liveDotClass"></span>
+                                </span>
+                                <span x-text="liveLabel">LIVE</span>
+                            </span>
+                        </p>
+                        <h3 class="text-xl font-bold m-0 truncate" data-live="plan_name" style="letter-spacing:-0.02em;">{{ $plan?->name ?? 'ฟรี' }}</h3>
                         @if($plan && !$isFree)
-                            <p class="text-xs opacity-90 m-0 mt-0.5">฿{{ number_format((float) $plan->price_thb, 0) }}/เดือน</p>
+                            <p class="text-xs opacity-90 m-0 mt-0.5" data-live="plan_price">฿{{ number_format((float) $plan->price_thb, 0) }}/เดือน</p>
                         @endif
                     </div>
                 </div>
                 <div class="flex flex-col items-end gap-1.5 shrink-0">
                     @if($inGrace)
-                        <span class="plan-badge-status plan-badge-grace"><i class="bi bi-exclamation-triangle-fill"></i> ผ่อนผัน</span>
+                        <span class="plan-badge-status plan-badge-grace" data-live="status_badge"><i class="bi bi-exclamation-triangle-fill"></i> ผ่อนผัน</span>
                     @elseif($cancelAtEnd)
-                        <span class="plan-badge-status plan-badge-cancel"><i class="bi bi-clock-history"></i> สิ้นสุดเร็วๆ นี้</span>
+                        <span class="plan-badge-status plan-badge-cancel" data-live="status_badge"><i class="bi bi-clock-history"></i> สิ้นสุดเร็วๆ นี้</span>
                     @else
-                        <span class="plan-badge-status plan-badge-active"><i class="bi bi-check-circle-fill"></i> ใช้งาน</span>
+                        <span class="plan-badge-status plan-badge-active" data-live="status_badge"><i class="bi bi-check-circle-fill"></i> ใช้งาน</span>
                     @endif
+                    {{-- Manual refresh + last-updated tooltip --}}
+                    <button type="button"
+                            @click="poll()"
+                            :disabled="loading"
+                            :title="lastUpdatedTitle"
+                            class="text-[11px] text-white/90 hover:text-white font-semibold opacity-80 hover:opacity-100 transition disabled:opacity-50 inline-flex items-center gap-1">
+                        <i class="bi bi-arrow-clockwise" :class="loading ? 'animate-spin' : ''"></i>
+                        <span x-text="lastUpdatedShort">เพิ่งอัปเดต</span>
+                    </button>
                     <a href="{{ route('photographer.subscription.index') }}"
                        class="text-[11px] text-white/90 hover:text-white font-semibold no-underline opacity-80 hover:opacity-100 transition">
                         จัดการ <i class="bi bi-arrow-right"></i>
@@ -231,15 +274,16 @@
                         </span>
                     </div>
                     <div class="flex items-baseline gap-1.5">
-                        <span class="text-base font-bold text-gray-900 dark:text-white" style="font-variant-numeric:tabular-nums;">
+                        <span class="text-base font-bold text-gray-900 dark:text-white" style="font-variant-numeric:tabular-nums;" data-live="storage_used_gb">
                             {{ number_format($usedGb, 2) }}
                         </span>
-                        <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">/ {{ number_format($quotaGb, 0) }} GB</span>
-                        <span class="text-xs font-semibold ml-2" style="color:{{ $barColor }};">{{ number_format($pct, 1) }}%</span>
+                        <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">/ <span data-live="storage_quota_gb">{{ number_format($quotaGb, 0) }}</span> GB</span>
+                        <span class="text-xs font-semibold ml-2" style="color:{{ $barColor }};" data-live="storage_used_pct">{{ number_format($pct, 1) }}%</span>
                     </div>
                 </div>
                 <div class="plan-meter">
-                    <div style="width:{{ min(100, $pct) }}%;background:linear-gradient(90deg,{{ $barColor }} 0%,{{ $barColor }}cc 100%);"></div>
+                    <div data-live="storage_bar"
+                         style="width:{{ min(100, $pct) }}%;background:linear-gradient(90deg,{{ $barColor }} 0%,{{ $barColor }}cc 100%);"></div>
                 </div>
                 @if($critical)
                     <p class="text-[11px] mt-2 mb-0 text-rose-600 dark:text-rose-400">
@@ -261,7 +305,7 @@
                         <i class="bi bi-calendar-event"></i> อีเวนต์
                     </p>
                     <p class="font-bold text-sm text-gray-900 dark:text-white m-0" style="font-variant-numeric:tabular-nums;">
-                        {{ $eventsUsed }}<span class="text-xs text-gray-400 font-medium">/{{ $eventsUnlimited ? '∞' : $eventsCap }}</span>
+                        <span data-live="events_used">{{ $eventsUsed }}</span><span class="text-xs text-gray-400 font-medium">/<span data-live="events_cap_label">{{ $eventsUnlimited ? '∞' : $eventsCap }}</span></span>
                     </p>
                 </div>
                 <div class="plan-stat text-center">
@@ -269,7 +313,7 @@
                         <i class="bi bi-cpu"></i> AI Credits
                     </p>
                     <p class="font-bold text-sm text-gray-900 dark:text-white m-0" style="font-variant-numeric:tabular-nums;">
-                        {{ number_format($aiCreditsUsed) }}<span class="text-xs text-gray-400 font-medium">/{{ number_format($aiCreditsCap) }}</span>
+                        <span data-live="ai_credits_used">{{ number_format($aiCreditsUsed) }}</span><span class="text-xs text-gray-400 font-medium">/<span data-live="ai_credits_cap">{{ number_format($aiCreditsCap) }}</span></span>
                     </p>
                 </div>
                 <div class="plan-stat text-center">
@@ -277,7 +321,7 @@
                         <i class="bi bi-cash-coin"></i> รับเงิน
                     </p>
                     <p class="font-bold text-sm text-gray-900 dark:text-white m-0">
-                        {{ rtrim(rtrim(number_format($sharePct, 1), '0'), '.') }}<span class="text-xs text-gray-400 font-medium">%</span>
+                        <span data-live="commission_share">{{ rtrim(rtrim(number_format($sharePct, 1), '0'), '.') }}</span><span class="text-xs text-gray-400 font-medium">%</span>
                     </p>
                 </div>
             </div>
@@ -337,15 +381,13 @@
                         </p>
                         <div class="flex items-center gap-1.5 text-[10px]">
                             <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-semibold">
-                                <i class="bi bi-check-circle-fill"></i> {{ $availableCount }} เปิด
+                                <i class="bi bi-check-circle-fill"></i> <span data-live="features_available">{{ $availableCount }}</span> เปิด
                             </span>
-                            @if($blockedCount > 0)
-                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 font-semibold">
-                                    <i class="bi bi-exclamation-triangle-fill"></i> {{ $blockedCount }} ติดขัด
-                                </span>
-                            @endif
+                            <span data-live="features_blocked_wrap" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 font-semibold {{ $blockedCount > 0 ? '' : 'hidden' }}">
+                                <i class="bi bi-exclamation-triangle-fill"></i> <span data-live="features_blocked">{{ $blockedCount }}</span> ติดขัด
+                            </span>
                             <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 font-semibold">
-                                <i class="bi bi-lock-fill"></i> {{ $lockedCount }} ล็อค
+                                <i class="bi bi-lock-fill"></i> <span data-live="features_locked">{{ $lockedCount }}</span> ล็อค
                             </span>
                         </div>
                     </div>
@@ -430,7 +472,7 @@
 
             {{-- ─── Renewal info + CTA ─── --}}
             <div class="flex items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-white/[0.06]">
-                <div class="text-[11px] text-gray-500 dark:text-gray-400">
+                <div class="text-[11px] text-gray-500 dark:text-gray-400" data-live="renewal_text">
                     @if($renewAt && !$isFree)
                         <i class="bi bi-arrow-clockwise"></i>
                         @if($cancelAtEnd)
@@ -457,4 +499,148 @@
             </div>
         </div>
     </div>
+
+    {{-- ── Alpine.js live-polling component ─────────────────────────────
+         Auto-refreshes the widget every 30s by hitting the JSON snapshot
+         endpoint, then patches the small set of `data-live="..."`
+         elements with the new values. Pauses while the tab is hidden
+         (via document.visibilitychange) so background tabs don't burn
+         requests. Tab returns → poll() runs immediately so the user
+         never sees stale data on focus.
+
+         Status states the badge cycles through:
+           idle    — last poll OK, waiting for next interval (green pulse)
+           loading — request in flight (amber, no pulse)
+           error   — last poll failed (red, no pulse) — retry continues
+    --}}
+    @once
+    @push('scripts')
+    <script>
+    function subscriptionLiveWidget(opts) {
+      return {
+        endpoint: opts.endpoint,
+        intervalMs: opts.intervalMs || 30000,
+        loading: false,
+        error: false,
+        lastUpdatedAt: new Date(),
+        timer: null,
+        get liveBadgeClass() {
+          if (this.error)   return 'bg-rose-500/20 text-rose-100';
+          if (this.loading) return 'bg-amber-400/30 text-amber-50';
+          return 'bg-emerald-500/30 text-emerald-50';
+        },
+        get livePingClass() {
+          if (this.error)   return 'bg-rose-300';
+          if (this.loading) return 'bg-amber-200';
+          return 'bg-emerald-200';
+        },
+        get liveDotClass() {
+          if (this.error)   return 'bg-rose-300';
+          if (this.loading) return 'bg-amber-200';
+          return 'bg-emerald-200';
+        },
+        get liveLabel() {
+          if (this.error)   return 'OFFLINE';
+          if (this.loading) return 'SYNC…';
+          return 'LIVE';
+        },
+        get lastUpdatedShort() {
+          // "เพิ่งอัปเดต" within 10s; "X วิที่แล้ว" up to 60s; else "X นาทีที่แล้ว".
+          const s = Math.floor((Date.now() - this.lastUpdatedAt.getTime()) / 1000);
+          if (s < 10) return 'เพิ่งอัปเดต';
+          if (s < 60) return s + ' วิที่แล้ว';
+          const m = Math.floor(s / 60);
+          return m + ' นาทีที่แล้ว';
+        },
+        get lastUpdatedTitle() {
+          return 'อัปเดตล่าสุด: ' + this.lastUpdatedAt.toLocaleString('th-TH')
+               + '\nคลิกเพื่อรีเฟรชเดี๋ยวนี้';
+        },
+        start() {
+          // Refresh the relative-time label once per second so the user
+          // sees it tick up without waiting for the next poll.
+          setInterval(() => { /* triggers Alpine reactivity via getter */
+            this.lastUpdatedAt = this.lastUpdatedAt;
+          }, 1000);
+          this.resume();
+        },
+        resume() {
+          if (this.timer) return;
+          // Poll once immediately on resume so the user doesn't have to
+          // wait a full interval to see fresh data when their tab regains
+          // focus.
+          this.poll();
+          this.timer = setInterval(() => this.poll(), this.intervalMs);
+        },
+        pause() {
+          if (this.timer) { clearInterval(this.timer); this.timer = null; }
+        },
+        async poll() {
+          if (this.loading) return; // de-dupe overlapping requests
+          this.loading = true;
+          try {
+            const r = await fetch(this.endpoint, {
+              headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+              credentials: 'same-origin',
+            });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const data = await r.json();
+            this.applySnapshot(data);
+            this.error = false;
+            this.lastUpdatedAt = new Date();
+          } catch (e) {
+            console.warn('subscription poll failed:', e);
+            this.error = true;
+          } finally {
+            this.loading = false;
+          }
+        },
+        // Patch every data-live="..." element from the JSON payload.
+        // Kept in vanilla JS (querySelectorAll) — Alpine x-text on every
+        // counter would require wrapping the entire widget body in
+        // Alpine state, which conflicts with the existing blade-rendered
+        // feature-status section.
+        applySnapshot(d) {
+          const setText = (key, value) => {
+            const el = this.$root.querySelector('[data-live="' + key + '"]');
+            if (el) el.textContent = value;
+          };
+          const setStyle = (key, prop, value) => {
+            const el = this.$root.querySelector('[data-live="' + key + '"]');
+            if (el) el.style[prop] = value;
+          };
+          if (d.plan) {
+            setText('plan_name', d.plan.name);
+          }
+          if (d.storage) {
+            setText('storage_used_gb', Number(d.storage.used_gb).toFixed(2));
+            setText('storage_quota_gb', Math.round(Number(d.storage.quota_gb)));
+            setText('storage_used_pct', Number(d.storage.used_pct).toFixed(1) + '%');
+            setStyle('storage_bar', 'width', Math.min(100, d.storage.used_pct) + '%');
+          }
+          if (d.events) {
+            setText('events_used', d.events.used);
+            setText('events_cap_label', d.events.unlimited ? '∞' : d.events.cap);
+          }
+          if (d.ai_credits) {
+            setText('ai_credits_used', Number(d.ai_credits.used).toLocaleString());
+            setText('ai_credits_cap',  Number(d.ai_credits.cap).toLocaleString());
+          }
+          if (d.commission) {
+            const v = Number(d.commission.photographer_pct).toFixed(1).replace(/\.0$/, '');
+            setText('commission_share', v);
+          }
+          if (d.counts) {
+            setText('features_available', d.counts.available);
+            setText('features_blocked',   d.counts.blocked);
+            setText('features_locked',    d.counts.locked);
+            const blockedWrap = this.$root.querySelector('[data-live="features_blocked_wrap"]');
+            if (blockedWrap) blockedWrap.classList.toggle('hidden', d.counts.blocked === 0);
+          }
+        },
+      };
+    }
+    </script>
+    @endpush
+    @endonce
 @endif
