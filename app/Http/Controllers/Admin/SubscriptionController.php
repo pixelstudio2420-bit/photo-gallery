@@ -46,6 +46,30 @@ class SubscriptionController extends Controller
             ->latest('id')
             ->paginate(25);
 
+        // Batch-fetch monthly AI usage for every visible subscriber so the
+        // table can show "AI used / cap" without N+1 lookups. We sum across
+        // every AI resource (face_search + face_index + face_compare +
+        // face_detect) because monthly_ai_credits is a SHARED budget — same
+        // reasoning as PlanGate::aiCreditsUsedThisMonth.
+        $photographerIds = $activeSubs->pluck('photographer_id')
+            ->filter()
+            ->map(fn ($v) => (int) $v)
+            ->all();
+        $aiUsageByUserId = [];
+        if (!empty($photographerIds)) {
+            $usageRows = \DB::table('usage_counters')
+                ->whereIn('user_id', $photographerIds)
+                ->whereIn('resource', \App\Support\PlanGate::AI_RESOURCES)
+                ->where('period', 'month')
+                ->where('period_key', now()->format('Y-m'))
+                ->select('user_id', \DB::raw('SUM(units) AS used'))
+                ->groupBy('user_id')
+                ->get();
+            foreach ($usageRows as $r) {
+                $aiUsageByUserId[(int) $r->user_id] = (int) $r->used;
+            }
+        }
+
         $planCounts = SubscriptionPlan::query()
             ->orderBy('sort_order')
             ->get()
@@ -58,6 +82,7 @@ class SubscriptionController extends Controller
             'kpis'       => $kpis,
             'activeSubs' => $activeSubs,
             'planCounts' => $planCounts,
+            'aiUsageByUserId' => $aiUsageByUserId,
         ]);
     }
 
