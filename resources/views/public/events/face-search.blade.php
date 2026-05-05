@@ -226,6 +226,86 @@
 }
 .dark .results-count { background: rgba(16,185,129,0.15); color: #34d399; }
 
+/* ── Package chip strip ─────────────────────────────────────────────────
+   Lets the buyer pick a count-bundle (e.g. "5 รูป ฿199") and have the
+   price tags + total recompute on the matched cards below. Mirrors the
+   chip strip on the main event page so behavior is identical for buyers
+   already familiar with that UX. Hidden by default — JS shows it on
+   results render when packages exist. */
+.pkg-strip-wrap {
+  background: linear-gradient(180deg, #f8fafc 0%, transparent 100%);
+  border: 1px solid rgba(99,102,241,0.10);
+  border-radius: 14px;
+  padding: 0.85rem 1rem 0.95rem;
+  margin-bottom: 1rem;
+}
+.dark .pkg-strip-wrap {
+  background: linear-gradient(180deg, rgba(99,102,241,0.05) 0%, transparent 100%);
+  border-color: rgba(99,102,241,0.20);
+}
+.pkg-strip-label {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-size: 0.78rem; font-weight: 700; color: #475569;
+  margin-bottom: 0.5rem;
+}
+.dark .pkg-strip-label { color: #cbd5e1; }
+.pkg-strip-label i { color: #6366f1; }
+.pkg-strip {
+  display: flex; align-items: center; gap: 0.55rem;
+  overflow-x: auto; padding-bottom: 0.25rem; scrollbar-width: none;
+}
+.pkg-strip::-webkit-scrollbar { display: none; }
+.pkg-chip {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  padding: 0.55rem 0.95rem;
+  border-radius: 12px;
+  font-size: 0.78rem; font-weight: 600; color: #475569;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+.pkg-chip:hover { border-color: #818cf8; color: #4f46e5; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99,102,241,0.12); }
+.dark .pkg-chip { background: #1e293b; border-color: rgba(255,255,255,0.10); color: #cbd5e1; }
+.pkg-chip-divider { color: #cbd5e1; font-weight: 400; }
+.pkg-chip-price { color: #6366f1; font-weight: 800; }
+.pkg-chip.active {
+  background: linear-gradient(135deg, #6366f1, #7c3aed);
+  border-color: #6366f1;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(99,102,241,0.35);
+}
+.pkg-chip.active .pkg-chip-divider { color: rgba(255,255,255,0.6); }
+.pkg-chip.active .pkg-chip-price { color: #fff; }
+.pkg-chip.clear {
+  border-style: dashed;
+  border-color: #cbd5e1;
+  color: #64748b;
+}
+.dark .pkg-chip.clear { border-color: rgba(255,255,255,0.15); color: #94a3b8; }
+.pkg-info-bar {
+  margin-top: 0.6rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #eef2ff, #f5f3ff);
+  color: #4f46e5;
+  font-size: 0.78rem; font-weight: 600;
+  display: flex; align-items: center; gap: 0.4rem;
+}
+.dark .pkg-info-bar { background: rgba(99,102,241,0.12); color: #a5b4fc; }
+.pkg-info-bar.warn {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  color: #92400e;
+}
+.dark .pkg-info-bar.warn { background: rgba(245,158,11,0.15); color: #fbbf24; }
+.pkg-info-bar.ok {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  color: #065f46;
+}
+.dark .pkg-info-bar.ok { background: rgba(16,185,129,0.15); color: #34d399; }
+
 .match-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 1rem;
@@ -869,6 +949,46 @@
           <span id="matchCount" class="results-count"></span>
         </div>
 
+        {{-- ── Package chip strip ─────────────────────────────────────────
+             Server passes `$packages` (count-bundles only). Buyer can pick
+             one to override per-photo pricing — JS reprices every match
+             card and the selection bar's total. Hidden when:
+               • event has no active packages (count == 0)
+               • search hasn't run yet (resultsArea is display:none anyway)
+        --}}
+        @if(isset($packages) && $packages->count() > 0)
+        <div class="pkg-strip-wrap" id="pkgStripWrap" style="display:none;">
+          <div class="pkg-strip-label">
+            <i class="bi bi-box-seam"></i>
+            แพ็กเกจประหยัด — เลือกซื้อหลายรูปในราคาพิเศษ
+          </div>
+          <div class="pkg-strip" id="pkgStrip">
+            @foreach($packages as $pkg)
+            <button type="button"
+                    class="pkg-chip"
+                    data-package-id="{{ $pkg->id }}"
+                    data-count="{{ $pkg->photo_count }}"
+                    data-price="{{ $pkg->price }}"
+                    data-name="{{ $pkg->name }}"
+                    onclick="faceSearch.selectPackage(this)">
+              <span>{{ $pkg->name }}</span>
+              <span class="pkg-chip-divider">·</span>
+              <span>{{ $pkg->photo_count }} รูป</span>
+              <span class="pkg-chip-divider">·</span>
+              <span class="pkg-chip-price">{{ number_format($pkg->price, 0) }} ฿</span>
+            </button>
+            @endforeach
+            <button type="button"
+                    class="pkg-chip clear"
+                    onclick="faceSearch.clearPackage()">
+              <i class="bi bi-x-circle"></i>
+              ราคาต่อรูป
+            </button>
+          </div>
+          <div class="pkg-info-bar" id="pkgInfoBar" style="display:none;"></div>
+        </div>
+        @endif
+
         {{-- Selection bar — appears only when ≥1 match is selected and the event
              is priced. Guests see login-prompt buttons instead of the real
              cart/buy actions, mirroring the gated UX on the main event page. --}}
@@ -1341,37 +1461,122 @@ const faceSearch = (function () {
   let matches = [];
   const selected = new Set();  // set of file_id strings
 
+  // Active package (count-bundle). When set, every selected photo is priced
+  // at `package.price / package.count` and the buy/cart payload carries
+  // `package_id`. Mirrors the activePackage convention on show.blade.php.
+  let activePackage = null;
+
   const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || window.__csrf || '';
+  const BASE_PRICE_PER = {{ isset($pricePerPhoto) ? (float) $pricePerPhoto : 0 }};
 
   function render(ms) {
     matches = (ms || []).slice();
     selected.clear();
 
     const grid = document.getElementById('matchGrid');
-    const priced = matches.some(m => Number(m.price) > 0);
+    const priced = matches.some(m => Number(m.price) > 0)
+                || (activePackage !== null)
+                || BASE_PRICE_PER > 0;
 
-    grid.innerHTML = matches.map((m, idx) => {
-      const price = Number(m.price) || 0;
-      const priceHtml = price > 0
-        ? `<span class="price">฿${fmtMoney(price)}</span>`
-        : `<span class="price free">ฟรี</span>`;
-      return `
-        <div class="match-card" data-idx="${idx}" onclick="faceSearch.toggle(${idx})">
-          <div class="match-check"><i class="bi bi-check-lg"></i></div>
-          <img src="${escapeHtml(m.thumbnail || m.photo_url)}" alt="Match" loading="lazy">
-          <div class="match-badge"><i class="bi bi-check-circle-fill"></i>${m.confidence}%</div>
-          <div class="match-card-footer">
-            <span class="label">ตรงกัน ${m.confidence}%</span>
-            ${priceHtml}
-          </div>
-        </div>
-      `;
-    }).join('');
+    grid.innerHTML = matches.map((m, idx) => _renderCard(m, idx)).join('');
 
     // Hide the selection bar entirely for free events — nothing to buy.
     const bar = document.getElementById('selectionBar');
     if (bar) bar.style.display = priced ? '' : 'none';
+
+    // Show the package strip only on priced events with results.
+    const stripWrap = document.getElementById('pkgStripWrap');
+    if (stripWrap) {
+      stripWrap.style.display = (priced && matches.length > 0) ? '' : 'none';
+    }
+
     _updateBar();
+  }
+
+  // Render a single match card. Pulled out of render() so selectPackage()
+  // can repaint cards in place without re-running selection-clearing logic.
+  function _renderCard(m, idx) {
+    const perPhoto = activePackage
+      ? (activePackage.price / activePackage.count)
+      : (Number(m.price) || BASE_PRICE_PER || 0);
+    const priceHtml = perPhoto > 0
+      ? `<span class="price">฿${fmtMoney(perPhoto)}</span>`
+      : `<span class="price free">ฟรี</span>`;
+    const priceLabel = activePackage ? 'ราคาแพ็กเกจ' : `ตรงกัน ${m.confidence}%`;
+    return `
+      <div class="match-card" data-idx="${idx}" onclick="faceSearch.toggle(${idx})">
+        <div class="match-check"><i class="bi bi-check-lg"></i></div>
+        <img src="${escapeHtml(m.thumbnail || m.photo_url)}" alt="Match" loading="lazy">
+        <div class="match-badge"><i class="bi bi-check-circle-fill"></i>${m.confidence}%</div>
+        <div class="match-card-footer">
+          <span class="label">${escapeHtml(priceLabel)}</span>
+          ${priceHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  // Re-render every card without resetting selection — used after a package
+  // switch so existing checkmarks stay put while prices flip.
+  function _repaintCards() {
+    const grid = document.getElementById('matchGrid');
+    if (!grid) return;
+    grid.innerHTML = matches.map((m, idx) => _renderCard(m, idx)).join('');
+    // Restore .selected classes since we rebuilt the DOM.
+    matches.forEach((m, idx) => {
+      const key = String(m.file_id ?? m.photo_id);
+      if (selected.has(key)) {
+        const card = grid.querySelector(`.match-card[data-idx="${idx}"]`);
+        card?.classList.add('selected');
+      }
+    });
+  }
+
+  // ── Package picker ──────────────────────────────────────────────────────
+  function selectPackage(btn) {
+    if (!btn) return;
+    activePackage = {
+      id:    btn.dataset.packageId,
+      name:  btn.dataset.name || '',
+      count: parseInt(btn.dataset.count, 10) || 0,
+      price: parseFloat(btn.dataset.price) || 0,
+    };
+    document.querySelectorAll('#pkgStrip .pkg-chip').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    _repaintCards();
+    _updateBar();
+    _updatePkgInfoBar();
+  }
+
+  function clearPackage() {
+    activePackage = null;
+    document.querySelectorAll('#pkgStrip .pkg-chip').forEach(c => c.classList.remove('active'));
+    _repaintCards();
+    _updateBar();
+    _updatePkgInfoBar();
+  }
+
+  function _updatePkgInfoBar() {
+    const bar = document.getElementById('pkgInfoBar');
+    if (!bar) return;
+    if (!activePackage) {
+      bar.style.display = 'none';
+      return;
+    }
+    const need = activePackage.count;
+    const have = selected.size;
+    const diff = need - have;
+    bar.style.display = '';
+    if (diff > 0) {
+      bar.className = 'pkg-info-bar warn';
+      bar.innerHTML = `<i class="bi bi-info-circle-fill"></i>เลือกอีก <b>${diff}</b> รูปเพื่อใช้แพ็กเกจ <b>${escapeHtml(activePackage.name)}</b> (รวม <b>฿${fmtMoney(activePackage.price)}</b>)`;
+    } else if (diff === 0) {
+      bar.className = 'pkg-info-bar ok';
+      bar.innerHTML = `<i class="bi bi-check-circle-fill"></i>ครบแล้ว — แพ็กเกจ <b>${escapeHtml(activePackage.name)}</b> · <b>${need}</b> รูป · <b>฿${fmtMoney(activePackage.price)}</b>`;
+    } else {
+      bar.className = 'pkg-info-bar warn';
+      bar.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i>เลือกเกินแพ็กเกจ — แพ็กเกจรับ <b>${need}</b> รูป แต่เลือกไว้ <b>${have}</b> รูป กรุณาเอาออก <b>${-diff}</b> รูป`;
+    }
   }
 
   function toggle(idx) {
@@ -1383,53 +1588,110 @@ const faceSearch = (function () {
       selected.delete(key);
       card?.classList.remove('selected');
     } else {
+      // When a package is active we cap selection at the package count —
+      // toggling a new card past the cap is silently a no-op (more
+      // intuitive than a blocking dialog every click). The info bar
+      // already says "selected X of N" so the cap is visible.
+      if (activePackage && selected.size >= activePackage.count) {
+        showToast(`แพ็กเกจนี้รับ ${activePackage.count} รูป — เอารูปอื่นออกก่อน`);
+        return;
+      }
       selected.add(key);
       card?.classList.add('selected');
     }
     _updateBar();
+    _updatePkgInfoBar();
   }
 
   function selectAll() {
     matches.forEach((m, idx) => {
       const key = String(m.file_id ?? m.photo_id);
+      // Same cap as toggle() — selectAll never exceeds the package count.
+      if (activePackage && selected.size >= activePackage.count) return;
       selected.add(key);
       const card = document.querySelector(`.match-card[data-idx="${idx}"]`);
       card?.classList.add('selected');
     });
     _updateBar();
+    _updatePkgInfoBar();
   }
 
   function clearSelection() {
     selected.clear();
     document.querySelectorAll('.match-card.selected').forEach(c => c.classList.remove('selected'));
     _updateBar();
+    _updatePkgInfoBar();
   }
 
   // Build the payload /cart/add-bulk and /orders/express expect. Matches the
-  // shape used on the event page (show.blade.php → buildCartItems).
+  // shape used on the event page (show.blade.php → buildCartItems) — when a
+  // package is active, every line is priced at `price/count` and carries
+  // package_id so the server bills the bundle (not the per-photo total).
   function _buildItems() {
+    const perPhoto = activePackage
+      ? (activePackage.price / activePackage.count)
+      : 0; // 0 means "let the server use its own per-photo price for this match"
     const items = [];
     matches.forEach(m => {
       const key = String(m.file_id ?? m.photo_id);
       if (!selected.has(key)) return;
       items.push({
-        event_id:  m.event_id,
-        file_id:   key,
-        name:      m.name || `Photo ${key}`,
-        thumbnail: m.thumbnail || m.photo_url || '',
-        price:     Number(m.price) || 0,
+        event_id:   m.event_id,
+        file_id:    key,
+        name:       m.name || `Photo ${key}`,
+        thumbnail:  m.thumbnail || m.photo_url || '',
+        price:      activePackage ? perPhoto : (Number(m.price) || BASE_PRICE_PER || 0),
+        package_id: activePackage ? activePackage.id : null,
       });
     });
     return items;
   }
 
   function _total() {
+    // Package: the headline price IS the package price (not sum of per-photo).
+    // We still gate by selection.size === count so an under-filled bundle
+    // doesn't show the bundle price as if it were complete — fall back to
+    // the per-photo math while the buyer is mid-selection.
+    if (activePackage) {
+      if (selected.size === activePackage.count) return activePackage.price;
+      const perPhoto = activePackage.price / activePackage.count;
+      return selected.size * perPhoto;
+    }
     let total = 0;
     matches.forEach(m => {
       const key = String(m.file_id ?? m.photo_id);
-      if (selected.has(key)) total += Number(m.price) || 0;
+      if (selected.has(key)) total += Number(m.price) || BASE_PRICE_PER || 0;
     });
     return total;
+  }
+
+  // Validate selection against package rules. Returns true when ok to
+  // submit, false after surfacing a Swal toast about the mismatch.
+  function _validateSelection() {
+    if (!activePackage) return true;
+    const need = activePackage.count;
+    const have = selected.size;
+    if (have < need) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'เลือกรูปไม่ครบ',
+        html: `แพ็กเกจ <b>${escapeHtml(activePackage.name)}</b> ต้องเลือก <b>${need}</b> รูป<br>คุณเลือกไว้ <b>${have}</b> รูป — เลือกเพิ่มอีก <b>${need - have}</b> รูป`,
+        confirmButtonText: 'เลือกรูปเพิ่ม',
+        confirmButtonColor: '#6366f1',
+      });
+      return false;
+    }
+    if (have > need) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'เลือกรูปเกินแพ็กเกจ',
+        html: `แพ็กเกจรับ <b>${need}</b> รูป — กรุณาเอาออก <b>${have - need}</b> รูป`,
+        confirmButtonText: 'เข้าใจแล้ว',
+        confirmButtonColor: '#6366f1',
+      });
+      return false;
+    }
+    return true;
   }
 
   function _updateBar() {
@@ -1457,6 +1719,7 @@ const faceSearch = (function () {
   }
 
   async function addToCart() {
+    if (!_validateSelection()) return;
     const items = _buildItems();
     if (items.length === 0) { showToast('กรุณาเลือกรูปอย่างน้อย 1 รูป'); return; }
 
@@ -1472,7 +1735,7 @@ const faceSearch = (function () {
           'X-Requested-With': 'XMLHttpRequest',
         },
         credentials: 'same-origin',
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items, package_id: activePackage?.id ?? null }),
       });
       if (!res.ok) {
         const body = await res.text().catch(() => '');
@@ -1488,14 +1751,18 @@ const faceSearch = (function () {
   }
 
   async function buyNow() {
+    if (!_validateSelection()) return;
     const items = _buildItems();
     if (items.length === 0) { showToast('กรุณาเลือกรูปอย่างน้อย 1 รูป'); return; }
 
     const total = _total();
+    const summary = activePackage
+      ? `<div style="font-size:1.05rem;"><b>${escapeHtml(activePackage.name)}</b> — ${items.length} รูป<br>รวม <b>฿${fmtMoney(total)}</b></div>`
+      : `<div style="font-size:1.05rem;"><b>${items.length}</b> รูป — รวม <b>฿${fmtMoney(total)}</b></div>`;
     const confirm = await Swal.fire({
       icon: 'question',
       title: 'ยืนยันการซื้อ',
-      html: `<div style="font-size:1.05rem;"><b>${items.length}</b> รูป — รวม <b>฿${fmtMoney(total)}</b></div>`,
+      html: summary,
       confirmButtonText: '<i class="bi bi-lightning-charge-fill mr-1"></i>ซื้อเลย',
       cancelButtonText: 'ยกเลิก',
       showCancelButton: true,
@@ -1516,7 +1783,7 @@ const faceSearch = (function () {
           'X-Requested-With': 'XMLHttpRequest',
         },
         credentials: 'same-origin',
-        body: JSON.stringify({ items, package_id: null }),
+        body: JSON.stringify({ items, package_id: activePackage?.id ?? null }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.redirect) {
@@ -1552,6 +1819,7 @@ const faceSearch = (function () {
 
   return {
     render, toggle, selectAll, clearSelection,
+    selectPackage, clearPackage,
     addToCart, buyNow, promptLogin,
     _hideSelectionBar,
   };

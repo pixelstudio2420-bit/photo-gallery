@@ -48,7 +48,33 @@ class FaceSearchController extends Controller
 
         $configured = $this->faceSearch->isConfigured();
 
-        return view('public.events.face-search', compact('event', 'configured'));
+        // Load active packages so the face-search page can offer the same
+        // bundle pricing the regular event page does. We deliberately filter
+        // to `count` bundles only — face_match bundles already power the
+        // page itself (the buyer is on the face-search flow), and event_all
+        // bundles don't make sense alongside face-filtered matches (they're
+        // for "buy every photo in the event"). Mirrors EventController::show.
+        $packages = \DB::table('pricing_packages')
+            ->where('is_active', 1)
+            ->where(fn($q) => $q->whereNull('event_id')->orWhere('event_id', $event->id))
+            ->where(function ($q) {
+                $q->whereNull('bundle_type')->orWhere('bundle_type', 'count');
+            })
+            ->where('photo_count', '>', 0)
+            ->where('price', '>', 0)
+            ->orderBy('sort_order')
+            ->orderBy('photo_count')
+            ->get();
+
+        // Per-photo unit price (when not buying a bundle) — same value the
+        // search() endpoint stamps onto each match. Surfaced here so the
+        // chip strip's "no package" baseline can be displayed before any
+        // search runs (e.g. for the empty-state copy).
+        $pricePerPhoto = (float) $this->prices->perPhoto($event->id);
+
+        return view('public.events.face-search', compact(
+            'event', 'configured', 'packages', 'pricePerPhoto'
+        ));
     }
 
     /**
