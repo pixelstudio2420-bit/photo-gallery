@@ -188,7 +188,13 @@ class DriveController extends Controller
                         @set_time_limit(45);
 
                         if (class_exists(\App\Jobs\ProcessUploadedPhotoJob::class)) {
-                            \App\Jobs\ProcessUploadedPhotoJob::dispatchSync($photo->id);
+                            // fastMode=true skips face indexing, moderation
+                            // dispatch, and default-preset apply — those add
+                            // 3-8 sec per photo and aren't worth blocking the
+                            // buyer's gallery render. Operators backfilling
+                            // via `php artisan photos:reprocess` use the
+                            // full pipeline (fastMode=false default).
+                            \App\Jobs\ProcessUploadedPhotoJob::dispatchSync($photo->id, true);
                         }
 
                         // Pick up the newly-written paths.

@@ -37,8 +37,21 @@ class ProcessUploadedPhotoJob implements ShouldQueue
 
     public int $backoff = 30;  // retry after 30s
 
+    /**
+     * @param  int   $photoId   ID of the EventPhoto row to process
+     * @param  bool  $fastMode  Skip post-bake side-effects (face indexing
+     *                          via AWS Rekognition, moderation queue
+     *                          dispatch, default-preset apply). Used by
+     *                          the proxyImage JIT recovery path so the
+     *                          gallery doesn't pay the full 7-15 sec per
+     *                          photo when 100+ photos need bake. The
+     *                          skipped side-effects are recoverable via
+     *                          `php artisan photos:reprocess --event={id}`
+     *                          in batch mode (which runs full pipeline).
+     */
     public function __construct(
-        public int $photoId
+        public int $photoId,
+        public bool $fastMode = false,
     ) {}
 
     public function handle(): void
@@ -168,19 +181,25 @@ class ProcessUploadedPhotoJob implements ShouldQueue
             }
 
             // 4) Generate watermarked preview (admin-configured preview size + quality).
-            //    Same pipeline as before — apply watermark to original,
-            //    then resize to preview dimensions. Preserved verbatim
-            //    so the lightbox / face-search-result behaviour doesn't
-            //    change.
+            //    Optimisation: resize FIRST, then watermark. The previous
+            //    order (watermark→resize) composited on the full 4K
+            //    original which decoded to ~96 MB of GD bitmap and took
+            //    3-5 seconds of CPU per photo. Resizing first brings the
+            //    bitmap down to ~6 MB at $previewMax (1600px), so the
+            //    watermark composite drops to ~0.3-0.5 sec — a 5-10x
+            //    speedup per photo with no visible quality difference
+            //    (WatermarkService scales the mark by % of image size,
+            //    so the result looks identical at both input sizes).
             if ($watermarkEnabled) {
-                $wmData = $watermark->apply($tmpOriginal);
-                $tmpWm = tempnam(sys_get_temp_dir(), 'photo_wm_');
-                file_put_contents($tmpWm, $wmData);
-                $tmpFiles[] = $tmpWm;
-
-                $wmResized = $imgProc->resizeWithQuality($tmpWm, $previewMax, $previewMax, $previewQuality);
-                if ($wmResized && $photo->watermarked_path) {
-                    $storage->put($photo->watermarked_path, $wmResized);
+                $previewData = $imgProc->resizeWithQuality($tmpOriginal, $previewMax, $previewMax, $previewQuality);
+                if ($previewData) {
+                    $tmpPreview = tempnam(sys_get_temp_dir(), 'photo_prev_');
+                    file_put_contents($tmpPreview, $previewData);
+                    $tmpFiles[] = $tmpPreview;
+                    $wmData = $watermark->apply($tmpPreview);
+                    if (!empty($wmData) && $photo->watermarked_path) {
+                        $storage->put($photo->watermarked_path, $wmData);
+                    }
                 }
             } else {
                 $previewData = $imgProc->resizeWithQuality($tmpOriginal, $previewMax, $previewMax, $previewQuality);
@@ -200,64 +219,86 @@ class ProcessUploadedPhotoJob implements ShouldQueue
             $photo->status = 'active';
             $photo->save();
 
-            // 7) Index face into AWS Rekognition collection (best-effort, non-fatal).
-            //    Silently skips when AWS is not configured or the photo contains no face.
-            //    Any failure is logged but never fails the surrounding job — image
-            //    processing has already succeeded by this point and must be preserved.
-            try {
-                app(FaceSearchService::class)->indexPhoto($photo, $tmpOriginal);
-            } catch (\Throwable $e) {
-                Log::warning("ProcessUploadedPhotoJob: face indexing skipped for photo #{$this->photoId}", [
-                    'error' => $e->getMessage(),
-                ]);
-            }
-
-            // 8) Queue moderation scan. The EventPhoto::created hook already
-            //    fires one, but that runs before the image was moved to final
-            //    storage on cloud-backed setups — dispatching again here is
-            //    idempotent (the job reads current DB state) and makes sure
-            //    the scan happens AFTER the final original is in place.
-            try {
-                if ((string) AppSetting::get('moderation_enabled', '1') === '1') {
-                    \App\Jobs\ModeratePhotoJob::dispatch($photo->id);
+            // ─── Post-bake side-effects ───
+            // These three steps add 3-8 seconds per photo (face indexing
+            // is the heavy one — Rekognition API + GD facebox detection).
+            // For uploads / batch reprocesses they're worth running, but
+            // when the job fires from the proxy's JIT recovery path
+            // (a buyer is waiting for the gallery to render), they'd
+            // multiply the perceived load time by ~2x for every photo.
+            //
+            // fastMode=true skips them. They can be backfilled by
+            // re-running the job in normal mode later — the bake's
+            // early-return is keyed on "active + variants present", so
+            // a second run with fastMode=false will fall through here
+            // and only do the side-effects (the variant generation step
+            // above will be skipped). That means
+            //   `php artisan photos:reprocess --event={id}`
+            // operators run after a JIT-bake event still completes the
+            // face index / moderation / preset, just on a less time-
+            // sensitive code path.
+            if ($this->fastMode) {
+                Log::info("ProcessUploadedPhotoJob: photo #{$this->photoId} processed (fastMode — face/moderation/preset deferred).");
+            } else {
+                // 7) Index face into AWS Rekognition collection (best-effort, non-fatal).
+                //    Silently skips when AWS is not configured or the photo contains no face.
+                //    Any failure is logged but never fails the surrounding job — image
+                //    processing has already succeeded by this point and must be preserved.
+                try {
+                    app(FaceSearchService::class)->indexPhoto($photo, $tmpOriginal);
+                } catch (\Throwable $e) {
+                    Log::warning("ProcessUploadedPhotoJob: face indexing skipped for photo #{$this->photoId}", [
+                        'error' => $e->getMessage(),
+                    ]);
                 }
-            } catch (\Throwable $e) {
-                Log::warning("ProcessUploadedPhotoJob: moderation dispatch skipped for photo #{$this->photoId}", [
-                    'error' => $e->getMessage(),
-                ]);
-            }
 
-            // 9) Auto-apply default Lightroom preset if the uploading
-            //    photographer has one set. Best-effort — failure here
-            //    must not roll back the upload (the original is already
-            //    saved + thumbnailed). The PresetService writes a sibling
-            //    file at <originalDir>/preset/<filename>.jpg and stamps
-            //    event_photos.preset_applied_path so the gallery can
-            //    serve the toned version when present.
-            try {
-                $event = $photo->event;
-                if ($event && $event->photographer_id) {
-                    $profile = \App\Models\PhotographerProfile::where('user_id', $event->photographer_id)->first();
-                    if ($profile && $profile->default_preset_id) {
-                        $subs = app(\App\Services\SubscriptionService::class);
-                        if ($subs->canAccessFeature($profile, 'presets')) {
-                            $preset = \App\Models\PhotographerPreset::active()
-                                ->forPhotographer($profile->user_id)
-                                ->find($profile->default_preset_id);
-                            if ($preset) {
-                                app(\App\Services\PresetService::class)->applyTo($photo, $preset);
-                                Log::info("ProcessUploadedPhotoJob: applied default preset '{$preset->name}' to photo #{$this->photoId}");
+                // 8) Queue moderation scan. The EventPhoto::created hook already
+                //    fires one, but that runs before the image was moved to final
+                //    storage on cloud-backed setups — dispatching again here is
+                //    idempotent (the job reads current DB state) and makes sure
+                //    the scan happens AFTER the final original is in place.
+                try {
+                    if ((string) AppSetting::get('moderation_enabled', '1') === '1') {
+                        \App\Jobs\ModeratePhotoJob::dispatch($photo->id);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning("ProcessUploadedPhotoJob: moderation dispatch skipped for photo #{$this->photoId}", [
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+
+                // 9) Auto-apply default Lightroom preset if the uploading
+                //    photographer has one set. Best-effort — failure here
+                //    must not roll back the upload (the original is already
+                //    saved + thumbnailed). The PresetService writes a sibling
+                //    file at <originalDir>/preset/<filename>.jpg and stamps
+                //    event_photos.preset_applied_path so the gallery can
+                //    serve the toned version when present.
+                try {
+                    $event = $photo->event;
+                    if ($event && $event->photographer_id) {
+                        $profile = \App\Models\PhotographerProfile::where('user_id', $event->photographer_id)->first();
+                        if ($profile && $profile->default_preset_id) {
+                            $subs = app(\App\Services\SubscriptionService::class);
+                            if ($subs->canAccessFeature($profile, 'presets')) {
+                                $preset = \App\Models\PhotographerPreset::active()
+                                    ->forPhotographer($profile->user_id)
+                                    ->find($profile->default_preset_id);
+                                if ($preset) {
+                                    app(\App\Services\PresetService::class)->applyTo($photo, $preset);
+                                    Log::info("ProcessUploadedPhotoJob: applied default preset '{$preset->name}' to photo #{$this->photoId}");
+                                }
                             }
                         }
                     }
+                } catch (\Throwable $e) {
+                    Log::warning("ProcessUploadedPhotoJob: preset auto-apply skipped for photo #{$this->photoId}", [
+                        'error' => $e->getMessage(),
+                    ]);
                 }
-            } catch (\Throwable $e) {
-                Log::warning("ProcessUploadedPhotoJob: preset auto-apply skipped for photo #{$this->photoId}", [
-                    'error' => $e->getMessage(),
-                ]);
-            }
 
-            Log::info("ProcessUploadedPhotoJob: photo #{$this->photoId} processed successfully.");
+                Log::info("ProcessUploadedPhotoJob: photo #{$this->photoId} processed successfully.");
+            }
 
         } catch (\Throwable $e) {
             Log::error("ProcessUploadedPhotoJob: photo #{$this->photoId} failed", [
