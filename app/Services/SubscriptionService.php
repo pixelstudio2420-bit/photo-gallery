@@ -1225,6 +1225,36 @@ class SubscriptionService
             $patch['ai_credits_used']         = 0;
             $patch['ai_credits_period_start'] = $newStart;
             $patch['ai_credits_period_end']   = $sub->current_period_end;
+
+            // Also wipe usage_counters for the AI bucket the dashboard
+            // widget reads. Without this the photographer just renewed
+            // their Pro plan, profile.ai_credits_used flips to 0, but
+            // PlanGate::aiCreditsUsedThisMonth (which sums usage_counters)
+            // still returns the pre-renewal count — and aiCreditsUsed()
+            // takes max() of both, so the widget shows the OLD figure
+            // even though the budget has actually reset.
+            //
+            // We zero only the *current* month bucket for AI resources;
+            // the immutable usage_events ledger keeps the full audit
+            // trail untouched, so billing reports + per-call analytics
+            // are unaffected. This is the same surgical reset that
+            // monthly_ai_credits semantically requires.
+            try {
+                \Illuminate\Support\Facades\DB::table('usage_counters')
+                    ->where('user_id',   $profile->user_id)
+                    ->whereIn('resource', \App\Support\PlanGate::AI_RESOURCES)
+                    ->where('period',    'month')
+                    ->where('period_key', now()->format('Y-m'))
+                    ->update([
+                        'units'           => 0,
+                        'cost_microcents' => 0,
+                        'updated_at'      => now(),
+                    ]);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning(
+                    'syncProfileCache: usage_counters AI reset failed: ' . $e->getMessage()
+                );
+            }
         }
 
         $profile->forceFill($patch)->save();
