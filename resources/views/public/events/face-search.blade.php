@@ -285,6 +285,28 @@
   color: #64748b;
 }
 .dark .pkg-chip.clear { border-color: rgba(255,255,255,0.15); color: #94a3b8; }
+
+/* Face-match chip: distinct visual to flag "buy ALL your photos at discount"
+   so it stands out from the count-bundles next to it. */
+.pkg-chip.face-match {
+  border-color: #f9a8d4;
+  background: linear-gradient(135deg, #fff1f7, #fef3c7);
+  color: #be185d;
+}
+.dark .pkg-chip.face-match {
+  background: linear-gradient(135deg, rgba(244,114,182,0.10), rgba(251,191,36,0.08));
+  border-color: rgba(244,114,182,0.35);
+  color: #fbcfe8;
+}
+.pkg-chip.face-match i { color: #ec4899; }
+.pkg-chip.face-match.active {
+  background: linear-gradient(135deg, #ec4899, #f97316);
+  border-color: #ec4899;
+  color: #fff;
+  box-shadow: 0 4px 18px rgba(236,72,153,0.40);
+}
+.pkg-chip.face-match.active i { color: #fff; }
+.pkg-chip.face-match.active .pkg-chip-price { color: #fff; }
 .pkg-info-bar {
   margin-top: 0.6rem;
   padding: 0.55rem 0.85rem;
@@ -964,19 +986,40 @@
           </div>
           <div class="pkg-strip" id="pkgStrip">
             @foreach($packages as $pkg)
-            <button type="button"
-                    class="pkg-chip"
-                    data-package-id="{{ $pkg->id }}"
-                    data-count="{{ $pkg->photo_count }}"
-                    data-price="{{ $pkg->price }}"
-                    data-name="{{ $pkg->name }}"
-                    onclick="faceSearch.selectPackage(this)">
-              <span>{{ $pkg->name }}</span>
-              <span class="pkg-chip-divider">·</span>
-              <span>{{ $pkg->photo_count }} รูป</span>
-              <span class="pkg-chip-divider">·</span>
-              <span class="pkg-chip-price">{{ number_format($pkg->price, 0) }} ฿</span>
-            </button>
+              @php($bt = $pkg->bundle_type ?? 'count')
+              @if($bt === 'face_match')
+                {{-- Face-match bundle: variable count, percentage discount,
+                     capped at max_price. Auto-selects every match on click. --}}
+                <button type="button"
+                        class="pkg-chip face-match"
+                        data-package-id="{{ $pkg->id }}"
+                        data-bundle-type="face_match"
+                        data-discount="{{ (float) ($pkg->discount_pct ?? 0) }}"
+                        data-max-price="{{ (float) ($pkg->max_price ?? 0) }}"
+                        data-name="{{ $pkg->name }}"
+                        onclick="faceSearch.selectPackage(this)">
+                  <i class="bi bi-stars"></i>
+                  <span>{{ $pkg->name ?: 'เหมารูปฉัน' }}</span>
+                  <span class="pkg-chip-divider">·</span>
+                  <span class="pkg-chip-price">ลด {{ (int) ($pkg->discount_pct ?? 0) }}%</span>
+                </button>
+              @else
+                {{-- Count bundle: fixed N photos for ฿X --}}
+                <button type="button"
+                        class="pkg-chip"
+                        data-package-id="{{ $pkg->id }}"
+                        data-bundle-type="count"
+                        data-count="{{ $pkg->photo_count }}"
+                        data-price="{{ $pkg->price }}"
+                        data-name="{{ $pkg->name }}"
+                        onclick="faceSearch.selectPackage(this)">
+                  <span>{{ $pkg->name }}</span>
+                  <span class="pkg-chip-divider">·</span>
+                  <span>{{ $pkg->photo_count }} รูป</span>
+                  <span class="pkg-chip-divider">·</span>
+                  <span class="pkg-chip-price">{{ number_format($pkg->price, 0) }} ฿</span>
+                </button>
+              @endif
             @endforeach
             <button type="button"
                     class="pkg-chip clear"
@@ -1496,13 +1539,25 @@ const faceSearch = (function () {
   // Render a single match card. Pulled out of render() so selectPackage()
   // can repaint cards in place without re-running selection-clearing logic.
   function _renderCard(m, idx) {
-    const perPhoto = activePackage
-      ? (activePackage.price / activePackage.count)
-      : (Number(m.price) || BASE_PRICE_PER || 0);
+    let perPhoto, priceLabel;
+    if (activePackage && activePackage.bundle_type === 'face_match') {
+      // Face-match: per-photo flips with selection size — show the
+      // discount-adjusted live rate (price/N) when ≥1 photo is selected,
+      // else the per-photo rate at full discount as a hint.
+      const count = Math.max(1, selected.size);
+      const q = _computeFaceMatchPrice(count);
+      perPhoto   = q ? q.per_photo : 0;
+      priceLabel = `เหมา · ลด ${activePackage.discount_pct}%`;
+    } else if (activePackage) {
+      perPhoto   = activePackage.price / activePackage.count;
+      priceLabel = 'ราคาแพ็กเกจ';
+    } else {
+      perPhoto   = Number(m.price) || BASE_PRICE_PER || 0;
+      priceLabel = `ตรงกัน ${m.confidence}%`;
+    }
     const priceHtml = perPhoto > 0
       ? `<span class="price">฿${fmtMoney(perPhoto)}</span>`
       : `<span class="price free">ฟรี</span>`;
-    const priceLabel = activePackage ? 'ราคาแพ็กเกจ' : `ตรงกัน ${m.confidence}%`;
     return `
       <div class="match-card" data-idx="${idx}" onclick="faceSearch.toggle(${idx})">
         <div class="match-check"><i class="bi bi-check-lg"></i></div>
@@ -1535,14 +1590,37 @@ const faceSearch = (function () {
   // ── Package picker ──────────────────────────────────────────────────────
   function selectPackage(btn) {
     if (!btn) return;
-    activePackage = {
-      id:    btn.dataset.packageId,
-      name:  btn.dataset.name || '',
-      count: parseInt(btn.dataset.count, 10) || 0,
-      price: parseFloat(btn.dataset.price) || 0,
-    };
-    document.querySelectorAll('#pkgStrip .pkg-chip').forEach(c => c.classList.remove('active'));
-    btn.classList.add('active');
+    const bundleType = btn.dataset.bundleType || 'count';
+    if (bundleType === 'face_match') {
+      activePackage = {
+        id:           btn.dataset.packageId,
+        name:         btn.dataset.name || 'เหมารูปฉัน',
+        bundle_type:  'face_match',
+        discount_pct: parseFloat(btn.dataset.discount)  || 0,
+        max_price:    parseFloat(btn.dataset.maxPrice) || 0,
+        count:        0, // not enforced — buyer chooses any subset
+        price:        0, // computed dynamically
+      };
+      document.querySelectorAll('#pkgStrip .pkg-chip').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      // Auto-select EVERY match — that's the whole point of "เหมารูปตัวเอง".
+      // Buyer can deselect ones they don't want, total recomputes live.
+      selected.clear();
+      matches.forEach(m => {
+        const key = String(m.file_id ?? m.photo_id);
+        selected.add(key);
+      });
+    } else {
+      activePackage = {
+        id:          btn.dataset.packageId,
+        name:        btn.dataset.name || '',
+        bundle_type: 'count',
+        count:       parseInt(btn.dataset.count, 10) || 0,
+        price:       parseFloat(btn.dataset.price)  || 0,
+      };
+      document.querySelectorAll('#pkgStrip .pkg-chip').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+    }
     _repaintCards();
     _updateBar();
     _updatePkgInfoBar();
@@ -1556,6 +1634,35 @@ const faceSearch = (function () {
     _updatePkgInfoBar();
   }
 
+  // ── Face-match bundle pricing ──────────────────────────────────────
+  // Mirrors BundleService::calculateFaceBundle (PHP) so the UI total
+  // matches what the server will charge after expressCheckout. Keep these
+  // formulas in sync — drift is hard to debug post-checkout.
+  //
+  //   original  = count * per_photo
+  //   price     = original * (1 - discount/100)
+  //   price     = min(price, max_price)        ← cap
+  //   price     = max(price, per_photo)        ← floor (no ฿0 bundle)
+  //
+  // Returns null when math is impossible (no per-photo price set, etc.).
+  function _computeFaceMatchPrice(count) {
+    if (!activePackage || activePackage.bundle_type !== 'face_match') return null;
+    const perPhoto = BASE_PRICE_PER;
+    if (perPhoto <= 0 || count < 1) return null;
+    const original  = count * perPhoto;
+    let price       = original * (1 - (activePackage.discount_pct || 0) / 100);
+    if (activePackage.max_price > 0) price = Math.min(price, activePackage.max_price);
+    price           = Math.max(price, perPhoto);
+    const savings   = Math.max(0, original - price);
+    return {
+      price:       Math.round(price * 100) / 100,
+      original:    Math.round(original * 100) / 100,
+      savings:     Math.round(savings * 100) / 100,
+      savings_pct: original > 0 ? Math.round((original - price) / original * 100) : 0,
+      per_photo:   count > 0 ? Math.round((price / count) * 100) / 100 : 0,
+    };
+  }
+
   function _updatePkgInfoBar() {
     const bar = document.getElementById('pkgInfoBar');
     if (!bar) return;
@@ -1563,10 +1670,32 @@ const faceSearch = (function () {
       bar.style.display = 'none';
       return;
     }
+    bar.style.display = '';
+
+    // Face-match bundle: variable count. Show live "ซื้อ N รูป ราคา ฿X
+    // ประหยัด ฿Y" so the buyer sees the deal as they pick.
+    if (activePackage.bundle_type === 'face_match') {
+      const have = selected.size;
+      if (have === 0) {
+        bar.className = 'pkg-info-bar warn';
+        bar.innerHTML = `<i class="bi bi-info-circle-fill"></i>เลือกรูปอย่างน้อย <b>1</b> รูปเพื่อเหมา`;
+        return;
+      }
+      const q = _computeFaceMatchPrice(have);
+      if (!q) {
+        bar.className = 'pkg-info-bar warn';
+        bar.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i>คำนวณราคาไม่ได้`;
+        return;
+      }
+      bar.className = 'pkg-info-bar ok';
+      bar.innerHTML = `<i class="bi bi-stars"></i>เหมา <b>${have}</b> รูป · ราคารวม <b>฿${fmtMoney(q.price)}</b> · ประหยัด <b>฿${fmtMoney(q.savings)}</b> (${q.savings_pct}%)`;
+      return;
+    }
+
+    // Count bundle: fixed count
     const need = activePackage.count;
     const have = selected.size;
     const diff = need - have;
-    bar.style.display = '';
     if (diff > 0) {
       bar.className = 'pkg-info-bar warn';
       bar.innerHTML = `<i class="bi bi-info-circle-fill"></i>เลือกอีก <b>${diff}</b> รูปเพื่อใช้แพ็กเกจ <b>${escapeHtml(activePackage.name)}</b> (รวม <b>฿${fmtMoney(activePackage.price)}</b>)`;
@@ -1584,34 +1713,36 @@ const faceSearch = (function () {
     if (!m) return;
     const key = String(m.file_id ?? m.photo_id);
     const card = document.querySelector(`.match-card[data-idx="${idx}"]`);
+    const isFaceMatch = activePackage && activePackage.bundle_type === 'face_match';
     if (selected.has(key)) {
       selected.delete(key);
       card?.classList.remove('selected');
     } else {
-      // When a package is active we cap selection at the package count —
-      // toggling a new card past the cap is silently a no-op (more
-      // intuitive than a blocking dialog every click). The info bar
-      // already says "selected X of N" so the cap is visible.
-      if (activePackage && selected.size >= activePackage.count) {
+      // Count bundle: cap at package.count. Face-match: no cap (variable).
+      if (activePackage && !isFaceMatch && selected.size >= activePackage.count) {
         showToast(`แพ็กเกจนี้รับ ${activePackage.count} รูป — เอารูปอื่นออกก่อน`);
         return;
       }
       selected.add(key);
       card?.classList.add('selected');
     }
+    // Face-match per-photo display depends on selection size — repaint.
+    if (isFaceMatch) _repaintCards();
     _updateBar();
     _updatePkgInfoBar();
   }
 
   function selectAll() {
+    const isFaceMatch = activePackage && activePackage.bundle_type === 'face_match';
     matches.forEach((m, idx) => {
       const key = String(m.file_id ?? m.photo_id);
-      // Same cap as toggle() — selectAll never exceeds the package count.
-      if (activePackage && selected.size >= activePackage.count) return;
+      // Count bundle: cap at package.count. Face-match: no cap.
+      if (activePackage && !isFaceMatch && selected.size >= activePackage.count) return;
       selected.add(key);
       const card = document.querySelector(`.match-card[data-idx="${idx}"]`);
       card?.classList.add('selected');
     });
+    if (isFaceMatch) _repaintCards();
     _updateBar();
     _updatePkgInfoBar();
   }
@@ -1628,9 +1759,13 @@ const faceSearch = (function () {
   // package is active, every line is priced at `price/count` and carries
   // package_id so the server bills the bundle (not the per-photo total).
   function _buildItems() {
-    const perPhoto = activePackage
-      ? (activePackage.price / activePackage.count)
-      : 0; // 0 means "let the server use its own per-photo price for this match"
+    let perPhoto = 0;
+    if (activePackage && activePackage.bundle_type === 'face_match') {
+      const q = _computeFaceMatchPrice(selected.size);
+      perPhoto = q ? q.per_photo : 0;
+    } else if (activePackage) {
+      perPhoto = activePackage.price / activePackage.count;
+    }
     const items = [];
     matches.forEach(m => {
       const key = String(m.file_id ?? m.photo_id);
@@ -1648,11 +1783,12 @@ const faceSearch = (function () {
   }
 
   function _total() {
-    // Package: the headline price IS the package price (not sum of per-photo).
-    // We still gate by selection.size === count so an under-filled bundle
-    // doesn't show the bundle price as if it were complete — fall back to
-    // the per-photo math while the buyer is mid-selection.
+    if (activePackage && activePackage.bundle_type === 'face_match') {
+      const q = _computeFaceMatchPrice(selected.size);
+      return q ? q.price : 0;
+    }
     if (activePackage) {
+      // Count bundle: full bundle price only when count matches.
       if (selected.size === activePackage.count) return activePackage.price;
       const perPhoto = activePackage.price / activePackage.count;
       return selected.size * perPhoto;
@@ -1669,6 +1805,22 @@ const faceSearch = (function () {
   // submit, false after surfacing a Swal toast about the mismatch.
   function _validateSelection() {
     if (!activePackage) return true;
+
+    // Face-match: variable count, just need ≥1 photo.
+    if (activePackage.bundle_type === 'face_match') {
+      if (selected.size < 1) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'เลือกรูปอย่างน้อย 1 รูป',
+          text: 'กรุณาเลือกรูปที่ต้องการเหมาก่อนชำระเงิน',
+          confirmButtonText: 'ตกลง',
+          confirmButtonColor: '#ec4899',
+        });
+        return false;
+      }
+      return true;
+    }
+
     const need = activePackage.count;
     const have = selected.size;
     if (have < need) {
@@ -1756,17 +1908,34 @@ const faceSearch = (function () {
     if (items.length === 0) { showToast('กรุณาเลือกรูปอย่างน้อย 1 รูป'); return; }
 
     const total = _total();
-    const summary = activePackage
-      ? `<div style="font-size:1.05rem;"><b>${escapeHtml(activePackage.name)}</b> — ${items.length} รูป<br>รวม <b>฿${fmtMoney(total)}</b></div>`
-      : `<div style="font-size:1.05rem;"><b>${items.length}</b> รูป — รวม <b>฿${fmtMoney(total)}</b></div>`;
+    let summary;
+    if (activePackage && activePackage.bundle_type === 'face_match') {
+      const q = _computeFaceMatchPrice(items.length);
+      summary = `
+        <div style="font-size:1rem; line-height:1.6;">
+          <div style="margin-bottom:0.5rem; color:#ec4899; font-weight:700;">
+            <i class="bi bi-stars"></i> ${escapeHtml(activePackage.name)}
+          </div>
+          <div>เหมา <b>${items.length}</b> รูป</div>
+          <div style="text-decoration:line-through; color:#94a3b8; font-size:0.85rem;">ราคาปกติ ฿${fmtMoney(q?.original ?? 0)}</div>
+          <div style="font-size:1.4rem; font-weight:800; color:#ec4899;">฿${fmtMoney(total)}</div>
+          <div style="font-size:0.8rem; color:#10b981; font-weight:600;">ประหยัด ฿${fmtMoney(q?.savings ?? 0)} (${q?.savings_pct ?? 0}%)</div>
+        </div>`;
+    } else if (activePackage) {
+      summary = `<div style="font-size:1.05rem;"><b>${escapeHtml(activePackage.name)}</b> — ${items.length} รูป<br>รวม <b>฿${fmtMoney(total)}</b></div>`;
+    } else {
+      summary = `<div style="font-size:1.05rem;"><b>${items.length}</b> รูป — รวม <b>฿${fmtMoney(total)}</b></div>`;
+    }
     const confirm = await Swal.fire({
       icon: 'question',
-      title: 'ยืนยันการซื้อ',
+      title: activePackage?.bundle_type === 'face_match' ? 'ยืนยันการเหมา & ชำระเงิน' : 'ยืนยันการซื้อ',
       html: summary,
-      confirmButtonText: '<i class="bi bi-lightning-charge-fill mr-1"></i>ซื้อเลย',
+      confirmButtonText: activePackage?.bundle_type === 'face_match'
+        ? '<i class="bi bi-credit-card-fill mr-1"></i>ชำระเงินทันที'
+        : '<i class="bi bi-lightning-charge-fill mr-1"></i>ซื้อเลย',
       cancelButtonText: 'ยกเลิก',
       showCancelButton: true,
-      confirmButtonColor: '#f59e0b',
+      confirmButtonColor: activePackage?.bundle_type === 'face_match' ? '#ec4899' : '#f59e0b',
       cancelButtonColor:  '#6b7280',
     });
     if (!confirm.isConfirmed) return;

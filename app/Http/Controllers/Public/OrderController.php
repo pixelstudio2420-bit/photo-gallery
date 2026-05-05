@@ -318,12 +318,38 @@ class OrderController extends Controller
             $subtotal = count($items) * $serverPrice;
 
             // Apply package pricing if selected
+            //
+            // Three bundle shapes — pick the right pricing path:
+            //   • count       — fixed N photos for ฿X (existing logic)
+            //   • face_match  — variable N, discount_pct off the per-photo
+            //                   total, capped at max_price. Used by the
+            //                   "เหมารูปตัวเอง" flow on /events/{id}/face-search
+            //                   so the buyer pays the bundle rate even though
+            //                   each line carries the discounted per-photo
+            //                   amount client-side. We RECOMPUTE the price
+            //                   server-side using BundleService so the JS
+            //                   can't lie about the discount.
+            //   • event_all   — flat fee (existing fallback path applies)
             $appliedPackageId = null;
             if ($packageId) {
                 $package = PricingPackage::where('id', $packageId)->where('is_active', true)->first();
-                if ($package && count($items) <= $package->photo_count) {
-                    $subtotal = (float) $package->price;
-                    $appliedPackageId = $package->id;
+                if ($package) {
+                    if ($package->bundle_type === PricingPackage::TYPE_FACE_MATCH && $eventId) {
+                        $event = \App\Models\Event::find($eventId);
+                        if ($event) {
+                            $quote = app(\App\Services\Pricing\BundleService::class)
+                                ->calculateFaceBundle($event, count($items), $package);
+                            if ($quote && isset($quote['price'])) {
+                                $subtotal         = (float) $quote['price'];
+                                $appliedPackageId = $package->id;
+                            }
+                        }
+                    } elseif ((int) $package->photo_count > 0
+                           && count($items) <= (int) $package->photo_count) {
+                        // count / event_all bundle (existing behaviour)
+                        $subtotal         = (float) $package->price;
+                        $appliedPackageId = $package->id;
+                    }
                 }
             }
 

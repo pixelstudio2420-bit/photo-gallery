@@ -49,22 +49,39 @@ class FaceSearchController extends Controller
         $configured = $this->faceSearch->isConfigured();
 
         // Load active packages so the face-search page can offer the same
-        // bundle pricing the regular event page does. We deliberately filter
-        // to `count` bundles only — face_match bundles already power the
-        // page itself (the buyer is on the face-search flow), and event_all
-        // bundles don't make sense alongside face-filtered matches (they're
-        // for "buy every photo in the event"). Mirrors EventController::show.
+        // bundle pricing the regular event page does. We include:
+        //   • count       bundles — fixed N photos for ฿X (e.g. "5 รูป ฿199")
+        //   • face_match  bundles — variable count, photo_count*per_photo
+        //                  with discount_pct off, capped at max_price.
+        //                  Auto-selects every match on chip click.
+        //
+        // We exclude `event_all` because that bundle's UX (buy the whole
+        // event flat fee) doesn't fit alongside face-filtered matches.
+        // Mirrors EventController::show with the face_match opt-in.
         $packages = \DB::table('pricing_packages')
             ->where('is_active', 1)
             ->where(fn($q) => $q->whereNull('event_id')->orWhere('event_id', $event->id))
             ->where(function ($q) {
-                $q->whereNull('bundle_type')->orWhere('bundle_type', 'count');
+                $q->whereNull('bundle_type')
+                  ->orWhere('bundle_type', 'count')
+                  ->orWhere('bundle_type', 'face_match');
             })
-            ->where('photo_count', '>', 0)
-            ->where('price', '>', 0)
+            // count bundles need photo_count + price both > 0; face_match
+            // bundles intentionally store photo_count=NULL & price=0 (they
+            // compute dynamically) so we cannot impose those bounds here.
+            // Filter the invalid count rows out in PHP after the query.
+            ->orderByRaw("CASE WHEN bundle_type = 'face_match' THEN 0 ELSE 1 END")
             ->orderBy('sort_order')
             ->orderBy('photo_count')
-            ->get();
+            ->get()
+            ->filter(function ($p) {
+                if (($p->bundle_type ?? 'count') === 'face_match') {
+                    return true; // face_match has no count/price gate
+                }
+                return ((int) ($p->photo_count ?? 0) > 0)
+                    && ((float) ($p->price ?? 0) > 0);
+            })
+            ->values();
 
         // Per-photo unit price (when not buying a bundle) — same value the
         // search() endpoint stamps onto each match. Surfaced here so the
