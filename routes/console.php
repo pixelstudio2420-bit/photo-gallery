@@ -353,6 +353,20 @@ Schedule::command('subscriptions:expire-grace')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Subscription downgrade notice — daily at 09:35 (right after the
+// generic notify-expiring at :30 so the two don't fight for the same
+// LINE rate-limit window). Fires T-7/T-3/T-1 reminders specifically
+// to subs heading for a SHRINK at rollover (cancel_at_period_end OR
+// meta.pending_plan_code), with a concrete checklist of "X events to
+// close, Y GB to delete, Z features going away" so the photographer
+// can act before the silent sync-on-rollover leaves them stuck.
+// Per-bucket idempotency via meta.downgrade_warned_buckets.
+Schedule::command('subscriptions:notify-downgrade --quiet-if-none')
+    ->name('subscriptions-notify-downgrade')
+    ->dailyAt('09:35')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Subscription expiring-soon reminders — daily at 09:30 (waking hours
 // so the photographer sees the email same morning, not pre-dawn).
 // Fires T-7 / T-3 / T-1 day reminders + grace-period countdowns.
