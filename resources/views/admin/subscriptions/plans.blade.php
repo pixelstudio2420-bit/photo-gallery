@@ -23,20 +23,30 @@
         <table class="w-full text-sm">
             <thead class="bg-gray-50 dark:bg-slate-900/40 text-gray-500 text-xs uppercase tracking-wider">
                 <tr>
-                    <th class="px-5 py-3 text-left">รหัส / ชื่อ</th>
-                    <th class="px-5 py-3 text-right">พื้นที่</th>
-                    <th class="px-5 py-3 text-right">ค่าคอม %</th>
-                    <th class="px-5 py-3 text-right">ราคา/เดือน</th>
-                    <th class="px-5 py-3 text-right">ราคา/ปี</th>
-                    <th class="px-5 py-3 text-center">AI</th>
-                    <th class="px-5 py-3 text-center">Active</th>
-                    <th class="px-5 py-3 text-right">จัดการ</th>
+                    <th class="px-4 py-3 text-left">รหัส / ชื่อ</th>
+                    <th class="px-3 py-3 text-right">ราคา/เดือน</th>
+                    <th class="px-3 py-3 text-right">ราคา/ปี</th>
+                    <th class="px-3 py-3 text-right">พื้นที่</th>
+                    <th class="px-3 py-3 text-right">ค่าคอม%</th>
+                    <th class="px-3 py-3 text-right" title="อีเวนต์ที่เปิดได้พร้อมกัน">อีเวนต์</th>
+                    <th class="px-3 py-3 text-right" title="จำนวนสมาชิกทีมต่อบัญชี">ทีม</th>
+                    <th class="px-3 py-3 text-right" title="เครดิต AI ต่อเดือน">AI/เดือน</th>
+                    <th class="px-3 py-3 text-center" title="ฟีเจอร์ที่เปิดใน ai_features">ฟีเจอร์</th>
+                    <th class="px-3 py-3 text-center" title="LINE photo delivery / push notify">LINE</th>
+                    <th class="px-3 py-3 text-center">สถานะ</th>
+                    <th class="px-4 py-3 text-right">จัดการ</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-white/5">
                 @foreach($plans as $p)
+                    @php
+                        $features = $p->ai_features ?? [];
+                        $hasLine = in_array('line_notify', $features, true);
+                        $unlimitedEvents = is_null($p->max_concurrent_events);
+                        $unlimitedAi = is_null($p->monthly_ai_credits);
+                    @endphp
                     <tr class="hover:bg-gray-50 dark:hover:bg-slate-900/40">
-                        <td class="px-5 py-3">
+                        <td class="px-4 py-3">
                             <div class="font-semibold" style="color: {{ $p->color_hex ?: '#6366f1' }}">
                                 {{ $p->name }}
                                 @if($p->badge)
@@ -45,19 +55,51 @@
                             </div>
                             <div class="text-[11px] text-gray-400 font-mono">{{ $p->code }}</div>
                         </td>
-                        <td class="px-5 py-3 text-right">{{ number_format($p->storage_gb, 0) }} GB</td>
-                        <td class="px-5 py-3 text-right">{{ (int) $p->commission_pct }}%</td>
-                        <td class="px-5 py-3 text-right">{{ $p->isFree() ? '—' : '฿'.number_format((float) $p->price_thb, 0) }}</td>
-                        <td class="px-5 py-3 text-right">{{ $p->price_annual_thb ? '฿'.number_format((float) $p->price_annual_thb, 0) : '—' }}</td>
-                        <td class="px-5 py-3 text-center">{{ count($p->ai_features ?? []) }}</td>
-                        <td class="px-5 py-3 text-center">
-                            @if($p->is_active)
-                                <span class="inline-block px-2 py-0.5 rounded text-[11px] bg-emerald-100 text-emerald-700">ON</span>
+                        <td class="px-3 py-3 text-right">{{ $p->isFree() ? '—' : '฿'.number_format((float) $p->price_thb, 0) }}</td>
+                        <td class="px-3 py-3 text-right">{{ $p->price_annual_thb ? '฿'.number_format((float) $p->price_annual_thb, 0) : '—' }}</td>
+                        <td class="px-3 py-3 text-right">{{ number_format($p->storage_gb, 0) }} GB</td>
+                        <td class="px-3 py-3 text-right">{{ (int) $p->commission_pct }}%</td>
+                        <td class="px-3 py-3 text-right">
+                            @if($unlimitedEvents)
+                                <span class="text-emerald-600 font-semibold">∞</span>
                             @else
-                                <span class="inline-block px-2 py-0.5 rounded text-[11px] bg-gray-100 text-gray-500">OFF</span>
+                                {{ (int) $p->max_concurrent_events }}
                             @endif
                         </td>
-                        <td class="px-5 py-3 text-right whitespace-nowrap">
+                        <td class="px-3 py-3 text-right">{{ (int) ($p->max_team_seats ?? 1) }}</td>
+                        <td class="px-3 py-3 text-right">
+                            @if($unlimitedAi)
+                                <span class="text-emerald-600 font-semibold">∞</span>
+                            @else
+                                {{ number_format((int) $p->monthly_ai_credits) }}
+                            @endif
+                        </td>
+                        <td class="px-3 py-3 text-center">
+                            <span title="{{ implode(', ', $features) ?: 'ไม่มี' }}"
+                                  class="inline-block px-2 py-0.5 rounded text-[11px] {{ count($features) > 0 ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-400' }}">
+                                {{ count($features) }}
+                            </span>
+                        </td>
+                        <td class="px-3 py-3 text-center">
+                            @if($hasLine)
+                                <span class="inline-block px-2 py-0.5 rounded text-[11px] bg-emerald-100 text-emerald-700" title="ส่งรูป + แจ้งเตือนผ่าน LINE">
+                                    <i class="bi bi-line"></i> ON
+                                </span>
+                            @else
+                                <span class="inline-block px-2 py-0.5 rounded text-[11px] bg-gray-100 text-gray-400" title="ไม่รองรับ LINE delivery">OFF</span>
+                            @endif
+                        </td>
+                        <td class="px-3 py-3 text-center">
+                            @if($p->is_active)
+                                <span class="inline-block px-2 py-0.5 rounded text-[11px] bg-emerald-100 text-emerald-700">เปิด</span>
+                            @else
+                                <span class="inline-block px-2 py-0.5 rounded text-[11px] bg-gray-100 text-gray-500">ปิด</span>
+                            @endif
+                            @unless($p->is_public)
+                                <span class="block text-[10px] text-amber-600 mt-0.5" title="ซ่อนจากหน้าแสดงแผน">ซ่อน</span>
+                            @endunless
+                        </td>
+                        <td class="px-4 py-3 text-right whitespace-nowrap">
                             <a href="{{ route('admin.subscriptions.plans.edit', $p) }}"
                                class="text-xs text-indigo-600 font-medium hover:underline mr-3">
                                 <i class="bi bi-pencil"></i> แก้ไข

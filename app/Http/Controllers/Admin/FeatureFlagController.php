@@ -151,6 +151,7 @@ class FeatureFlagController extends Controller
             'smart_captions'       => ['Smart Captions',           'bi-chat-quote',          'ai'],
             'video_thumbnails'     => ['Video Thumbnails',         'bi-play-btn',            'ai'],
             // ── LINE ──────────────────────────────────────────────
+            'line_notify'          => ['ส่งรูป + แจ้งเตือนลูกค้าผ่าน LINE','bi-line',         'line'],
             'line_delivery'        => ['ส่งรูปเข้า LINE หลังจ่าย',   'bi-line',                'line'],
             'line_notify_admin'    => ['แจ้งยอด/ออเดอร์เข้า LINE',  'bi-bell-fill',           'line'],
             'line_notify_customer' => ['แจ้งสถานะออเดอร์ใน LINE',   'bi-chat-dots-fill',      'line'],
