@@ -1089,6 +1089,37 @@ class SubscriptionService
     // ────────────────────────────────────────────────────────────────────
 
     /**
+     * Re-sync the denormalised quota columns from the photographer's
+     * CURRENT plan, even when there's no active subscription row. Used
+     * for admin "Fix drift" buttons, cron healers, and the migration
+     * that backfills the column on existing profiles.
+     *
+     * Different from syncProfileCache() in that it doesn't need a
+     * Subscription model — it resolves the plan from the profile's
+     * cached subscription_plan_code (or falls back to the default-free
+     * plan when that's empty).
+     *
+     * Returns true when a write happened (column changed), false if
+     * already in sync.
+     */
+    public function resyncStorageQuotaFromPlan(PhotographerProfile $profile): bool
+    {
+        $plan = $this->currentPlan($profile);
+        $newBytes = (int) ($plan->storage_bytes ?? 0);
+        if ($newBytes <= 0) return false;
+
+        $current = (int) ($profile->storage_quota_bytes ?? 0);
+        if ($current === $newBytes) return false;
+
+        $profile->forceFill([
+            'storage_quota_bytes'    => $newBytes,
+            'subscription_plan_code' => $plan->code,
+            'commission_rate'        => max(0, 100 - (float) ($plan->commission_pct ?? 0)),
+        ])->saveQuietly();
+        return true;
+    }
+
+    /**
      * Refresh the denormalised columns on photographer_profiles so the
      * middleware / dashboard / quota queries don't have to JOIN.
      *
@@ -1171,6 +1202,56 @@ class SubscriptionService
     {
         $plan = $this->currentPlan($profile);
         $sub  = $this->currentSubscription($profile);
+
+        // ── Self-heal: storage_quota drift ────────────────────────────────
+        // profile.storage_quota_bytes (read by EnforceStorageQuota
+        // middleware) sometimes drifts from plan.storage_bytes when a
+        // photographer's plan changes through a path that bypasses
+        // syncProfileCache (admin manual edit, legacy migration, etc.).
+        // Heal it lazily on dashboard read so the display the photographer
+        // sees and the value the upload gate enforces always agree.
+        $planBytes    = (int) ($plan->storage_bytes ?? 0);
+        $profileQuota = (int) ($profile->storage_quota_bytes ?? 0);
+        if ($planBytes > 0 && $profileQuota !== $planBytes) {
+            try {
+                $profile->forceFill(['storage_quota_bytes' => $planBytes])->saveQuietly();
+                \Illuminate\Support\Facades\Log::info('subscription.storage_quota_resynced', [
+                    'user_id'   => $profile->user_id,
+                    'old_bytes' => $profileQuota,
+                    'new_bytes' => $planBytes,
+                    'plan_code' => $plan->code,
+                ]);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning(
+                    'storage_quota_resync_failed: ' . $e->getMessage()
+                );
+            }
+        }
+
+        // ── Self-heal: storage_used drift ─────────────────────────────────
+        // storage_used_bytes is maintained by delta updates on photo
+        // upload/delete (see StorageQuotaService::adjust). If a photo row
+        // gets removed by some path that skips the helper (raw DELETE,
+        // event purge), the counter drifts. Reconcile from event_photos
+        // when storage_recalculated_at is stale (>24h) OR when the value
+        // looks suspiciously zero on a profile that has photos. Heavy
+        // op (one COUNT/SUM join) so we cap by recompute interval.
+        $needsRecalc = false;
+        if (!$profile->storage_recalculated_at) {
+            $needsRecalc = true;
+        } elseif ($profile->storage_recalculated_at->diffInHours(now()) >= 24) {
+            $needsRecalc = true;
+        }
+        if ($needsRecalc) {
+            try {
+                app(\App\Services\StorageQuotaService::class)->recalculate($profile);
+                $profile->refresh();
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning(
+                    'storage_used_recalc_failed: ' . $e->getMessage()
+                );
+            }
+        }
 
         $used   = (int) ($profile->storage_used_bytes ?? 0);
         $quota  = (int) ($plan->storage_bytes ?? 0);
