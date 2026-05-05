@@ -194,7 +194,13 @@ class EventController extends Controller
         // Only fold in the id-equality clause when the input is a pure
         // digit string. ctype_digit() rejects '1.5', '1e5', and negative
         // numbers — exactly the values that can't be a primary-key match.
-        $query = Event::with('category')->where('slug', $slug);
+        // Eager-load `photographerProfile` alongside `category` so the
+        // SEO Event schema below can fall back to the photographer's
+        // display_name for the `organizer` and `performer` fields when
+        // the event's own organizer column is blank — without this load
+        // Search Console flags those two fields as missing on every
+        // event whose admin didn't manually fill the organizer text.
+        $query = Event::with(['category', 'photographerProfile'])->where('slug', $slug);
         if (ctype_digit((string) $slug)) {
             $query->orWhere('id', (int) $slug);
         }
@@ -268,6 +274,16 @@ class EventController extends Controller
             // attendees, and contact links land in JSON-LD without
             // every controller having to build them by hand.
             'organizer'         => $event->organizer ?? '',
+            // Photographer's display_name as the fallback `organizer`
+            // and `performer` when the event's own organizer column is
+            // blank. Search Console flags both fields as missing on
+            // events that don't fill it in manually, so we feed the
+            // photographer here and let SeoService::eventSchema cascade.
+            'photographer_name' => optional($event->photographerProfile)->display_name ?? '',
+            // created_at flows into Offer.validFrom (when the offer
+            // became live). Search Console flags missing validFrom as
+            // an Offer error; created_at is the truthful answer.
+            'created_at'        => $event->created_at,
             'event_type'        => $event->event_type ?? '',
             'expected_attendees'=> (int) ($event->expected_attendees ?? 0),
             'highlights'        => is_array($event->highlights) ? $event->highlights : [],

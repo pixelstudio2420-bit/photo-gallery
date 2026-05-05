@@ -233,6 +233,23 @@ class SeoService
         $start = $start instanceof \DateTimeInterface ? $start->format(\DateTimeInterface::ATOM) : (string) $start;
         $end   = $end   instanceof \DateTimeInterface ? $end->format(\DateTimeInterface::ATOM)   : (string) $end;
 
+        // ── endDate fallback ──────────────────────────────────────────
+        // Google Search Console's Event rich result validator emits
+        // "Missing field 'endDate'" when this is empty. Most photo
+        // shoots are single-day so when the admin didn't fill an
+        // explicit end_time, infer end-of-day from start. We only
+        // need a deterministic ISO timestamp — Google doesn't care
+        // whether it matches the actual wrap time minute-by-minute.
+        if ($end === '' && $start !== '') {
+            try {
+                $end = \Carbon\Carbon::parse($start)
+                    ->endOfDay()
+                    ->format(\DateTimeInterface::ATOM);
+            } catch (\Throwable $e) {
+                // leave $end empty; better to omit than emit garbage
+            }
+        }
+
         // Place: prefer the dedicated `venue` (the building) and fall
         // back to free-text `location` (the area). When both are
         // present we still use venue as the Place.name — Google
@@ -241,7 +258,7 @@ class SeoService
         $address = (string) ($event['location'] ?? '');
         $place = [
             '@type' => 'Place',
-            'name'  => $venue !== '' ? $venue : $address,
+            'name'  => $venue !== '' ? $venue : ($address !== '' ? $address : ($event['name'] ?? 'Event Venue')),
         ];
         if ($address !== '') {
             $place['address'] = [
@@ -251,11 +268,25 @@ class SeoService
             ];
         }
 
+        // ── description fallback ──────────────────────────────────────
+        // Synthesised from the parts we DO have when the admin left
+        // description blank — Search Console flags missing descriptions
+        // as a structured-data error. We never emit an empty string.
+        $description = trim((string) ($event['description'] ?? ''));
+        if ($description === '') {
+            $bits = [];
+            if (!empty($event['name']))     $bits[] = $event['name'];
+            if ($venue !== '')              $bits[] = '@ ' . $venue;
+            elseif ($address !== '')        $bits[] = '@ ' . $address;
+            if ($start !== '')              $bits[] = '— ' . substr($start, 0, 10);
+            $description = !empty($bits) ? implode(' ', $bits) : ($event['name'] ?? 'Photo Event');
+        }
+
         $schema = array_filter([
             '@context'    => 'https://schema.org',
             '@type'       => 'Event',
-            'name'        => $event['name']        ?? '',
-            'description' => $event['description'] ?? '',
+            'name'        => $event['name'] ?? '',
+            'description' => $description,
             'startDate'   => $start,
             'endDate'     => $end ?: null,
             'image'       => $event['image']       ?? '',
@@ -275,29 +306,88 @@ class SeoService
                 : null,
         ], fn ($v) => $v !== null && $v !== '');
 
-        // Organizer — explicit organizer column wins; otherwise omit
-        // the field rather than invent one (avoids putting "Loadroop"
-        // as the organizer of every wedding, which would be a lie).
-        $organizerName = (string) ($event['organizer'] ?? '');
-        if ($organizerName !== '') {
-            $organizer = ['@type' => 'Organization', 'name' => $organizerName];
-            if (!empty($event['contact_phone']))  $organizer['telephone'] = $event['contact_phone'];
-            if (!empty($event['contact_email']))  $organizer['email']     = $event['contact_email'];
-            if (!empty($event['website_url']))    $organizer['url']       = $event['website_url'];
-            if (!empty($event['facebook_url']))   $organizer['sameAs']    = [$event['facebook_url']];
-            $schema['organizer'] = $organizer;
+        // ── Organizer fallback chain ──────────────────────────────────
+        // Search Console flags "Missing field organizer". Cascade:
+        //   1. explicit organizer column on the event
+        //   2. the event's photographer (display_name)
+        //   3. the platform's brand name (Loadroop / seo_site_name)
+        // The third level is deliberately the LAST fallback — we don't
+        // want every wedding's organizer to be "Loadroop" when the
+        // photographer info is available.
+        $organizerName = trim((string) ($event['organizer'] ?? ''));
+        if ($organizerName === '') {
+            $organizerName = trim((string) ($event['photographer_name'] ?? ''));
         }
+        if ($organizerName === '') {
+            $siteName = (string) $this->setting('seo_site_name');
+            if ($siteName === '') {
+                $siteName = (string) config('app.name', 'Loadroop');
+            }
+            $organizerName = $siteName;
+        }
+
+        $organizer = ['@type' => 'Organization', 'name' => $organizerName];
+        if (!empty($event['contact_phone']))  $organizer['telephone'] = $event['contact_phone'];
+        if (!empty($event['contact_email']))  $organizer['email']     = $event['contact_email'];
+        $organizer['url'] = !empty($event['website_url'])
+            ? $event['website_url']
+            : (string) config('app.url');
+        $sameAs = [];
+        if (!empty($event['facebook_url'])) $sameAs[] = $event['facebook_url'];
+        if (!empty($sameAs))                $organizer['sameAs'] = $sameAs;
+        $schema['organizer'] = $organizer;
+
+        // ── Performer (NEW — REQUIRED) ────────────────────────────────
+        // For photo events the performer is the photographer / studio
+        // hosting the shoot. PerformingGroup is the Schema.org type
+        // Google's Event validator accepts for non-individual performers.
+        // Fall back chain mirrors organizer; we use a Person type when
+        // we have an individual photographer name on the event.
+        $performerName = trim((string) ($event['performer'] ?? $event['photographer_name'] ?? ''));
+        if ($performerName === '') {
+            $performerName = $organizerName; // last resort
+        }
+        $schema['performer'] = [
+            '@type' => !empty($event['photographer_name']) ? 'Person' : 'PerformingGroup',
+            'name'  => $performerName,
+        ];
 
         // Offer — accept either `price` (new spelling) or the legacy
         // `price_per_photo` key to keep older callers compatible.
         $price = $event['price'] ?? $event['price_per_photo'] ?? null;
         if ($price !== null && (float) $price > 0) {
+            // ── validFrom (NEW — REQUIRED for Offer) ──────────────────
+            // When the offer becomes available. For our model the offer
+            // is live the moment the admin publishes the event, so
+            // event.created_at is the most truthful default. Falls
+            // through to "now" when neither was supplied.
+            $validFrom = $event['validFrom']
+                      ?? $event['offer_valid_from']
+                      ?? $event['created_at']
+                      ?? null;
+            if ($validFrom instanceof \DateTimeInterface) {
+                $validFrom = $validFrom->format(\DateTimeInterface::ATOM);
+            } elseif (is_string($validFrom) && $validFrom !== '') {
+                try {
+                    $validFrom = \Carbon\Carbon::parse($validFrom)
+                        ->format(\DateTimeInterface::ATOM);
+                } catch (\Throwable $e) {
+                    $validFrom = null;
+                }
+            } else {
+                $validFrom = null;
+            }
+            if (!$validFrom) {
+                $validFrom = now()->format(\DateTimeInterface::ATOM);
+            }
+
             $schema['offers'] = [
                 '@type'         => 'Offer',
                 'price'         => (string) $price,
                 'priceCurrency' => $event['currency']     ?? 'THB',
                 'availability'  => $event['availability'] ?? 'https://schema.org/InStock',
                 'url'           => $event['url']          ?? '',
+                'validFrom'     => $validFrom,
             ];
         }
 
