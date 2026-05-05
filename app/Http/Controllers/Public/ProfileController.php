@@ -134,17 +134,117 @@ class ProfileController extends Controller
 
     /**
      * Download history.
+     *
+     * Surfaces every DownloadToken for the user with:
+     *   • Stats card (total / active / expiring-24h / expired) for the
+     *     redesigned hero. Counted on the FULL set so the chips show
+     *     totals regardless of the current filter view.
+     *   • Filter via `?status=active|expiring|expired|all` — narrows the
+     *     paginated grid without affecting the header counts.
+     *   • Pre-loaded thumbnail lookup so each card shows the actual
+     *     photo preview (per-photo tokens) or the first photo of the
+     *     order (all-photos tokens). Falls back to the placeholder icon
+     *     when nothing is available.
      */
     public function downloads(Request $request)
     {
         $user = Auth::user();
+        $now  = now();
 
-        $downloads = DownloadToken::where('user_id', $user->id)
+        // ── Stats over the user's ENTIRE download history (not the page).
+        // Done in one query that pulls only the columns we need for the
+        // four counters; the full paginated list re-queries below.
+        $allTokens = DownloadToken::where('user_id', $user->id)
+            ->select('id', 'expires_at', 'max_downloads', 'download_count')
+            ->get();
+
+        $stats = [
+            'total'    => $allTokens->count(),
+            'active'   => 0,
+            'expiring' => 0,
+            'expired'  => 0,
+        ];
+        foreach ($allTokens as $t) {
+            $isExpired = $t->expires_at && $t->expires_at->isPast();
+            $limitHit  = $t->max_downloads && $t->download_count >= $t->max_downloads;
+            if ($isExpired || $limitHit) {
+                $stats['expired']++;
+            } else {
+                $stats['active']++;
+                if ($t->expires_at && $t->expires_at->diffInHours($now, false) > -24) {
+                    $stats['expiring']++;
+                }
+            }
+        }
+
+        // ── Filtered listing
+        $status = (string) $request->query('status', 'all');
+        $query  = DownloadToken::where('user_id', $user->id)
             ->with('order.event')
-            ->orderByDesc('created_at')
-            ->paginate(15);
+            ->orderByDesc('created_at');
 
-        return view('public.profile.downloads', compact('downloads'));
+        if ($status === 'active') {
+            $query->where(function ($q) use ($now) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', $now);
+            })->where(function ($q) {
+                $q->whereNull('max_downloads')
+                  ->orWhereColumn('download_count', '<', 'max_downloads');
+            });
+        } elseif ($status === 'expiring') {
+            $query->where('expires_at', '>', $now)
+                  ->where('expires_at', '<=', $now->copy()->addHours(24))
+                  ->where(function ($q) {
+                      $q->whereNull('max_downloads')
+                        ->orWhereColumn('download_count', '<', 'max_downloads');
+                  });
+        } elseif ($status === 'expired') {
+            $query->where(function ($q) use ($now) {
+                $q->where('expires_at', '<=', $now)
+                  ->orWhereColumn('download_count', '>=', 'max_downloads');
+            });
+        }
+
+        $downloads = $query->paginate(12)->withQueryString();
+
+        // ── Thumbnail lookup so cards can show real photo previews
+        // instead of a generic icon. Two cases:
+        //   (a) per-photo token (photo_id set) → that exact photo
+        //   (b) all-photos token (photo_id null) → first item of the order
+        $perPhotoIds   = [];
+        $orderIds      = [];
+        foreach ($downloads as $dl) {
+            if ($dl->photo_id && is_numeric($dl->photo_id)) {
+                $perPhotoIds[] = (int) $dl->photo_id;
+            }
+            if ($dl->order_id) {
+                $orderIds[] = $dl->order_id;
+            }
+        }
+
+        $photoLookup = !empty($perPhotoIds)
+            ? \App\Models\EventPhoto::whereIn('id', array_unique($perPhotoIds))
+                ->get(['id', 'thumbnail_path', 'storage_disk', 'original_filename'])
+                ->keyBy('id')
+            : collect();
+
+        // First OrderItem (with thumbnail) per order, for all-photos tokens.
+        $firstItemByOrder = [];
+        if (!empty($orderIds)) {
+            $rows = \DB::table('order_items')
+                ->select('order_id', 'thumbnail_url', 'photo_id')
+                ->whereIn('order_id', array_unique($orderIds))
+                ->orderBy('id')
+                ->get();
+            foreach ($rows as $row) {
+                if (!isset($firstItemByOrder[$row->order_id])) {
+                    $firstItemByOrder[$row->order_id] = $row;
+                }
+            }
+        }
+
+        return view('public.profile.downloads', compact(
+            'downloads', 'stats', 'status', 'photoLookup', 'firstItemByOrder'
+        ));
     }
 
     /**
