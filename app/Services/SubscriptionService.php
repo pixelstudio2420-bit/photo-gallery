@@ -75,16 +75,56 @@ class SubscriptionService
 
     public function currentSubscription(PhotographerProfile $profile): ?PhotographerSubscription
     {
+        // Fast path: profile.current_subscription_id points at the active
+        // row. We trust this when AND ONLY when the row is still usable
+        // (status active/grace + period not expired). A stale pointer
+        // (sub got cancelled, period rolled past midnight, the row was
+        // hard-deleted) used to silently fall back to the FREE plan via
+        // currentPlan(), which is what made the photographer dashboard
+        // show "5 GB Free" for someone who'd just paid for Pro. Now we
+        // detect the drift and re-resolve.
         if ($profile->current_subscription_id) {
-            return PhotographerSubscription::with('plan')
+            $cached = PhotographerSubscription::with('plan')
                 ->find($profile->current_subscription_id);
+            if ($cached && $cached->isUsable()) {
+                return $cached;
+            }
+            // Cache is stale — fall through to the fresh lookup, then
+            // self-heal the pointer below if we find a better row.
         }
 
-        return PhotographerSubscription::with('plan')
+        $fresh = PhotographerSubscription::with('plan')
             ->where('photographer_id', $profile->user_id)
             ->activeOrGrace()
             ->latest('id')
             ->first();
+
+        // Self-heal: when the cached pointer disagreed with the fresh
+        // lookup, write the fresh ID back so the next request takes the
+        // fast path. saveQuietly to avoid kicking observers / events.
+        if ($fresh
+            && (int) $profile->current_subscription_id !== (int) $fresh->id) {
+            try {
+                $profile->forceFill([
+                    'current_subscription_id' => $fresh->id,
+                    'subscription_plan_code'  => $fresh->plan?->code ?? $profile->subscription_plan_code,
+                    'subscription_status'     => $fresh->status,
+                    'subscription_renews_at'  => $fresh->current_period_end,
+                ])->saveQuietly();
+                \Illuminate\Support\Facades\Log::info('subscription.current_pointer_resynced', [
+                    'user_id' => $profile->user_id,
+                    'old_id'  => (int) ($profile->current_subscription_id ?? 0),
+                    'new_id'  => (int) $fresh->id,
+                    'plan'    => $fresh->plan?->code ?? '?',
+                ]);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning(
+                    'current_subscription_id_resync_failed: ' . $e->getMessage()
+                );
+            }
+        }
+
+        return $fresh;
     }
 
     public function currentPlan(PhotographerProfile $profile): SubscriptionPlan
