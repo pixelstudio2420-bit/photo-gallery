@@ -56,7 +56,35 @@ class OrderController extends Controller
             ? \App\Models\Review::where('user_id', Auth::id())->where('order_id', $order->id)->first()
             : null;
 
-        return view('public.orders.show', compact('order', 'existingReview'));
+        // Pre-load photo metadata so the view can show real filenames /
+        // thumbnails rather than "Photo" placeholders. OrderItem stores only
+        // photo_id + thumbnail_url + price; the human-readable filename
+        // lives on EventPhoto.original_filename.
+        $photoIds = $order->items->pluck('photo_id')
+            ->filter()
+            ->map(fn ($v) => is_numeric($v) ? (int) $v : null)
+            ->filter()
+            ->all();
+        $photoLookup = !empty($photoIds)
+            ? \App\Models\EventPhoto::whereIn('id', $photoIds)
+                ->get(['id', 'original_filename', 'thumbnail_path', 'storage_disk'])
+                ->keyBy('id')
+            : collect();
+
+        // Map photo_id → DownloadToken for per-row "ดาวน์โหลด" buttons.
+        // Tokens are written by PhotoDeliveryService when the order is paid;
+        // an unpaid order has none and the buttons stay hidden in the view.
+        $tokenLookup = collect();
+        if ($order->status === 'paid' && \Illuminate\Support\Facades\Schema::hasTable('download_tokens')) {
+            $tokenLookup = \App\Models\DownloadToken::where('order_id', $order->id)
+                ->whereNotNull('photo_id')
+                ->get(['photo_id', 'token'])
+                ->keyBy('photo_id');
+        }
+
+        return view('public.orders.show', compact(
+            'order', 'existingReview', 'photoLookup', 'tokenLookup'
+        ));
     }
 
     public function store(Request $request)
@@ -751,6 +779,20 @@ class OrderController extends Controller
 
     /**
      * Download all order photos as ZIP.
+     *
+     * Reads each photo's bytes from whichever disk it lives on
+     * (`event_photos.storage_disk` — typically `r2` in production, `public`
+     * locally) via StorageManager. The previous implementation only looked
+     * at the local filesystem (`storage/app/public/...`), so any order
+     * containing R2-backed photos returned 0 files and surfaced
+     * "ไม่พบไฟล์รูปภาพสำหรับดาวน์โหลด" — exactly the bug the buyer hit
+     * after a face_match bundle purchase, since those photos are stored on
+     * R2 alongside every other event photo.
+     *
+     * Falls back through original → watermarked when the original is
+     * missing (e.g. if originals were purged for retention) so buyers
+     * always get SOMETHING rather than an empty ZIP. Watermarked variant
+     * is still gated by `paid` status above so this isn't a leak.
      */
     public function downloadZip($id)
     {
@@ -776,55 +818,97 @@ class OrderController extends Controller
             return back()->with('error', 'ไม่สามารถสร้างไฟล์ ZIP ได้');
         }
 
+        $storage   = app(\App\Services\StorageManager::class);
         $fileCount = 0;
+        // Track failures separately so a single dead photo doesn't poison the
+        // whole ZIP — the buyer still gets the ones that worked.
+        $failed = [];
 
+        // Pre-load every event_photo row referenced by the order in one
+        // query so we don't N+1 on a large order.
+        $photoIds = $order->items->pluck('photo_id')
+            ->filter()
+            ->map(fn ($v) => is_numeric($v) ? (int) $v : $v)
+            ->filter(fn ($v) => is_int($v))
+            ->all();
+        $photos = !empty($photoIds)
+            ? \App\Models\EventPhoto::whereIn('id', $photoIds)->get()->keyBy('id')
+            : collect();
+
+        $usedNames = []; // dedupe duplicate filenames inside the ZIP
         foreach ($order->items as $item) {
-            $fileId = $item->file_id ?? null;
-
-            // Try local event_photos first
-            if ($item->event_id) {
-                $photo = DB::table('event_photos')
-                    ->where('event_id', $item->event_id)
-                    ->where(function ($q) use ($item) {
-                        $q->where('id', $item->photo_id ?? 0)
-                          ->orWhere('original_filename', $item->file_name ?? '');
-                    })
-                    ->first();
-
-                if ($photo && $photo->original_path) {
-                    $localPath = storage_path('app/public/' . $photo->original_path);
-                    if (!file_exists($localPath)) {
-                        $localPath = public_path('storage/' . $photo->original_path);
-                    }
-                    if (file_exists($localPath)) {
-                        $ext = pathinfo($localPath, PATHINFO_EXTENSION) ?: 'jpg';
-                        $zip->addFile($localPath, 'photo_' . ($fileCount + 1) . '.' . $ext);
-                        $fileCount++;
-                        continue;
-                    }
-                }
+            $photoId = is_numeric($item->photo_id) ? (int) $item->photo_id : null;
+            $photo   = $photoId ? $photos->get($photoId) : null;
+            if (!$photo) {
+                $failed[] = "photo_id={$item->photo_id} (no event_photos row)";
+                continue;
             }
 
-            // Fallback: try Google Drive download
-            if ($fileId) {
-                try {
-                    $url = "https://drive.google.com/uc?id={$fileId}&export=download";
-                    $response = \Illuminate\Support\Facades\Http::timeout(30)->get($url);
-                    if ($response->successful()) {
-                        $zip->addFromString('photo_' . ($fileCount + 1) . '.jpg', $response->body());
-                        $fileCount++;
-                    }
-                } catch (\Throwable $e) {
-                    \Illuminate\Support\Facades\Log::warning("ZIP: Failed to fetch photo {$fileId}: " . $e->getMessage());
+            $disk = (string) ($photo->storage_disk ?: 'public');
+            $bytes = null;
+
+            // 1) Original — best quality, what the buyer paid for.
+            if (!empty($photo->original_path)) {
+                $bytes = $storage->readFromDriver($disk, $photo->original_path);
+            }
+            // 2) Mirror disks (R2/S3 split) — try each in turn.
+            if ($bytes === null && !empty($photo->original_path)) {
+                $mirrors = is_array($photo->storage_mirrors) ? $photo->storage_mirrors : [];
+                foreach ($mirrors as $mirrorDisk) {
+                    if ($mirrorDisk === $disk) continue;
+                    $bytes = $storage->readFromDriver($mirrorDisk, $photo->original_path);
+                    if ($bytes !== null) break;
                 }
             }
+            // 3) Watermarked fallback — better than failing the ZIP entirely
+            //    if originals were purged. Buyer is paid so this still
+            //    respects the licensing model.
+            if ($bytes === null && !empty($photo->watermarked_path)) {
+                $bytes = $storage->readFromDriver($disk, $photo->watermarked_path);
+            }
+
+            if ($bytes === null || $bytes === '') {
+                $failed[] = "id={$photo->id} disk={$disk} path=" . ($photo->original_path ?? '?');
+                continue;
+            }
+
+            // Build a friendly name. Prefer original_filename ("DSC_0042.jpg")
+            // then fall back to a numbered slot. Dedupe by appending (2),
+            // (3), … so ZipArchive doesn't silently overwrite duplicates.
+            $base = $photo->original_filename ?: ('photo_' . ($fileCount + 1) . '.jpg');
+            $base = preg_replace('/[\\/\?\*:|<>"]/', '_', $base) ?: 'photo.jpg';
+            $name = $base;
+            $i = 2;
+            while (isset($usedNames[$name])) {
+                $info = pathinfo($base);
+                $name = ($info['filename'] ?? 'photo') . " ({$i})." . ($info['extension'] ?? 'jpg');
+                $i++;
+            }
+            $usedNames[$name] = true;
+
+            $zip->addFromString($name, $bytes);
+            $fileCount++;
         }
 
         $zip->close();
 
         if ($fileCount === 0) {
             @unlink($zipPath);
-            return back()->with('error', 'ไม่พบไฟล์รูปภาพสำหรับดาวน์โหลด');
+            \Illuminate\Support\Facades\Log::warning('downloadZip: no files added', [
+                'order_id'    => $order->id,
+                'item_count'  => $order->items->count(),
+                'photo_count' => $photos->count(),
+                'failed'      => $failed,
+            ]);
+            return back()->with('error', 'ไม่พบไฟล์รูปภาพสำหรับดาวน์โหลด — กรุณาติดต่อผู้ดูแลระบบ');
+        }
+
+        if (!empty($failed)) {
+            \Illuminate\Support\Facades\Log::info('downloadZip: partial success', [
+                'order_id'  => $order->id,
+                'succeeded' => $fileCount,
+                'failed'    => $failed,
+            ]);
         }
 
         return response()->download($zipPath, $zipName, [

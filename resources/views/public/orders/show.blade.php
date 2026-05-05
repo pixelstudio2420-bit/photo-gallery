@@ -30,20 +30,53 @@
           </thead>
           <tbody>
             @foreach($order->items as $item)
-            <tr class="border-t border-gray-50">
-              <td class="pl-4 px-4 py-3 font-medium">{{ $item->description ?? $item->file_name ?? 'Photo' }}</td>
-              <td class="px-4 py-3">{{ $item->quantity }}</td>
-              <td class="px-4 py-3"><span style="color:#6366f1;font-weight:500;">{{ number_format($item->price, 0) }} ฿</span></td>
-              <td class="px-4 py-3">
-                @if($order->status === 'paid' && $item->file_id)
-                <a href="{{ route('download.show', ['token' => $item->download_token ?? '']) }}" class="inline-flex items-center px-3 py-1 rounded-lg text-xs font-medium" style="background:rgba(16,185,129,0.1);color:#10b981;font-size:0.8rem;">
-                  <i class="bi bi-download mr-1"></i> ดาวน์โหลด
-                </a>
-                @else
-                <span class="text-gray-500 text-sm">-</span>
-                @endif
-              </td>
-            </tr>
+              @php
+                // Look up the EventPhoto for this row (controller pre-loaded
+                // these into $photoLookup). Falls back gracefully when the
+                // photo was deleted from the event after purchase.
+                $photo  = isset($photoLookup) && is_numeric($item->photo_id)
+                            ? ($photoLookup->get((int) $item->photo_id))
+                            : null;
+                $name   = $photo->original_filename ?? ('Photo #' . $item->photo_id);
+                $thumb  = $item->thumbnail_url
+                       ?: ($photo?->thumbnail_url ?? '');
+                $token  = isset($tokenLookup) && is_numeric($item->photo_id)
+                            ? optional($tokenLookup->get((int) $item->photo_id))->token
+                            : null;
+              @endphp
+              <tr class="border-t border-gray-50">
+                <td class="pl-4 px-4 py-3 font-medium">
+                  <div class="flex items-center gap-3">
+                    @if($thumb)
+                      <img src="{{ $thumb }}" alt="thumbnail" loading="lazy"
+                           class="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+                           onerror="this.style.display='none';">
+                    @endif
+                    <span class="truncate" style="max-width:240px;">{{ $name }}</span>
+                  </div>
+                </td>
+                <td class="px-4 py-3">1</td>
+                <td class="px-4 py-3"><span style="color:#6366f1;font-weight:500;">{{ number_format($item->price, 0) }} ฿</span></td>
+                <td class="px-4 py-3">
+                  @if($order->status === 'paid' && $token)
+                    <a href="{{ route('download.show', ['token' => $token]) }}"
+                       class="inline-flex items-center px-3 py-1 rounded-lg text-xs font-medium"
+                       style="background:rgba(16,185,129,0.1);color:#10b981;font-size:0.8rem;">
+                      <i class="bi bi-download mr-1"></i> ดาวน์โหลด
+                    </a>
+                  @elseif($order->status === 'paid')
+                    {{-- Token row missing for this paid item — shouldn't happen
+                         (PhotoDeliveryService creates them on payment), but if
+                         it does, the ZIP download covers the buyer. Keep a
+                         visible hint instead of silently showing "-". --}}
+                    <span class="text-gray-400 text-xs" title="ใช้ปุ่ม ดาวน์โหลดทั้งหมด ZIP ด้านขวา">
+                      <i class="bi bi-archive mr-1"></i>ดาวน์โหลด ZIP
+                    </span>
+                  @else
+                    <span class="text-gray-500 text-sm">-</span>
+                  @endif
+                </td>
+              </tr>
             @endforeach
           </tbody>
         </table>
