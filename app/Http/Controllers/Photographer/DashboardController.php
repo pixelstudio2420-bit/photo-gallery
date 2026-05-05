@@ -325,6 +325,23 @@ class DashboardController extends Controller
             // Silent fail — widget won't render, dashboard stays up.
         }
 
+        // ── Feature-by-feature status (the redesigned widget consumes this)
+        // For every feature the platform exposes, decide:
+        //   • is it in this photographer's plan?
+        //   • is the global flag on (admin kill switch)?
+        //   • what's the cheapest plan that grants it (for the upgrade label)?
+        //   • does the live PlanGate currently allow it?
+        //   • for AI features, what's the per-month usage?
+        // This array drives the "ฟีเจอร์ที่ใช้งานได้ / ฟีเจอร์ที่ล็อค" sections
+        // of the subscription-widget partial — single source of truth for the
+        // dashboard's feature visibility.
+        $featureStatus = [];
+        try {
+            $featureStatus = $this->buildFeatureStatus($profile, $subscriptionInfo);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('buildFeatureStatus failed: ' . $e->getMessage());
+        }
+
         return view('photographer.dashboard', compact(
             'profile',
             'stats',
@@ -339,8 +356,140 @@ class DashboardController extends Controller
             'driveSyncPending',
             'quotaInfo',
             'creditsInfo',
-            'subscriptionInfo'
+            'subscriptionInfo',
+            'featureStatus'
         ));
+    }
+
+    /**
+     * Build a feature-by-feature status array for the subscription widget.
+     *
+     * For each registered feature (FeatureFlagController::featureLabels()),
+     * resolves four answers:
+     *   1. in_plan          — appears in the photographer's plan ai_features
+     *   2. globally_enabled — admin's master switch (feature_<f>_enabled)
+     *   3. available        — both above (the practical "you can use this")
+     *   4. blocked_reason   — when in_plan is true but PlanGate refuses live
+     *                         (over cap, plan expired, global flag flipped)
+     *
+     * Plus per-feature data:
+     *   • icon       — bi-* class for the row
+     *   • group      — ai / line / workflow / branding / platform (for filtering)
+     *   • upgrade_to — name of the cheapest plan that includes this feature
+     *                  when the photographer doesn't have it (drives the
+     *                  "Upgrade to Pro to unlock" CTA).
+     *   • usage      — for AI features only: ['used' => N, 'cap' => M, 'pct' => P]
+     *                  shared across all AI resources to match the budget model.
+     */
+    private function buildFeatureStatus(\App\Models\PhotographerProfile $profile, ?array $summary): array
+    {
+        $subs = app(\App\Services\SubscriptionService::class);
+        $plan = $summary['plan'] ?? null;
+        $planFeatures = is_array($plan?->ai_features ?? null) ? $plan->ai_features : [];
+
+        // Pre-load all features that map to a label — anything else is a
+        // legacy code we don't surface (FeatureFlagController is the
+        // canonical list).
+        $labels = \App\Http\Controllers\Admin\FeatureFlagController::featureLabels();
+
+        // Look up "cheapest plan for each feature" once. Used to render
+        // upgrade hints like "Pro+" / "Business+" next to locked rows.
+        $allPlans = \App\Models\SubscriptionPlan::query()
+            ->where('is_active', true)
+            ->where('is_public', true)
+            ->orderBy('price_thb')
+            ->get(['code', 'name', 'price_thb', 'ai_features']);
+        $cheapestForFeature = [];
+        foreach ($allPlans as $p) {
+            foreach ((array) $p->ai_features as $feat) {
+                if (!isset($cheapestForFeature[$feat])) {
+                    $cheapestForFeature[$feat] = $p->name;
+                }
+            }
+        }
+
+        // Live AI usage — same shared budget that PlanGate enforces.
+        $aiUsed = $profile->user_id
+            ? \App\Support\PlanGate::aiCreditsUsedThisMonth((int) $profile->user_id)
+            : 0;
+        $aiCap = (int) ($plan?->monthly_ai_credits ?? 0);
+        $aiPct = $aiCap > 0 ? min(100, round(($aiUsed / $aiCap) * 100, 1)) : 0;
+
+        // Live LINE gate — boolean, no usage counter we trust right now.
+        $canLineLive = $profile->user_id
+            ? \App\Support\PlanGate::canUseLine((int) $profile->user_id)
+            : false;
+
+        $rows = [];
+        foreach ($labels as $code => $meta) {
+            // featureLabels() returns either [label, icon, group] or [label, group].
+            // Normalise so downstream code doesn't have to branch.
+            $label = $meta[0] ?? $code;
+            $icon  = $meta[1] ?? 'bi-circle';
+            $group = $meta[2] ?? 'ai';
+            // If meta is 2-tuple [label, group], shift the icon out.
+            if (!str_starts_with((string) $icon, 'bi-')) {
+                $group = $icon;
+                $icon  = 'bi-circle';
+            }
+
+            $inPlan      = in_array($code, $planFeatures, true);
+            $globallyOn  = $subs->featureGloballyEnabled($code);
+            $available   = $inPlan && $globallyOn;
+
+            $blockedReason = null;
+            if ($inPlan && !$globallyOn) {
+                $blockedReason = 'feature_disabled_by_admin';
+            }
+
+            // Per-feature usage / live gate enrichment.
+            $usage = null;
+            $liveOk = null;
+            if ($code === 'face_search'
+                || $code === 'quality_filter'
+                || $code === 'duplicate_detection'
+                || $code === 'auto_tagging'
+                || $code === 'best_shot'
+                || $code === 'color_enhance'
+                || $code === 'smart_captions'
+                || $code === 'ai_preview_limited') {
+                // AI feature — show shared monthly_ai_credits budget
+                $usage = ['used' => $aiUsed, 'cap' => $aiCap, 'pct' => $aiPct, 'label' => 'AI calls'];
+                if ($available && $aiCap > 0 && $aiUsed >= $aiCap) {
+                    $blockedReason = 'monthly_cap_reached';
+                    $liveOk = false;
+                } elseif ($available) {
+                    $liveOk = true;
+                }
+            } elseif ($code === 'line_notify' || $code === 'line_delivery'
+                   || $code === 'line_notify_admin' || $code === 'line_notify_customer') {
+                // LINE feature — defer to PlanGate's live answer
+                $liveOk = $canLineLive;
+                if ($inPlan && $globallyOn && !$canLineLive) {
+                    $blockedReason = 'plan_inactive';
+                }
+            } else {
+                // Other features (priority_upload, presets, custom_branding,
+                // api_access, etc.) — boolean availability only.
+                $liveOk = $available;
+            }
+
+            $rows[$code] = [
+                'code'             => $code,
+                'label'            => (string) $label,
+                'icon'             => (string) $icon,
+                'group'            => (string) $group,
+                'in_plan'          => $inPlan,
+                'globally_enabled' => $globallyOn,
+                'available'        => $available,
+                'live_ok'          => $liveOk,
+                'blocked_reason'   => $blockedReason,
+                'usage'            => $usage,
+                'upgrade_to'       => !$inPlan ? ($cheapestForFeature[$code] ?? null) : null,
+            ];
+        }
+
+        return $rows;
     }
 
     /** Safe percent-change between two values — returns null when prior is 0. */

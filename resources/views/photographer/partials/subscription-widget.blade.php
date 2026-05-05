@@ -282,20 +282,149 @@
                 </div>
             </div>
 
-            {{-- ─── AI Features (only show if any unlocked) ─── --}}
-            @if(count($aiFeatures) > 0)
+            {{-- ─── Feature-by-feature status table ─────────────────────────
+                 The redesigned section. Driven by $featureStatus (built in
+                 DashboardController::buildFeatureStatus). For each feature
+                 we show:
+                   • a green-check + Thai label when it's in the plan AND
+                     globally enabled AND PlanGate's live check passes
+                   • an orange dot when it's in the plan but PlanGate is
+                     refusing right now (over cap, expired, admin off)
+                   • a grey lock-icon + "อัปเกรดเป็น <plan> เพื่อปลดล็อก"
+                     when it's NOT in the plan
+                 The grouped layout keeps AI / LINE / Workflow / Branding /
+                 Platform separate so the photographer can scan by intent.
+            --}}
+            @if(!empty($featureStatus))
+                @php
+                    // Group features by their declared group; pre-sort so
+                    // "available" rows appear first, then "blocked", then
+                    // "locked" — matches the visual hierarchy below.
+                    $grouped = collect($featureStatus)->groupBy('group')->map(function ($rows) {
+                        return $rows->sortBy(function ($r) {
+                            // 0 = available, 1 = blocked-but-in-plan, 2 = locked
+                            if (!empty($r['available']) && $r['live_ok'] !== false) return 0;
+                            if (!empty($r['in_plan'])) return 1;
+                            return 2;
+                        })->values();
+                    });
+
+                    $availableCount = collect($featureStatus)
+                        ->filter(fn ($r) => $r['available'] && $r['live_ok'] !== false)
+                        ->count();
+                    $blockedCount = collect($featureStatus)
+                        ->filter(fn ($r) => $r['in_plan'] && $r['live_ok'] === false)
+                        ->count();
+                    $lockedCount = collect($featureStatus)
+                        ->filter(fn ($r) => !$r['in_plan'])
+                        ->count();
+
+                    // Friendly group names for the section headers
+                    $groupNames = [
+                        'ai'        => ['🧠 AI · ค้นหา / คัดรูป',           'rgba(99,102,241,.10)'],
+                        'line'      => ['💬 LINE · ส่งรูป / แจ้งเตือน',     'rgba(16,185,129,.10)'],
+                        'workflow'  => ['⚡ ขั้นตอนการทำงาน',                 'rgba(251,191,36,.10)'],
+                        'branding'  => ['🎨 แบรนด์',                       'rgba(236,72,153,.10)'],
+                        'platform'  => ['🛡️ แพลตฟอร์ม / API',              'rgba(124,58,237,.10)'],
+                    ];
+                @endphp
+
                 <div class="mb-4">
-                    <p class="text-[10px] font-bold tracking-[0.16em] uppercase text-gray-500 dark:text-gray-400 mb-2">
-                        <i class="bi bi-magic mr-1"></i>ฟีเจอร์ที่ปลดล็อก ({{ count($aiFeatures) }})
-                    </p>
-                    <div class="flex flex-wrap gap-1.5">
-                        @foreach($aiFeatures as $featureKey)
-                            @php $f = $featureLabels[$featureKey] ?? null; @endphp
-                            @if($f)
-                                <span class="feature-pill"><i class="bi {{ $f[0] }}"></i>{{ $f[1] }}</span>
+                    {{-- Section header with summary counters --}}
+                    <div class="flex items-center justify-between mb-3">
+                        <p class="text-[10px] font-bold tracking-[0.16em] uppercase text-gray-500 dark:text-gray-400 mb-0">
+                            <i class="bi bi-layers mr-1"></i>ฟีเจอร์ของแผน
+                        </p>
+                        <div class="flex items-center gap-1.5 text-[10px]">
+                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-semibold">
+                                <i class="bi bi-check-circle-fill"></i> {{ $availableCount }} เปิด
+                            </span>
+                            @if($blockedCount > 0)
+                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 font-semibold">
+                                    <i class="bi bi-exclamation-triangle-fill"></i> {{ $blockedCount }} ติดขัด
+                                </span>
                             @endif
-                        @endforeach
+                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 font-semibold">
+                                <i class="bi bi-lock-fill"></i> {{ $lockedCount }} ล็อค
+                            </span>
+                        </div>
                     </div>
+
+                    {{-- Per-group sections --}}
+                    @foreach($grouped as $groupKey => $rows)
+                        @php $gn = $groupNames[$groupKey] ?? [ucfirst($groupKey), 'rgba(99,102,241,.10)']; @endphp
+                        <div class="mb-3 last:mb-0">
+                            <div class="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5 pl-0.5">{{ $gn[0] }}</div>
+                            <div class="rounded-xl border border-gray-100 dark:border-white/[0.06] overflow-hidden divide-y divide-gray-100 dark:divide-white/[0.06]">
+                                @foreach($rows as $r)
+                                    @php
+                                        $isAvail   = $r['available'] && ($r['live_ok'] !== false);
+                                        $isBlocked = $r['in_plan'] && ($r['live_ok'] === false);
+                                        $isLocked  = !$r['in_plan'];
+
+                                        // Reason copy (Thai)
+                                        $reasonTxt = match($r['blocked_reason'] ?? '') {
+                                            'feature_disabled_by_admin' => 'ปิดโดยผู้ดูแลระบบชั่วคราว',
+                                            'monthly_cap_reached'       => 'ครบโควต้าเดือนนี้แล้ว',
+                                            'plan_inactive'             => 'แผนหมดอายุ — ต่ออายุก่อน',
+                                            default                     => '',
+                                        };
+                                    @endphp
+                                    <div class="flex items-center gap-3 px-3 py-2 text-xs
+                                        {{ $isAvail   ? 'bg-emerald-50/40 dark:bg-emerald-500/[0.04]' : '' }}
+                                        {{ $isBlocked ? 'bg-amber-50/60 dark:bg-amber-500/[0.06]' : '' }}
+                                        {{ $isLocked  ? 'opacity-60'                              : '' }}">
+                                        {{-- Status icon --}}
+                                        <div class="flex-shrink-0 w-6 text-center">
+                                            @if($isAvail)
+                                                <i class="bi bi-check-circle-fill text-emerald-500"></i>
+                                            @elseif($isBlocked)
+                                                <i class="bi bi-exclamation-triangle-fill text-amber-500"></i>
+                                            @else
+                                                <i class="bi bi-lock-fill text-gray-400"></i>
+                                            @endif
+                                        </div>
+
+                                        {{-- Feature label + status caption --}}
+                                        <div class="flex-1 min-w-0">
+                                            <div class="font-semibold text-gray-800 dark:text-gray-200 truncate flex items-center gap-1.5">
+                                                <i class="bi {{ $r['icon'] }} text-gray-400"></i>
+                                                {{ $r['label'] }}
+                                            </div>
+                                            @if($isBlocked && $reasonTxt)
+                                                <div class="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">{{ $reasonTxt }}</div>
+                                            @elseif($isLocked && !empty($r['upgrade_to']))
+                                                <div class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                                    <i class="bi bi-arrow-up-circle"></i> ต้องอัปเกรดเป็น
+                                                    <span class="font-semibold text-indigo-600 dark:text-indigo-400">{{ $r['upgrade_to'] }}</span>
+                                                </div>
+                                            @endif
+                                        </div>
+
+                                        {{-- Usage stat (only for AI features when available + has cap) --}}
+                                        @if($isAvail && !empty($r['usage']) && ($r['usage']['cap'] ?? 0) > 0)
+                                            @php
+                                                $u = $r['usage'];
+                                                $upct = (float) ($u['pct'] ?? 0);
+                                                $ucol = $upct >= 100 ? '#ef4444' : ($upct >= 80 ? '#f59e0b' : '#10b981');
+                                            @endphp
+                                            <div class="flex-shrink-0 text-right" style="min-width:80px;">
+                                                <div class="text-[10px] tabular-nums font-semibold text-gray-700 dark:text-gray-300">
+                                                    {{ number_format($u['used']) }}<span class="text-gray-400"> / </span>{{ number_format($u['cap']) }}
+                                                </div>
+                                                <div class="mt-1 w-full h-1 bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden">
+                                                    <div class="h-full rounded-full" style="width:{{ min(100, $upct) }}%;background:{{ $ucol }};"></div>
+                                                </div>
+                                            </div>
+                                        @elseif($isAvail && empty($r['usage']))
+                                            {{-- Boolean feature — no quota, just show ON --}}
+                                            <span class="flex-shrink-0 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">เปิด</span>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endforeach
                 </div>
             @endif
 
