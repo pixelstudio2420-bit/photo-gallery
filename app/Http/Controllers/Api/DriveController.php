@@ -158,49 +158,75 @@ class DriveController extends Controller
                     );
                 }
 
-                // Variant missing — auto-dispatch reprocess (debounced)
-                // and serve a placeholder. The previous code redirected
-                // to the un-watermarked original here as a "make it
-                // visible immediately" fallback, but the user explicitly
-                // asked us to NEVER expose the original through these
-                // public surfaces — the gallery and lightbox must only
-                // show the watermarked thumbnail. So we now swallow the
-                // visibility hit during the reprocess window in favour
-                // of strict no-leak guarantees.
-                $debounceKey = "reprocess_dispatched_photo_{$photo->id}";
-                if (!\Illuminate\Support\Facades\Cache::has($debounceKey)) {
-                    \Illuminate\Support\Facades\Cache::put($debounceKey, 1, 600); // 10 min debounce
-                    Log::warning('proxyImage: no baked variant — auto-queueing reprocess', [
-                        'photo_id'         => $photo->id,
-                        'event_id'         => $photo->event_id,
-                        'thumbnail_path'   => $photo->thumbnail_path,
-                        'watermarked_path' => $photo->watermarked_path,
-                        'requested_size'   => $size,
-                    ]);
+                // Variants missing — JIT bake them right now in this
+                // request. Dispatches ProcessUploadedPhotoJob synchronously
+                // (same pipeline as the upload-time bake), then redirects
+                // to the freshly-written watermarked thumbnail.
+                //
+                // First request per photo: ~5-10s (download original from
+                // R2 → resize → watermark → upload back to R2 → update
+                // DB row). Subsequent requests: instant — the redirect
+                // branch above hits and the response is fully CDN-cached.
+                //
+                // Concurrency safety: a soft single-flight via Cache lock.
+                // If another worker is already baking the same photo, we
+                // return the placeholder immediately rather than
+                // double-bake (same R2 path, last write wins, but no
+                // point burning two workers' memory on the same image).
+                $bakeLockKey = "proxyimg_baking_{$photo->id}";
+                $alreadyBaking = \Illuminate\Support\Facades\Cache::has($bakeLockKey);
+
+                if (!$alreadyBaking) {
+                    \Illuminate\Support\Facades\Cache::put($bakeLockKey, 1, 60); // 60s lock
                     try {
+                        // Bump runtime caps for this request only — the bake
+                        // decodes a multi-MB JPEG into RGBA pixels (memory
+                        // peak ~width × height × 4 bytes) and the GD
+                        // composite + reencode dominates the wall-clock.
+                        // 256M / 45s comfortably fits a 4K original.
+                        @ini_set('memory_limit', '256M');
+                        @set_time_limit(45);
+
                         if (class_exists(\App\Jobs\ProcessUploadedPhotoJob::class)) {
-                            \App\Jobs\ProcessUploadedPhotoJob::dispatch($photo->id)
-                                ->onQueue('default');
+                            \App\Jobs\ProcessUploadedPhotoJob::dispatchSync($photo->id);
+                        }
+
+                        // Pick up the newly-written paths.
+                        $photo->refresh();
+                        $bakedUrl = $size <= 500
+                            ? ($photo->thumbnail_url ?: $photo->watermarked_url)
+                            : ($photo->watermarked_url ?: $photo->thumbnail_url);
+
+                        if (!empty($bakedUrl)) {
+                            return redirect()->away($bakedUrl, 302)->withHeaders([
+                                'Cache-Control' => 'public, max-age=86400, s-maxage=604800, immutable',
+                                'X-Source'      => 'jit-baked',
+                            ]);
                         }
                     } catch (\Throwable $e) {
-                        // Swallow — admin can still run the reprocess
-                        // command manually; queue misconfig shouldn't
-                        // block the gallery from rendering.
+                        Log::warning('proxyImage: JIT bake failed, returning placeholder', [
+                            'photo_id' => $photo->id,
+                            'error'    => $e->getMessage(),
+                        ]);
+                    } finally {
+                        \Illuminate\Support\Facades\Cache::forget($bakeLockKey);
                     }
                 }
 
-                // Placeholder: 1×1 transparent GIF + short browser cache.
-                // 60s max-age means the moment ProcessUploadedPhotoJob
-                // completes (and writes thumbnail_path/watermarked_path),
-                // the next gallery visit picks up the proper watermarked
-                // redirect within at most a minute — no manual cache
-                // bust needed. Operators who want the variants right now
-                // can run `php artisan photos:reprocess --event={id}`
-                // (synchronous, doesn't depend on queue workers).
+                // Placeholder fallback when:
+                //   • Another worker is already baking this photo (skip,
+                //     they'll write the variant; next visit gets it)
+                //   • The bake itself failed (caught above; logged for
+                //     ops; admin can re-run `photos:reprocess` manually)
+                //   • The job ran but somehow didn't populate the paths
+                //     (shouldn't happen; same diagnostic value as above)
+                //
+                // 60s cache so the moment any of the above clears, the
+                // next gallery visit gets the real watermarked thumbnail.
                 return response(base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'), 200, [
                     'Content-Type'  => 'image/gif',
                     'Cache-Control' => 'public, max-age=60',
-                    'X-Source'      => 'placeholder-pending-reprocess',
+                    'X-Source'      => 'placeholder-bake-deferred',
                 ]);
             }
         }
