@@ -215,6 +215,124 @@ final class PlanGate
     }
 
     /**
+     * Race-safe "consume one AI credit" gate.
+     *
+     * Wraps the entire check-then-record cycle in a per-photographer
+     * Cache lock so parallel requests are serialised. Without this,
+     * two concurrent face-index jobs could both pass canUseAi() (each
+     * sees the same pre-increment counter), both hit AWS, and only
+     * THEN both record — burning two credits when only one was
+     * available. The lock ensures one wins, the other gets blocked.
+     *
+     * Usage:
+     *   $allowed = PlanGate::consumeAiCredit($photographerId, 'ai.face_index', [
+     *       'event_id' => $eventId, 'photo_id' => $photoId,
+     *   ]);
+     *   if (!$allowed['ok']) {
+     *       Log::info('Plan blocked AI', $allowed);
+     *       return null; // bail out, don't call AWS
+     *   }
+     *   $awsResult = $aws->doTheThing();
+     *   // No need to call UsageMeter::record — consumeAiCredit already did.
+     *
+     * Locks for at most 5 seconds per request (long enough for the AWS
+     * call + record, short enough that a stuck request can't permastall
+     * the photographer's other AI calls).
+     */
+    public static function consumeAiCredit(int $photographerId, string $resource, array $metadata = []): array
+    {
+        if (!in_array($resource, self::AI_RESOURCES, true)) {
+            // Defensive: caller passed an unknown resource. Don't gate — but
+            // log so we can spot drift (if a new AI resource was added but
+            // not registered in AI_RESOURCES, the budget pool would silently
+            // not include it).
+            \Illuminate\Support\Facades\Log::warning('PlanGate::consumeAiCredit unknown resource', [
+                'resource' => $resource,
+                'photographer_id' => $photographerId,
+            ]);
+        }
+
+        $lock = \Illuminate\Support\Facades\Cache::lock(
+            'plan_gate_ai_consume_' . $photographerId,
+            5
+        );
+
+        try {
+            // Block up to 3s for the lock so brief contention doesn't fail
+            // the request — but we don't want a long queue here either, so
+            // 3s is the practical cap.
+            if (!$lock->block(3)) {
+                return [
+                    'ok'     => false,
+                    'reason' => 'lock_busy',
+                    'message'=> 'AI กำลังประมวลผลอยู่ ลองอีกครั้ง',
+                ];
+            }
+
+            // Re-check the gate INSIDE the lock — between the caller's earlier
+            // canUseAi() (if any) and now, another request might have consumed
+            // the last credit.
+            $gate = self::canUseAi($photographerId, self::FEAT_FACE_SEARCH);
+            if (!$gate['allowed']) {
+                return [
+                    'ok'        => false,
+                    'reason'    => $gate['reason'],
+                    'remaining' => $gate['remaining'] ?? 0,
+                    'cap'       => $gate['cap']       ?? null,
+                    'used'      => $gate['used']      ?? null,
+                ];
+            }
+
+            // Record the unit BEFORE making the actual AI call. This is
+            // intentional: an AWS error after recording is recoverable
+            // via UsageMeter::reverse(); a successful AWS call without
+            // recording would be silent revenue loss + cap drift.
+            $planCode = \App\Models\User::find($photographerId)
+                ? \App\Support\PlanResolver::photographerCode(\App\Models\User::find($photographerId))
+                : 'free';
+            UsageMeter::record(
+                userId:   $photographerId,
+                planCode: $planCode,
+                resource: $resource,
+                units:    1,
+                metadata: $metadata,
+            );
+
+            // Bust the in-memory plan cache so subsequent calls in this
+            // request see the new counter immediately (otherwise canUseAi
+            // would read the stale 60-second-cached subscription).
+            \Illuminate\Support\Facades\Cache::store('array')->flush();
+
+            return [
+                'ok'        => true,
+                'remaining' => max(0, ($gate['cap'] ?? 0) - ($gate['used'] ?? 0) - 1),
+            ];
+        } finally {
+            optional($lock)->release();
+        }
+    }
+
+    /**
+     * Reverse a previously-consumed credit. Use after a downstream
+     * failure (AWS error, image rejected) to refund the credit so the
+     * photographer isn't charged for a no-op.
+     */
+    public static function refundAiCredit(int $photographerId, string $resource, array $metadata = []): void
+    {
+        $planCode = \App\Models\User::find($photographerId)
+            ? \App\Support\PlanResolver::photographerCode(\App\Models\User::find($photographerId))
+            : 'free';
+        UsageMeter::reverse(
+            userId:   $photographerId,
+            planCode: $planCode,
+            resource: $resource,
+            units:    1,
+            metadata: $metadata + ['reason' => 'refund'],
+        );
+        \Illuminate\Support\Facades\Cache::store('array')->flush();
+    }
+
+    /**
      * Days left in the current billing period. Returns null when the
      * subscription has no fixed period (e.g. lifetime free).
      */

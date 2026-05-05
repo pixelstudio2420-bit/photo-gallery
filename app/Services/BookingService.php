@@ -292,7 +292,7 @@ class BookingService
             "🎉 คุณได้เลื่อนคิวจาก waitlist!\n📷 งาน: %s\n📅 %s\n\nรอช่างภาพยืนยันใน 24 ชม.",
             $next->title,
             $next->scheduled_at?->format('d/m/Y H:i'),
-        ));
+        ), gateByPhotographerId: (int) $next->photographer_id);
         $this->pushLine($next->photographer_id, sprintf(
             "🆕 มีคิวงานใหม่จาก waitlist (เพราะคุณยกเลิกงานเก่า)\n📷 %s\n📅 %s",
             $next->title,
@@ -354,7 +354,8 @@ class BookingService
                 "✅ ได้รับเงินมัดจำแล้ว!\n📷 %s\n💰 มัดจำ: %s ฿\n\nคิวงานยืนยันสมบูรณ์",
                 $fresh->title,
                 number_format((float) $fresh->deposit_paid),
-            ), idempotencyKey: $idempotencyKey ? "deposit.{$fresh->id}.cust" : null);
+            ), idempotencyKey: $idempotencyKey ? "deposit.{$fresh->id}.cust" : null,
+               gateByPhotographerId: (int) $fresh->photographer_id);
             $this->queuePushLine($fresh->photographer_id, sprintf(
                 "💰 ลูกค้าจ่ายมัดจำแล้ว!\n📷 %s\n💵 %s ฿",
                 $fresh->title,
@@ -515,6 +516,7 @@ class BookingService
                 $mapsLink ? "\n🗺️ นำทาง: {$mapsLink}" : '',
             ),
             idempotencyKey: "booking.{$booking->id}.confirmed",
+            gateByPhotographerId: (int) $booking->photographer_id,
         );
     }
 
@@ -533,7 +535,13 @@ class BookingService
             $booking->cancellation_reason ? "📝 เหตุผล: {$booking->cancellation_reason}" : '',
         );
 
-        $this->pushLine($targetUserId, trim($msg));
+        // Gate ONLY when target is the customer (photographer-context push).
+        // When target is the photographer themselves (cancelled-by-customer),
+        // the message is a self-notification and stays unconditional.
+        $gateBy = $targetUserId === $booking->customer_user_id
+            ? (int) $booking->photographer_id
+            : null;
+        $this->pushLine($targetUserId, trim($msg), $gateBy);
     }
 
     /**
@@ -541,8 +549,28 @@ class BookingService
      * the `isMessagingEnabled` + `getLineUserId` plumbing each time.
      * Best-effort: failures logged, never thrown.
      */
-    private function pushLine(int $userId, string $text): void
+    /**
+     * Push a LINE message, optionally plan-gated.
+     *
+     * When $gateByPhotographerId is set, PlanGate::canUseLine() must
+     * pass before the message is sent — used for CUSTOMER-direction
+     * pushes (booking confirms, reminders, cancellations) where the
+     * platform charge follows the photographer's plan. Photographer
+     * SELF-notifications (eg. "your customer just confirmed") pass
+     * null here so they always go through, regardless of subscription
+     * — they're a platform feature for every photographer to keep
+     * track of their own bookings.
+     */
+    private function pushLine(int $userId, string $text, ?int $gateByPhotographerId = null): void
     {
+        if ($gateByPhotographerId !== null
+            && !\App\Support\PlanGate::canUseLine($gateByPhotographerId)) {
+            Log::info('booking.line_blocked_by_plan', [
+                'recipient_user_id' => $userId,
+                'photographer_id'   => $gateByPhotographerId,
+            ]);
+            return;
+        }
         try {
             $this->line->pushText($userId, $text);
         } catch (\Throwable $e) {
@@ -558,9 +586,22 @@ class BookingService
      * idempotency key. Use this for booking-event notifications: the
      * job retries 5x with backoff on transient LINE 5xx, and the
      * idempotency key collapses webhook retries to a single delivery.
+     *
+     * Same plan-gate semantics as pushLine() — pass photographer_id when
+     * sending to the customer; pass null when sending to the photographer
+     * themselves.
      */
-    private function queuePushLine(int $userId, string $text, ?string $idempotencyKey = null): void
+    private function queuePushLine(int $userId, string $text, ?string $idempotencyKey = null, ?int $gateByPhotographerId = null): void
     {
+        if ($gateByPhotographerId !== null
+            && !\App\Support\PlanGate::canUseLine($gateByPhotographerId)) {
+            Log::info('booking.line_queue_blocked_by_plan', [
+                'recipient_user_id' => $userId,
+                'photographer_id'   => $gateByPhotographerId,
+                'idempotency_key'   => $idempotencyKey,
+            ]);
+            return;
+        }
         try {
             $this->line->queuePushToUser(
                 $userId,
@@ -591,7 +632,8 @@ class BookingService
             $booking->title,
             $booking->scheduled_at?->format('d/m/Y H:i'),
             $booking->location ?? 'ตามที่ตกลง',
-        ), idempotencyKey: "booking.{$booking->id}.reminder.3d.cust");
+        ), idempotencyKey: "booking.{$booking->id}.reminder.3d.cust",
+           gateByPhotographerId: (int) $booking->photographer_id);
         $this->queuePushLine($booking->photographer_id, sprintf(
             "📅 อีก 3 วันมีงาน!\n📷 %s\n🕐 %s\n👤 %s\n📞 %s",
             $booking->title,
@@ -613,7 +655,8 @@ class BookingService
             $booking->title,
             $booking->scheduled_at?->format('H:i'),
             $booking->location ?? 'ตามที่ตกลง',
-        ), idempotencyKey: "booking.{$booking->id}.reminder.1d.cust");
+        ), idempotencyKey: "booking.{$booking->id}.reminder.1d.cust",
+           gateByPhotographerId: (int) $booking->photographer_id);
         $this->queuePushLine($booking->photographer_id, sprintf(
             "⏰ พรุ่งนี้มีงาน — เตรียมอุปกรณ์!\n📷 %s\n🕐 %s\n👤 %s · 📞 %s",
             $booking->title,
@@ -714,7 +757,8 @@ class BookingService
             "📸 วันนี้คือวันงาน!\n📷 %s\n🕐 %s",
             $booking->title,
             $booking->scheduled_at?->format('H:i'),
-        ), idempotencyKey: "booking.{$booking->id}.reminder.day.cust");
+        ), idempotencyKey: "booking.{$booking->id}.reminder.day.cust",
+           gateByPhotographerId: (int) $booking->photographer_id);
 
         $this->markReminderSent($booking, 'day', 'reminder_day_sent_at');
         return true;
@@ -731,7 +775,8 @@ class BookingService
         $this->queuePushLine($booking->customer_user_id, sprintf(
             "🌟 หวังว่างานเมื่อวานจะเป็นที่พอใจ!\nช่วยเขียนรีวิวให้ช่างภาพหน่อยนะครับ — ใช้เวลา 30 วินาที\n📝 %s",
             url('/orders'),
-        ), idempotencyKey: "booking.{$booking->id}.reminder.post.cust");
+        ), idempotencyKey: "booking.{$booking->id}.reminder.post.cust",
+           gateByPhotographerId: (int) $booking->photographer_id);
 
         $this->markReminderSent($booking, 'post', 'post_shoot_review_sent_at');
         return true;
