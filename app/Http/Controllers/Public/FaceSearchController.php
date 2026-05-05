@@ -163,8 +163,38 @@ class FaceSearchController extends Controller
                 ]);
             }
 
-            // First verify the selfie contains a face (1 API call)
-            $faces = $this->faceSearch->detectFaces($selfieBytes);
+            // First verify the selfie contains a face (1 API call).
+            // detectFaces() now returns a structured payload so we can
+            // tell "AWS errored" (config / IAM / network — admin issue)
+            // apart from "no face in image" (user uploaded wrong file).
+            $detectResult = $this->faceSearch->detectFaces($selfieBytes);
+            $faces        = $detectResult['faces']      ?? [];
+            $errorCode    = $detectResult['error_code'] ?? null;
+
+            // ── AWS infrastructure error (auth/IAM/region/network) ──
+            // Was hiding behind 422 "no face" before. Surface as 503 so
+            // the buyer sees a "service unavailable" message + admin
+            // gets the real error from the Log::error in FaceSearchService.
+            if ($errorCode === 'aws_error' || $errorCode === 'unconfigured') {
+                $this->budget->logResult([
+                    'event_id'    => $event->id,
+                    'user_id'     => Auth::id(),
+                    'ip_address'  => $request->ip(),
+                    'selfie_hash' => $selfieHash,
+                    'search_type' => 'collection',
+                    'api_calls'   => 0,
+                    'face_count'  => 0,
+                    'duration_ms' => (int) ((microtime(true) - $requestStart) * 1000),
+                    'status'      => 'aws_error',
+                    'notes'       => substr((string) ($detectResult['error'] ?? $errorCode), 0, 240),
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'ระบบ AI วิเคราะห์ภาพไม่พร้อมใช้งานชั่วคราว · กรุณาลองอีกครั้งภายหลัง หรือติดต่อผู้ดูแลระบบ',
+                ], 503);
+            }
+
+            // ── Genuine no-face — selfie tip ──
             if (empty($faces)) {
                 $this->budget->logResult([
                     'event_id'    => $event->id,
@@ -177,12 +207,6 @@ class FaceSearchController extends Controller
                     'duration_ms' => (int) ((microtime(true) - $requestStart) * 1000),
                     'status'      => 'no_face',
                 ]);
-                // 422 = entity (the selfie) couldn't be processed because it
-                // doesn't contain a face Rekognition can index. Common
-                // causes: too dark, blurry, face turned away, mask/sunglasses,
-                // or the photo is of an object instead of a person.
-                // Surface concrete tips so the user can fix the upload
-                // without guessing.
                 return response()->json([
                     'success' => false,
                     'message' => 'ไม่พบใบหน้าในรูปที่อัพโหลด — ลองรูปที่เห็นใบหน้าชัดเจน หันหน้าตรง แสงเพียงพอ ไม่มีแว่นกันแดดหรือหน้ากากบดบัง',

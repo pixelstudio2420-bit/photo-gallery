@@ -76,20 +76,59 @@ class FaceSearchService
 
     /**
      * Detect faces in a user-uploaded photo.
-     * Returns array of face details.
+     *
+     * Returns a structured result so callers can distinguish "AWS
+     * call succeeded but the image had no face" (legitimate user
+     * input error — show "please upload a clearer selfie") from
+     * "AWS itself errored" (auth, region, IAM, network — service
+     * unavailable, admin must fix). The previous version returned
+     * an empty array for BOTH cases, which made the public API
+     * return 422 "ไม่พบใบหน้า..." when the actual cause was an
+     * IAM/credentials misconfiguration in prod — admin had no way
+     * to tell from the user's bug report.
+     *
+     * @return array{faces: array, error: ?string, error_code: ?string}
+     *   `faces`      — array of FaceDetail objects (empty if none)
+     *   `error`      — human-readable error (null on success)
+     *   `error_code` — short machine-readable code:
+     *                  null            → success (faces may be empty)
+     *                  'aws_error'     → SDK threw (auth/region/network)
+     *                  'unconfigured'  → AWS keys not set
      */
     public function detectFaces(string $imageBytes): array
     {
+        if (!$this->isConfigured()) {
+            return ['faces' => [], 'error' => 'AWS Rekognition not configured', 'error_code' => 'unconfigured'];
+        }
+
         try {
             $result = $this->getClient()->detectFaces([
                 'Image' => ['Bytes' => $imageBytes],
                 'Attributes' => ['DEFAULT'],
             ]);
 
-            return $result->get('FaceDetails') ?? [];
+            return [
+                'faces'      => $result->get('FaceDetails') ?? [],
+                'error'      => null,
+                'error_code' => null,
+            ];
         } catch (\Throwable $e) {
-            Log::error('Rekognition detectFaces failed: ' . $e->getMessage());
-            return [];
+            // Log the FULL exception for admin debugging — this is
+            // what was hidden before. Common causes:
+            //   • InvalidSignatureException — wrong/expired AWS keys
+            //   • AccessDeniedException     — IAM missing rekognition:DetectFaces
+            //   • ResourceNotFoundException — wrong region (collection lives elsewhere)
+            //   • EndpointConnectionError    — VPC / network / Rekognition not in this region
+            Log::error('Rekognition detectFaces SDK error', [
+                'class'   => get_class($e),
+                'message' => $e->getMessage(),
+                'region'  => $this->resolveRegion(),
+            ]);
+            return [
+                'faces'      => [],
+                'error'      => 'AWS Rekognition error: ' . $e->getMessage(),
+                'error_code' => 'aws_error',
+            ];
         }
     }
 
