@@ -105,6 +105,58 @@ class RefundService
                     'resolved_at'           => now(),
                     'payment_refund_id'     => $refund->id,
                 ]);
+
+                // ── Subscription-specific refund handling ──────────────────
+                // When the underlying Order is a subscription, refunding the
+                // payment must ALSO revoke the photographer's plan access.
+                // Without this hook the photographer keeps Pro/Studio
+                // privileges after the refund — the audit trail showed
+                // money returned but the entitlement column on the profile
+                // still pointed at the paid plan. Detected via
+                // order.order_type = 'subscription' (the RefundService is
+                // generic enough to handle non-sub orders too).
+                $order = \App\Models\Order::find($request->order_id);
+                if ($order && $order->order_type === \App\Models\Order::TYPE_SUBSCRIPTION
+                    && $order->subscription_invoice_id) {
+                    $invoice = \App\Models\SubscriptionInvoice::find($order->subscription_invoice_id);
+                    if ($invoice) {
+                        $invoice->update([
+                            'status' => \App\Models\SubscriptionInvoice::STATUS_REFUNDED,
+                        ]);
+                        $sub = $invoice->subscription;
+                        if ($sub && $sub->isUsable()) {
+                            $oldPlanId = $sub->plan_id;
+                            // Cancel the paid sub immediately + drop to free.
+                            // Use the centralised cancel(immediate=true) so all
+                            // the existing side-effects (profile cache flip,
+                            // history record, lifecycle notifier hook) fire
+                            // through the same code path.
+                            $svc = app(\App\Services\SubscriptionService::class);
+                            $svc->cancel($sub, immediate: true);
+
+                            // Override the cancel-sourced history row with a
+                            // refund-specific entry so admins searching for
+                            // "why did they lose access?" see the refund as
+                            // the proximate cause, not "user cancelled".
+                            $svc->recordHistory(
+                                $sub->fresh(),
+                                \App\Models\SubscriptionHistory::EVT_REFUNDED,
+                                fromPlanId: $oldPlanId,
+                                toPlanId:   null,
+                                amount:     $amount,
+                                metadata: [
+                                    'refund_request_id' => $request->id,
+                                    'payment_refund_id' => $refund->id,
+                                    'invoice_id'        => $invoice->id,
+                                    'order_id'          => $order->id,
+                                    'admin_note'        => $adminNote,
+                                ],
+                                triggeredBy: \App\Models\SubscriptionHistory::TRIG_ADMIN,
+                                triggeredById: $adminId ?: null,
+                            );
+                        }
+                    }
+                }
             });
 
             $fresh = $request->fresh(['order', 'user']);

@@ -402,6 +402,22 @@ class SubscriptionService
             // Free plan — no invoice/order needed; flip profile caches immediately.
             if ($plan->isFree()) {
                 $this->syncProfileCache($profile, $sub);
+                $this->recordHistory(
+                    $sub,
+                    \App\Models\SubscriptionHistory::EVT_CREATED,
+                    fromPlanId: null,
+                    toPlanId:   $plan->id,
+                    amount:     0,
+                    metadata: ['cycle' => $cycle, 'free_path' => true],
+                );
+                $this->recordHistory(
+                    $sub,
+                    \App\Models\SubscriptionHistory::EVT_ACTIVATED,
+                    fromPlanId: null,
+                    toPlanId:   $plan->id,
+                    amount:     0,
+                    metadata: ['free_path' => true],
+                );
                 return $sub;
             }
 
@@ -432,6 +448,21 @@ class SubscriptionService
             ]);
 
             $invoice->update(['order_id' => $order->id]);
+
+            // Audit: pending sub created. The "activated" event fires
+            // separately in activateFromPaidInvoice once payment lands.
+            $this->recordHistory(
+                $sub,
+                \App\Models\SubscriptionHistory::EVT_CREATED,
+                fromPlanId: null,
+                toPlanId:   $plan->id,
+                amount:     $amount,
+                metadata: [
+                    'cycle'      => $cycle,
+                    'invoice_id' => $invoice->id,
+                    'order_id'   => $order->id,
+                ],
+            );
 
             return $sub->fresh('plan');
         });
@@ -515,6 +546,57 @@ class SubscriptionService
             }
 
             $fresh = $sub->fresh('plan');
+
+            // Audit-log this activation. Three flavours so the timeline
+            // is meaningful in customer-support views:
+            //   • plan_change  → upgraded / downgraded (price comparison)
+            //   • first activate (started_at was null) → activated
+            //   • else         → renewed
+            try {
+                if ($isPlanChange) {
+                    $oldPlanId = (int) ($invoice->meta['previous_plan_id'] ?? 0) ?: null;
+                    $oldPrice  = $oldPlanId
+                        ? (float) (SubscriptionPlan::find($oldPlanId)?->price_thb ?? 0)
+                        : 0;
+                    $newPrice  = (float) ($fresh->plan?->price_thb ?? 0);
+                    $eventType = $newPrice >= $oldPrice
+                        ? \App\Models\SubscriptionHistory::EVT_UPGRADED
+                        : \App\Models\SubscriptionHistory::EVT_DOWNGRADED;
+                    $this->recordHistory(
+                        $fresh,
+                        $eventType,
+                        fromPlanId: $oldPlanId,
+                        toPlanId:   $fresh->plan_id,
+                        amount:     (float) $invoice->amount_thb,
+                        metadata: [
+                            'invoice_id'      => $invoice->id,
+                            'order_id'        => $order->id,
+                            'days_remaining'  => $invoice->meta['days_remaining'] ?? null,
+                            'days_in_period'  => $invoice->meta['days_in_period'] ?? null,
+                        ],
+                        triggeredBy: \App\Models\SubscriptionHistory::TRIG_WEBHOOK,
+                    );
+                } else {
+                    $eventType = $isFirstActivation
+                        ? \App\Models\SubscriptionHistory::EVT_ACTIVATED
+                        : \App\Models\SubscriptionHistory::EVT_RENEWED;
+                    $this->recordHistory(
+                        $fresh,
+                        $eventType,
+                        fromPlanId: null,
+                        toPlanId:   $fresh->plan_id,
+                        amount:     (float) $invoice->amount_thb,
+                        metadata: [
+                            'invoice_id' => $invoice->id,
+                            'order_id'   => $order->id,
+                            'period_end' => $fresh->current_period_end?->toIso8601String(),
+                        ],
+                        triggeredBy: \App\Models\SubscriptionHistory::TRIG_WEBHOOK,
+                    );
+                }
+            } catch (\Throwable $e) {
+                Log::debug('subscription history (activate) failed: ' . $e->getMessage());
+            }
 
             // Lifecycle notification — fire AFTER the transaction commits
             // (best-effort; never blocks activation). Distinguishes
@@ -854,6 +936,14 @@ class SubscriptionService
                 ]);
             }
 
+            $this->recordHistory(
+                $sub->fresh(),
+                \App\Models\SubscriptionHistory::EVT_CANCELLED,
+                fromPlanId: $sub->plan_id,
+                toPlanId:   $sub->plan_id,
+                metadata:   ['immediate' => $immediate],
+            );
+
             return $sub->fresh('plan');
         });
     }
@@ -870,6 +960,12 @@ class SubscriptionService
             'cancel_at_period_end' => false,
             'cancelled_at'         => null,
         ]);
+        $this->recordHistory(
+            $sub->fresh(),
+            \App\Models\SubscriptionHistory::EVT_REACTIVATED,
+            fromPlanId: $sub->plan_id,
+            toPlanId:   $sub->plan_id,
+        );
         return $sub->fresh('plan');
     }
 
@@ -914,6 +1010,16 @@ class SubscriptionService
                 $meta = $sub->meta ?? [];
                 $meta['pending_plan_code'] = $newPlan->code;
                 $sub->update(['meta' => $meta]);
+                $this->recordHistory(
+                    $sub->fresh(),
+                    \App\Models\SubscriptionHistory::EVT_PLAN_CHANGE_SCHEDULED,
+                    fromPlanId: $currentPlan?->id,
+                    toPlanId:   $newPlan->id,
+                    metadata: [
+                        'period_end' => $sub->current_period_end?->toIso8601String(),
+                        'reason'     => $isUpgrade ? 'deferred_by_user' : 'downgrade',
+                    ],
+                );
                 return ['type' => 'deferred', 'order' => null];
             }
 
@@ -945,6 +1051,14 @@ class SubscriptionService
                 $meta = $sub->meta ?? [];
                 $meta['pending_plan_code'] = $newPlan->code;
                 $sub->update(['meta' => $meta]);
+                $this->recordHistory(
+                    $sub->fresh(),
+                    \App\Models\SubscriptionHistory::EVT_PLAN_CHANGE_SCHEDULED,
+                    fromPlanId: $currentPlan?->id,
+                    toPlanId:   $newPlan->id,
+                    amount:     $proratedAmount,
+                    metadata: ['reason' => 'below_min_proration'],
+                );
                 return ['type' => 'deferred', 'order' => null];
             }
 
@@ -1078,6 +1192,18 @@ class SubscriptionService
                 'cancelled_at' => now(),
             ]);
 
+            $this->recordHistory(
+                $fresh->fresh(),
+                \App\Models\SubscriptionHistory::EVT_EXPIRED,
+                fromPlanId: $fresh->plan_id,
+                toPlanId:   null,
+                metadata: [
+                    'reason'     => 'period_end_passed',
+                    'period_end' => $fresh->current_period_end?->toIso8601String(),
+                ],
+                triggeredBy: \App\Models\SubscriptionHistory::TRIG_CRON,
+            );
+
             $profile = PhotographerProfile::where('user_id', $fresh->photographer_id)->first();
             if ($profile) {
                 $freeSub = $this->ensureFreeSubscription($profile);
@@ -1118,6 +1244,18 @@ class SubscriptionService
                 'status'       => PhotographerSubscription::STATUS_EXPIRED,
                 'cancelled_at' => now(),
             ]);
+
+            $this->recordHistory(
+                $sub->fresh(),
+                \App\Models\SubscriptionHistory::EVT_EXPIRED,
+                fromPlanId: $sub->plan_id,
+                toPlanId:   null,
+                metadata: [
+                    'reason'        => 'grace_window_passed',
+                    'grace_ends_at' => $sub->grace_ends_at?->toIso8601String(),
+                ],
+                triggeredBy: \App\Models\SubscriptionHistory::TRIG_CRON,
+            );
 
             $profile = PhotographerProfile::where('user_id', $sub->photographer_id)->first();
             if ($profile) {
@@ -1279,6 +1417,46 @@ class SubscriptionService
         if ($existing) return $existing;
 
         return $this->subscribe($profile, $free);
+    }
+
+    /**
+     * Append an audit-trail row for a subscription transition.
+     *
+     * Best-effort by design: a logger failure must NEVER block the
+     * actual subscription operation. We catch + log so the customer
+     * journey continues even if the history table has issues.
+     *
+     * @param string|null $triggeredBy  user/admin/cron/webhook/system
+     */
+    public function recordHistory(
+        PhotographerSubscription $sub,
+        string $eventType,
+        ?int $fromPlanId = null,
+        ?int $toPlanId = null,
+        ?float $amount = null,
+        array $metadata = [],
+        ?string $triggeredBy = null,
+        ?int $triggeredById = null
+    ): void {
+        try {
+            \App\Models\SubscriptionHistory::create([
+                'subscription_id' => $sub->id,
+                'photographer_id' => $sub->photographer_id,
+                'event_type'      => $eventType,
+                'from_plan_id'    => $fromPlanId,
+                'to_plan_id'      => $toPlanId ?? $sub->plan_id,
+                'amount_thb'      => $amount,
+                'triggered_by'    => $triggeredBy ?? (\Illuminate\Support\Facades\Auth::check() ? \App\Models\SubscriptionHistory::TRIG_USER : \App\Models\SubscriptionHistory::TRIG_SYSTEM),
+                'triggered_by_id' => $triggeredById ?? \Illuminate\Support\Facades\Auth::id(),
+                'metadata'        => $metadata,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('SubscriptionHistory record failed', [
+                'sub_id'     => $sub->id,
+                'event_type' => $eventType,
+                'error'      => $e->getMessage(),
+            ]);
+        }
     }
 
     // ────────────────────────────────────────────────────────────────────
