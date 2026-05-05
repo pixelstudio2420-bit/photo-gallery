@@ -162,18 +162,34 @@ function faceBundleModal(eventId, packageId) {
       this.step = 'searching';
 
       try {
-        // 1. Run face search via existing endpoint to get matching photo IDs
+        // 1. Run face search via the canonical endpoint:
+        //    POST /api/face-search/{eventId}
+        //    Previously this fetched `/face-search` which has no
+        //    matching route → Laravel 405 → modal silently failed.
+        //    The endpoint also requires the PDPA consent flag (the
+        //    full /events/{id}/face-search page UI gathers it via
+        //    a checkbox; this modal users have already confirmed
+        //    intent by clicking "เหมารูปตัวเอง" so we send the
+        //    consent flag along with the selfie).
         const fd = new FormData();
         fd.append('selfie', file);
-        fd.append('event_id', eventId);
+        fd.append('consent', '1');
 
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-        const searchResp = await fetch('/face-search', {
+        const searchResp = await fetch(`/api/face-search/${eventId}`, {
           method: 'POST',
           headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
           body: fd,
         });
-        if (!searchResp.ok) throw new Error('Face search failed');
+        if (!searchResp.ok) {
+          // Surface the server's message (e.g. "ไม่พบใบหน้าในรูป...")
+          // so buyers know what to fix instead of seeing a generic
+          // "search failed" toast.
+          let body = null;
+          try { body = await searchResp.json(); } catch (_) {}
+          const msg = body?.message || `Face search failed (HTTP ${searchResp.status})`;
+          throw new Error(msg);
+        }
         const searchData = await searchResp.json();
         const photoIds = (searchData.matches || []).map(m => m.photo_id || m.id).filter(Boolean);
 

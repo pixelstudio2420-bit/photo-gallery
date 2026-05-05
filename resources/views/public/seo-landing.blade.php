@@ -69,7 +69,16 @@
              2. "ดูอีเวนต์ทั้งหมด"      — for browsers who don't know which event yet
              3. "จองช่างภาพ"            — pre-event booking funnel --}}
       <div class="flex flex-wrap gap-3">
-        <a href="{{ url('/face-search') }}"
+        {{-- Face Search lives PER-EVENT (route needs an event_id):
+             /events/{id}/face-search. There's no global landing,
+             so the SEO page directs the user to the events index
+             with `?action=face-search` — the events index renders
+             an instructional banner explaining "pick an event,
+             then upload your selfie inside it" (added in the
+             customer-search-button audit commits earlier). The
+             previous href `/face-search` had no matching route
+             and 404'd / 405'd. --}}
+        <a href="{{ route('events.index') }}?action=face-search"
            class="inline-flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-white shadow-xl"
            style="background: var(--sl-accent); box-shadow: 0 12px 30px -8px var(--sl-accent);">
           <i class="bi bi-person-bounding-box"></i>
