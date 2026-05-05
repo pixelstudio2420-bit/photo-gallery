@@ -95,6 +95,12 @@
 </style>
 @endpush
 
+{{-- Manual withdrawal request widget — sits ABOVE the summary cards
+     so it's the first thing the photographer sees when they open the
+     earnings page. Self-contained: handles the entire request flow
+     plus a recent-history list with cancel actions. --}}
+@include('photographer.partials.withdrawal-request-widget')
+
 {{-- Summary Cards --}}
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
   {{-- Total lifetime earnings --}}

@@ -1003,6 +1003,19 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/payouts/automation', [\App\Http\Controllers\Admin\PayoutSettingsController::class, 'index'])->name('payouts.automation');
             Route::post('/payouts/automation', [\App\Http\Controllers\Admin\PayoutSettingsController::class, 'index'])->name('payouts.automation.save');
             Route::post('/payouts/automation/run-now', [\App\Http\Controllers\Admin\PayoutSettingsController::class, 'runNow'])->name('payouts.automation.run-now');
+
+            // ── Manual withdrawal request queue ─────────────────────────────
+            // Photographer-initiated requests. Coexists with the automated
+            // payout engine above (creator can hit "แจ้งถอน" to request
+            // outside the regular schedule, admin reviews + manually marks
+            // paid). Settings page lets admin tune min/max/fee/methods.
+            Route::get('/withdrawals',                 [\App\Http\Controllers\Admin\WithdrawalController::class, 'index'])->name('withdrawals.index');
+            Route::get('/withdrawals/settings',        [\App\Http\Controllers\Admin\WithdrawalController::class, 'settings'])->name('withdrawals.settings');
+            Route::post('/withdrawals/settings',       [\App\Http\Controllers\Admin\WithdrawalController::class, 'saveSettings'])->name('withdrawals.settings.save');
+            Route::get('/withdrawals/{id}',            [\App\Http\Controllers\Admin\WithdrawalController::class, 'show'])->whereNumber('id')->name('withdrawals.show');
+            Route::post('/withdrawals/{id}/approve',   [\App\Http\Controllers\Admin\WithdrawalController::class, 'approve'])->whereNumber('id')->name('withdrawals.approve');
+            Route::post('/withdrawals/{id}/reject',    [\App\Http\Controllers\Admin\WithdrawalController::class, 'reject'])->whereNumber('id')->name('withdrawals.reject');
+            Route::post('/withdrawals/{id}/mark-paid', [\App\Http\Controllers\Admin\WithdrawalController::class, 'markPaid'])->whereNumber('id')->name('withdrawals.mark-paid');
         });
 
         // Tax & Costs
@@ -1981,6 +1994,15 @@ Route::prefix('photographer')->name('photographer.')->group(function () {
         Route::post('/earnings/withdraw', [\App\Http\Controllers\Photographer\EarningsController::class, 'withdraw'])
             ->middleware('photographer.tier:seller')
             ->name('earnings.withdraw');
+
+        // Manual withdrawal request flow — distinct from auto-payout cron.
+        // Photographer hits "แจ้งถอน" → admin reviews + marks paid.
+        Route::post('/withdrawals',          [\App\Http\Controllers\Photographer\WithdrawalController::class, 'store'])
+            ->middleware('throttle:20,1')
+            ->name('withdrawals.store');
+        Route::post('/withdrawals/{id}/cancel', [\App\Http\Controllers\Photographer\WithdrawalController::class, 'cancel'])
+            ->whereNumber('id')
+            ->name('withdrawals.cancel');
 
         // Analytics
         Route::get('/analytics', [\App\Http\Controllers\Photographer\AnalyticsController::class, 'index'])->name('analytics');

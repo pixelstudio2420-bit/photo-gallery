@@ -49,6 +49,16 @@ class EarningsController extends Controller
         // hardcoded copy.
         $payoutInfo = $this->buildPayoutInfo($engine, (float) $pendingAmount, $photographer);
 
+        // ── Manual withdrawal request snapshot + recent history ──────────
+        // Drives the "แจ้งถอน" button + form + activity timeline on this
+        // page. snapshot() handles every gate (enabled flag, min amount,
+        // active-pending cap, available balance) so the blade just toggles
+        // visibility off the returned booleans.
+        $withdrawalSnap = \App\Http\Controllers\Photographer\WithdrawalController::snapshot($userId);
+        $withdrawalHistory = \App\Models\WithdrawalRequest::where('photographer_id', $userId)
+            ->orderByDesc('id')
+            ->paginate(10, ['*'], 'wdraw_page');
+
         return view('photographer.earnings.index', compact(
             'payouts',
             'disbursements',
@@ -57,6 +67,8 @@ class EarningsController extends Controller
             'pendingAmount',
             'photographer',
             'payoutInfo',
+            'withdrawalSnap',
+            'withdrawalHistory'
         ));
     }
 
