@@ -129,7 +129,26 @@ class PhotographerSubscription extends Model
     {
         // Usable = entitled to plan features. Grace is still usable but
         // flagged so UI can show "please update payment" banners.
-        return in_array($this->status, [self::STATUS_ACTIVE, self::STATUS_GRACE], true);
+        //
+        // We enforce the gate three-fold (status + period + grace deadline)
+        // because the nightly SubscriptionExpireOverdueCommand can lag a
+        // few minutes behind the actual period_end timestamp. Without the
+        // time-based check, a photographer whose period rolled over at
+        // 12:00 could keep using paid features until ~01:00 cron run.
+        // Free tier (no row at all, or status='active' with no period_end)
+        // returns true here — they're "always usable" for the free caps.
+        if (!in_array($this->status, [self::STATUS_ACTIVE, self::STATUS_GRACE], true)) {
+            return false;
+        }
+        if ($this->current_period_end && $this->current_period_end->isPast()) {
+            return false;
+        }
+        if ($this->status === self::STATUS_GRACE
+            && $this->grace_ends_at
+            && $this->grace_ends_at->isPast()) {
+            return false;
+        }
+        return true;
     }
 
     public function daysUntilRenewal(): ?int

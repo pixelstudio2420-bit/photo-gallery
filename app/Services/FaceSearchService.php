@@ -263,6 +263,33 @@ class FaceSearchService
             return null;
         }
 
+        // 4) PLAN GATE — does the OWNER (event's photographer) have AI
+        //    available + monthly credit headroom right now? Skipping
+        //    here means:
+        //      • Free-plan photographers don't burn AWS credits we
+        //        promised the buyer they'd get.
+        //      • Expired-plan photographers stop indexing immediately
+        //        instead of waiting for the nightly cron.
+        //      • Over-cap photographers stop being indexed mid-month
+        //        instead of going unbounded.
+        //    We log the deny reason so the photographer can see it on
+        //    /photographer/subscription/index ("100/100 AI ใช้แล้ว").
+        $photo->loadMissing('event');
+        $photographerId = (int) (optional($photo->event)->photographer_id ?? 0);
+        if ($photographerId > 0) {
+            $gate = \App\Support\PlanGate::canUseAi($photographerId, \App\Support\PlanGate::FEAT_FACE_SEARCH);
+            if (!$gate['allowed']) {
+                Log::info("FaceSearchService::indexPhoto blocked by plan gate for photo #{$photo->id}", [
+                    'photographer_id' => $photographerId,
+                    'reason'          => $gate['reason'],
+                    'plan_code'       => $gate['plan_code'] ?? null,
+                    'used'            => $gate['used']      ?? null,
+                    'cap'             => $gate['cap']       ?? null,
+                ]);
+                return null;
+            }
+        }
+
         // 4) Resolve image bytes — from the provided path first, then from the disk
         $bytes = null;
         if ($imagePath && is_file($imagePath)) {
@@ -293,6 +320,28 @@ class FaceSearchService
             // No face detected or indexing failed — log and move on
             Log::info("FaceSearchService: no face indexed for photo #{$photo->id} (no face detected or API failure).");
             return null;
+        }
+
+        // 5b) Bill the photographer's AI quota for this index call so the
+        //     monthly_ai_credits cap counts the indexing too (not just buyer
+        //     searches). Without this the photographer could side-step the
+        //     cap by uploading thousands of photos and paying $0 in AI even
+        //     though Rekognition charged us per call.
+        if ($photographerId > 0) {
+            try {
+                $planCode = \App\Support\PlanResolver::photographerCode(
+                    \App\Models\User::find($photographerId)
+                );
+                \App\Services\Usage\UsageMeter::record(
+                    userId:   $photographerId,
+                    planCode: $planCode,
+                    resource: 'ai.face_index',
+                    units:    1,
+                    metadata: ['photo_id' => $photo->id, 'event_id' => $photo->event_id],
+                );
+            } catch (\Throwable $e) {
+                Log::warning('UsageMeter::record(ai.face_index) failed: ' . $e->getMessage());
+            }
         }
 
         // 6) Persist face_id (use forceFill to stay safe even if $fillable changes)

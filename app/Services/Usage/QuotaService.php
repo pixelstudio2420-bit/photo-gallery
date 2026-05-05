@@ -109,6 +109,28 @@ class QuotaService
     /** @return array{hard:?int,soft:?int,period:string}|null */
     private function capFor(string $planCode, string $resource): ?array
     {
+        // 1) DB-driven AI cap takes precedence over config — the admin's
+        //    `monthly_ai_credits` field on /admin/subscriptions/plans/{id}
+        //    is the source of truth for AI feature caps. We map any AI
+        //    resource (face_search/face_index/face_detect/face_compare)
+        //    to that single shared budget so a photographer can't bypass
+        //    the cap by mixing resource types.
+        if (str_starts_with($resource, 'ai.')) {
+            $plan = \App\Models\SubscriptionPlan::findByCode($planCode);
+            if ($plan && $plan->monthly_ai_credits !== null) {
+                $hard = (int) $plan->monthly_ai_credits;
+                // 0 = feature disabled (admin set the field to 0 to
+                // explicitly turn AI off for this tier). null = unlimited.
+                return [
+                    'hard'   => $hard,
+                    'soft'   => $hard > 0 ? max(1, (int) round($hard * 0.8)) : null,
+                    'period' => 'month',
+                ];
+            }
+        }
+
+        // 2) Fall back to config('usage.plan_caps') for resources without
+        //    a DB-driven equivalent (storage.bytes, event.create, etc.).
         // Two-step literal-key lookup — both `plan_code` and `resource`
         // are flat keys with dots inside (e.g. 'pro' → 'ai.face_search').
         $caps = FlatConfig::array('usage.plan_caps', $planCode);

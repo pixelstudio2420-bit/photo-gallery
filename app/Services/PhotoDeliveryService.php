@@ -78,11 +78,25 @@ class PhotoDeliveryService
      * Decide which delivery channel to use based on:
      *   1. Explicit buyer choice (order->delivery_method)
      *   2. Admin-enabled methods (some sites may disable LINE entirely)
-     *   3. Auto-switch rules: too many photos → email, LINE linked → LINE, else web
+     *   3. Photographer's PLAN — if their subscription doesn't include
+     *      line_notify, the LINE option is never available no matter
+     *      what the buyer picked. (This is the gate that stops free-plan
+     *      photographers from getting paid LINE delivery for free.)
+     *   4. Auto-switch rules: too many photos → email, LINE linked → LINE, else web
      */
     public function resolveMethod(Order $order): string
     {
         $enabled = $this->enabledMethods();
+
+        // Plan-gate LINE: when the event's photographer doesn't have the
+        // line_notify feature in their active plan, strip 'line' from the
+        // candidate list so neither the buyer's pick nor auto-switch can
+        // route here. Fail-open if no event/photographer is associated
+        // (system orders with no owner → keep LINE available).
+        if (!$this->photographerCanUseLine($order)) {
+            $enabled = array_values(array_filter($enabled, fn ($m) => $m !== 'line'));
+        }
+
         $chosen  = $order->delivery_method ?: 'auto';
 
         // If buyer picked something explicit AND admin allows it, honor it.
@@ -134,6 +148,15 @@ class PhotoDeliveryService
 
     private function deliverViaLine(Order $order): array
     {
+        // Defense-in-depth plan gate. resolveMethod() should have already
+        // filtered LINE out for free-plan photographers, but a buyer could
+        // arrive here via a stale order.delivery_method picked when the
+        // photographer was still on a paid plan. Refuse + fall back to web
+        // so the buyer still gets their photos.
+        if (!$this->photographerCanUseLine($order)) {
+            return $this->fallback($order, 'แผนของช่างภาพไม่รวมการส่งทาง LINE — ดาวน์โหลดผ่านเว็บได้');
+        }
+
         if (!$order->user_id || !$this->userHasLine($order->user_id)) {
             return $this->fallback($order, 'LINE ไม่ได้เชื่อมต่อ');
         }
@@ -250,6 +273,30 @@ class PhotoDeliveryService
         } catch (\Throwable $e) {
             return false;
         }
+    }
+
+    /**
+     * Plan-gate: does the order's event's photographer have the
+     * `line_notify` feature in their active plan?
+     *
+     * Returns TRUE when:
+     *   • Order has no event/photographer (system orders, no owner to gate
+     *     against — admin sends should keep working)
+     *   • Photographer's active subscription includes line_notify
+     *
+     * Returns FALSE when the photographer's plan lacks the feature OR
+     * their subscription has expired (PlanGate::isPlanActive enforces both
+     * status and time-based expiry).
+     */
+    private function photographerCanUseLine(Order $order): bool
+    {
+        $photographerId = optional($order->event)->photographer_id;
+        if (!$photographerId) {
+            // No owner = system / orphan order. Don't block; the admin
+            // delivery flows still need LINE for ops alerts etc.
+            return true;
+        }
+        return \App\Support\PlanGate::canUseLine((int) $photographerId);
     }
 
     private function userHasEmail(?int $userId): bool
