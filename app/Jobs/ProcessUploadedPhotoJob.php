@@ -114,6 +114,32 @@ class ProcessUploadedPhotoJob implements ShouldQueue
             $watermark = new WatermarkService();
             $watermarkEnabled = $watermark->isEnabled();
 
+            // CRITICAL FIX: derive thumbnail_path / watermarked_path from
+            // original_path when the row was inserted with NULL placeholders.
+            // PhotoController@store sets these to null and adds the comment
+            // "populated by ProcessUploadedPhotoJob" — but the previous
+            // version of THIS job only wrote to the path IF it was already
+            // set. Result was a chicken-and-egg deadlock where 129 photos
+            // on loadroop.com prod sat at status='active' with NULL paths
+            // forever, gallery serving placeholders.
+            //
+            // Path convention (matches R2MediaService::uploadEventPhoto):
+            //    original     = events/photos/user_X/event_Y/{uuid}_{name}.ext
+            //    thumbnail    = events/photos/user_X/event_Y/thumbnails/{uuid}_{name}.ext
+            //    watermarked  = events/photos/user_X/event_Y/watermarked/{uuid}_{name}.ext
+            // Subdirectory injection keeps the filename + UUID stable, so
+            // R2 lifecycle / cleanup tools can still pair the variants
+            // back to their original by basename.
+            $needPathPersist = false;
+            if (empty($photo->thumbnail_path) && !empty($photo->original_path)) {
+                $photo->thumbnail_path = $this->deriveVariantPath($photo->original_path, 'thumbnails');
+                $needPathPersist = true;
+            }
+            if (empty($photo->watermarked_path) && !empty($photo->original_path)) {
+                $photo->watermarked_path = $this->deriveVariantPath($photo->original_path, 'watermarked');
+                $needPathPersist = true;
+            }
+
             // 3) Generate thumbnail (admin-configured size + quality).
             //    When admin has watermarking on, we ALSO composite a
             //    watermark onto the small thumbnail. Previously thumbs
@@ -286,5 +312,28 @@ class ProcessUploadedPhotoJob implements ShouldQueue
         } catch (\Throwable) {
             // Silently ignore
         }
+    }
+
+    /**
+     * Derive a variant storage path from an original_path by injecting
+     * a subdirectory in front of the basename. Examples:
+     *   events/photos/user_3/event_1/abc.jpg
+     *     + 'thumbnails'  → events/photos/user_3/event_1/thumbnails/abc.jpg
+     *     + 'watermarked' → events/photos/user_3/event_1/watermarked/abc.jpg
+     *
+     * If the original_path has no directory component (rare — usually
+     * R2MediaService scopes uploads under events/photos/...) we fall back
+     * to a flat scheme using the photo ID so the variant still has a
+     * unique deterministic key.
+     */
+    protected function deriveVariantPath(string $originalPath, string $variantSubdir): string
+    {
+        $dir  = trim((string) dirname($originalPath), '/.');
+        $file = basename($originalPath);
+
+        if ($dir === '') {
+            return "{$variantSubdir}/{$file}";
+        }
+        return "{$dir}/{$variantSubdir}/{$file}";
     }
 }
