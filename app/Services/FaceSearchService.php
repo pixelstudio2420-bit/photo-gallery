@@ -433,11 +433,31 @@ class FaceSearchService
     }
 
     /**
-     * Get photo bytes from various sources.
+     * Get photo bytes for face comparison. Resolution order (most → least
+     * preferred):
+     *
+     *   1. Local filesystem at `storage/app/public/{path}` — only hits
+     *      for legacy `disk=public` uploads that haven't been migrated.
+     *   2. Storage::disk({storage_disk})->get({path}) — the canonical
+     *      path for R2 / S3 uploads. Returns the un-watermarked
+     *      original bytes, which is what compareFaces needs to find the
+     *      buyer's face accurately. Without this branch the function
+     *      fell through to step 4 (watermarked URL) and Rekognition
+     *      saw a watermark text overlay AND a downsized JPEG — face
+     *      detection accuracy on that combination drops to near-zero,
+     *      which is what was making `/events/3/face-search` return
+     *      "no matches" for events whose photos were on R2.
+     *   3. Direct HTTP fetch of `original_url` — fallback when the
+     *      Storage SDK isn't configured or the disk read fails. Still
+     *      returns the un-watermarked original (R2 public CDN).
+     *   4. Direct HTTP fetch of `url` (watermarked variant) — last
+     *      resort, only used if every other path failed. Match
+     *      accuracy is degraded but the search at least returns
+     *      something instead of zero.
      */
     private function getPhotoBytes(array $photo): ?string
     {
-        // Try local file first
+        // 1) Local file (legacy public disk)
         if (!empty($photo['path'])) {
             $localPath = storage_path('app/public/' . $photo['path']);
             if (file_exists($localPath)) {
@@ -449,7 +469,37 @@ class FaceSearchService
             }
         }
 
-        // Try URL
+        // 2) Storage SDK read (R2 / S3) — preferred for cloud-stored
+        //    originals. Reads the un-watermarked file directly.
+        if (!empty($photo['path']) && !empty($photo['storage_disk']) && $photo['storage_disk'] !== 'public') {
+            try {
+                $bytes = \Illuminate\Support\Facades\Storage::disk($photo['storage_disk'])->get($photo['path']);
+                if (!empty($bytes)) {
+                    return $bytes;
+                }
+            } catch (\Throwable $e) {
+                Log::debug("getPhotoBytes Storage::disk read failed for photo {$photo['id']}: " . $e->getMessage());
+                // fall through to URL fetch
+            }
+        }
+
+        // 3) HTTP fetch of original_url (un-watermarked CDN URL —
+        //    server-side only, never returned to public callers).
+        if (!empty($photo['original_url'])) {
+            try {
+                $response = \Illuminate\Support\Facades\Http::timeout(10)->get($photo['original_url']);
+                if ($response->successful()) {
+                    return $response->body();
+                }
+            } catch (\Throwable $e) {
+                Log::debug("getPhotoBytes original_url fetch failed for photo {$photo['id']}: " . $e->getMessage());
+                // fall through to watermarked URL
+            }
+        }
+
+        // 4) Last-resort: HTTP fetch of watermarked `url`. Match
+        //    accuracy degraded — kept only so the function returns
+        //    something instead of null on a fully-broken row.
         if (!empty($photo['url'])) {
             try {
                 $response = \Illuminate\Support\Facades\Http::timeout(10)->get($photo['url']);

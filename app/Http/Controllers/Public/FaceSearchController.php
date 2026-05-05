@@ -384,8 +384,18 @@ class FaceSearchController extends Controller
         if ($photos->isNotEmpty()) {
             return $photos->map(function (EventPhoto $p) {
                 return [
-                    'id'        => $p->id,
-                    'path'      => $p->original_path,
+                    'id'           => $p->id,
+                    'path'         => $p->original_path,
+                    // `storage_disk` + `original_url` are passed for
+                    // SERVER-side use only — FaceSearchService::getPhotoBytes
+                    // needs to read the un-watermarked original to feed
+                    // AWS Rekognition's compareFaces, otherwise the
+                    // watermark overlay obscures the face and matches
+                    // drop to ~0%. These fields never leave the server
+                    // (the public response uses `url` / `thumbnail`
+                    // below, which are the watermarked variants).
+                    'storage_disk' => $p->storage_disk,
+                    'original_url' => $p->original_url,
                     // `watermarked_url` / `thumbnail_url` → StorageManager →
                     // presigned URLs on R2/S3, public asset URLs on the
                     // local disk. Both are variant-aware (no leaking originals).
