@@ -114,8 +114,8 @@ $_footerBrandName = $siteName ?: config('app.name');
           <h5 class="font-bold mb-0 text-white text-lg tracking-tight">{{ $_footerBrandName }}</h5>
         </div>
         <p class="text-gray-300/90 mb-4 text-sm leading-relaxed">
-          แพลตฟอร์มซื้อขายรูปงานอีเวนต์อันดับ 1 ในไทย —
-          <span class="text-white font-medium">AI Face Search</span> หาตัวเองใน 3 วินาที, จ่าย <span class="text-white font-medium">PromptPay</span> → รับรูปเข้า <span class="text-white font-medium">LINE</span> ทันที
+          แพลตฟอร์มซื้อขายรูปงานอีเวนต์สำหรับช่างภาพไทย —
+          <span class="text-white font-medium">AI Face Search</span> ค้นหารูปด้วยใบหน้า, จ่าย <span class="text-white font-medium">PromptPay</span> → รับรูปเข้า <span class="text-white font-medium">LINE</span> หลังจ่ายเสร็จ
         </p>
 
         {{-- Trust badges --}}
@@ -185,7 +185,10 @@ $_footerBrandName = $siteName ?: config('app.name');
       <div class="lg:col-span-4">
         <h6 class="font-semibold mb-3 text-white text-sm uppercase tracking-wider">รับข่าวสาร & โปรโมชั่น</h6>
         <p class="text-xs text-gray-400 mb-3 leading-relaxed">
-          อีเวนต์ใหม่ + โปรโมชั่น + เคล็ดลับช่างภาพ — ส่งให้สัปดาห์ละครั้ง ยกเลิกได้ทุกเมื่อ
+          สรุปทุกวันอังคาร — อีเวนต์ใหม่ + โปรโมชั่นที่กำลังใช้งาน + เคล็ดลับ 1 ข้อ
+          <span class="block mt-1 text-gray-500 text-[11px]">
+            ส่งเมื่อมีของใหม่จริง (ไม่มี = ไม่ส่ง) · ต้องยืนยันอีเมลครั้งแรกผ่านลิงก์ที่เราส่งให้ · ยกเลิกได้ทุกเมื่อ
+          </span>
         </p>
         <form method="POST" action="{{ route('newsletter.subscribe') }}" class="mb-5"
               x-data="{ status: 'idle', msg: '' }"

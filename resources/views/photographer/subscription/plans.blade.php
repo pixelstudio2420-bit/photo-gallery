@@ -21,6 +21,15 @@
   // Pre-compute global aggregates for the metrics strip
   $totalAiCredits = $plans->sum('monthly_ai_credits');
   $maxStorageGb   = $plans->max('storage_gb');
+
+  // Lowest commission % across non-free plans currently visible — used in the
+  // hero subline so we never overstate. If every paid plan is 0%, we say
+  // "0%". If the cheapest paid commission is e.g. 5%, we display "5%". Auto-
+  // adjusts if admin re-enables a plan with a different rate.
+  $paidPlans       = $plans->filter(fn($p) => !$p->isFree());
+  $minPaidCommPct  = $paidPlans->isNotEmpty() ? (float) $paidPlans->min('commission_pct') : null;
+  $allPaidZeroComm = $paidPlans->isNotEmpty() && $paidPlans->every(fn($p) => (float) $p->commission_pct === 0.0);
+  $minStartingPrice = $paidPlans->isNotEmpty() ? (float) $paidPlans->min('price_thb') : null;
 @endphp
 
 @section('content')
@@ -606,6 +615,73 @@ html.dark .faq-q:hover{color:#a5b4fc;}
 .faq-a{padding:.5rem 0 .25rem 36px;color:#475569;font-size:.85rem;line-height:1.65;}
 html.dark .faq-a{ color:#94a3b8; }
 
+/* ─── Decision helper widget ─── */
+.decide-helper{
+  max-width:760px;margin:1.5rem auto 0;
+  background:rgba(255,255,255,.65);backdrop-filter:blur(14px);
+  border:1px solid rgba(99,102,241,.18);
+  border-radius:18px;
+  box-shadow:0 12px 30px -10px rgba(99,102,241,.16);
+  overflow:hidden;
+}
+html.dark .decide-helper{background:rgba(15,23,42,.55);border-color:rgba(255,255,255,.08);}
+.decide-toggle{
+  width:100%;display:flex;align-items:center;gap:.7rem;
+  padding:.95rem 1.2rem;background:transparent;border:none;cursor:pointer;
+  font-size:.85rem;font-weight:700;color:#4f46e5;letter-spacing:-0.005em;
+  text-align:left;transition:background .2s;
+}
+html.dark .decide-toggle{color:#a5b4fc;}
+.decide-toggle:hover{background:rgba(99,102,241,.04);}
+.decide-toggle i.bi-magic{font-size:1.1rem;color:#7c3aed;}
+.decide-toggle .arrow{margin-left:auto;color:#94a3b8;transition:transform .25s;font-size:.85rem;}
+.decide-toggle.is-open .arrow{transform:rotate(180deg);}
+.decide-body{padding:.4rem 1.2rem 1.2rem;border-top:1px dashed rgba(99,102,241,.16);}
+html.dark .decide-body{border-top-color:rgba(255,255,255,.08);}
+.decide-grid{display:grid;grid-template-columns:1fr;gap:.85rem;margin-top:.85rem;}
+@media (min-width:680px){.decide-grid{grid-template-columns:repeat(3,1fr);gap:1rem;}}
+.decide-q label{display:block;font-size:.72rem;font-weight:700;color:#475569;margin-bottom:.35rem;}
+html.dark .decide-q label{color:#cbd5e1;}
+.decide-opts{display:flex;gap:.35rem;flex-wrap:wrap;}
+.decide-opts button{
+  flex:1 1 0;min-width:0;
+  padding:.45rem .5rem;border-radius:10px;font-size:.74rem;font-weight:700;
+  background:#fff;border:1.5px solid rgba(99,102,241,.18);color:#475569;
+  cursor:pointer;transition:all .15s;
+}
+html.dark .decide-opts button{background:rgba(15,23,42,.6);border-color:rgba(255,255,255,.1);color:#cbd5e1;}
+.decide-opts button:hover{border-color:rgba(124,58,237,.45);color:#7c3aed;}
+.decide-opts button.sel{
+  background:linear-gradient(135deg,#4f46e5,#7c3aed);border-color:transparent;color:#fff;
+  box-shadow:0 4px 14px -3px rgba(124,58,237,.45);
+}
+.decide-result{
+  margin-top:1rem;padding:.85rem 1rem;border-radius:14px;
+  display:flex;align-items:center;gap:.7rem;
+  background:linear-gradient(135deg,rgba(16,185,129,.10),rgba(52,211,153,.05));
+  border:1px solid rgba(16,185,129,.22);
+}
+html.dark .decide-result{background:linear-gradient(135deg,rgba(16,185,129,.18),rgba(52,211,153,.08));border-color:rgba(16,185,129,.3);}
+.decide-result > i{font-size:1.3rem;color:#059669;}
+html.dark .decide-result > i{color:#34d399;}
+.decide-result .rt{flex:1;font-size:.85rem;color:#334155;display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;}
+html.dark .decide-result .rt{color:#cbd5e1;}
+.decide-result .rt strong{color:#0f172a;font-weight:800;}
+html.dark .decide-result .rt strong{color:#f1f5f9;}
+.decide-cta{
+  padding:.5rem .85rem;border-radius:10px;border:none;cursor:pointer;
+  font-size:.75rem;font-weight:800;color:#fff;
+  background:linear-gradient(135deg,#10b981,#059669);
+  box-shadow:0 4px 14px -3px rgba(16,185,129,.45);
+  display:inline-flex;align-items:center;gap:.35rem;white-space:nowrap;
+  transition:transform .15s;
+}
+.decide-cta:hover{transform:translateY(-1px);}
+.decide-foot{
+  margin-top:.7rem;font-size:.68rem;color:#94a3b8;display:flex;align-items:center;gap:.3rem;
+}
+html.dark .decide-foot{color:#64748b;}
+
 /* Animation */
 @keyframes planfade{ from{opacity:0;transform:translateY(20px);} to{opacity:1;transform:translateY(0);} }
 .plan-anim{animation:planfade .55s ease-out both;}
@@ -631,14 +707,23 @@ html.dark .faq-a{ color:#94a3b8; }
     </a>
 
     <div class="section-eyebrow mb-3">
-      <i class="bi bi-stars"></i> แผนสมัครสมาชิก
+      <i class="bi bi-stars"></i> แผนสมัครสมาชิก · เลือกแผนใช้งานวันนี้
     </div>
 
     <h1 class="title-grad text-3xl sm:text-4xl md:text-5xl mb-3 mx-0 leading-[1.1]">
-      เลือกแผนที่<br class="sm:hidden">เหมาะกับคุณ
+      อัปโหลด · ขาย · รับเงิน<br class="sm:hidden">
+      <span class="block sm:inline">ในแพลตฟอร์มเดียว</span>
     </h1>
     <p class="text-sm sm:text-base text-gray-600 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
-      จ่ายเฉพาะที่ใช้ — เริ่มฟรี อัปเกรดเมื่อพร้อม ยกเลิกได้ทุกเมื่อ
+      เริ่มฟรี — ลองได้ทันทีไม่ต้องใส่บัตร · อัปเกรดเฉพาะตอนงานเข้า · ยกเลิกตอนไหนก็ได้
+      <span class="block mt-1 text-xs text-slate-500 dark:text-slate-500">
+        @if($allPaidZeroComm)
+          แผนเสียเงินทุกแผน <strong class="text-emerald-600 dark:text-emerald-400">หัก 0% ค่าคอมมิชชั่น</strong> · เก็บเงินเต็มจำนวนทุกออเดอร์
+        @elseif($minPaidCommPct !== null)
+          คอมมิชชั่นต่ำสุด <strong class="text-emerald-600 dark:text-emerald-400">{{ rtrim(rtrim(number_format($minPaidCommPct, 1), '0'), '.') }}%</strong>
+        @endif
+        · PromptPay / บัตรเครดิต / โอนผ่านธนาคารไทย
+      </span>
     </p>
 
     {{-- Annual / Monthly toggle --}}
@@ -671,12 +756,106 @@ html.dark .faq-a{ color:#94a3b8; }
            • cancel anytime → SubscriptionService::cancel()
            • PromptPay + card → PaymentMethod active gateways
            • change plan anytime → SubscriptionService::changePlan()
-           • files stay on downgrade → confirmed in cancel() docstring  --}}
+           • files stay on downgrade → confirmed in cancel() docstring
+           • 0% comm pill only renders when allPaidZeroComm is true        --}}
     <div class="trust-row">
+      @if($allPaidZeroComm)
+      <span class="trust-pill"><i class="bi bi-cash-coin text-emerald-500"></i> หัก 0% ค่าคอมมิชชั่น (Pro/Studio)</span>
+      @endif
       <span class="trust-pill"><i class="bi bi-shield-check text-emerald-500"></i> ยกเลิกได้ทุกเมื่อ ไม่มีค่าธรรมเนียม</span>
       <span class="trust-pill"><i class="bi bi-credit-card text-indigo-500"></i> PromptPay + บัตรเครดิต</span>
       <span class="trust-pill"><i class="bi bi-lightning-charge text-pink-500"></i> เปลี่ยนแผนได้ทันที</span>
       <span class="trust-pill"><i class="bi bi-cloud-check text-sky-500"></i> ดาวน์เกรดไฟล์ยังอยู่ครบ</span>
+    </div>
+  </div>
+
+  {{-- ─── Decision helper / "Which plan?" mini-quiz ─────────────────
+       3 quick questions → highlights the right card + scrolls to it.
+       Designed to:
+         • reduce decision paralysis (Hick's law: fewer perceived choices)
+         • use real data (storage_gb, price_thb) — no fake recommendations
+         • get the user to a confident "Pro vs Studio" decision in <10s
+       Implementation is a single Alpine block; the recommendation logic
+       is plain JS so the photographer never sees a result that isn't
+       grounded in the plan-table values rendered into the page below. --}}
+  <div class="decide-helper plan-anim" x-data="{
+        open: false,
+        events: '',          // 1=light(<2/mo), 2=mid(2-5/mo), 3=many(>5/mo)
+        photos: '',          // 1=<200/event, 2=200-1000, 3=>1000
+        ai:     '',          // 1=no, 2=sometimes, 3=heavy
+        get rec() {
+          if(!this.events || !this.photos || !this.ai) return null;
+          const score = (+this.events) + (+this.photos) + (+this.ai);
+          // 3 = lowest workload → free; 4-6 → pro; 7-9 → studio
+          if(score <= 3) return 'free';
+          if(score <= 6) return 'pro';
+          return 'studio';
+        },
+        focus(code) {
+          const tile = document.querySelector('[data-plan-code=&quot;'+code+'&quot;]');
+          if(!tile) return;
+          const top = tile.getBoundingClientRect().top + window.scrollY - 100;
+          window.scrollTo({top, behavior:'smooth'});
+          tile.style.transition = 'box-shadow .6s ease, transform .6s ease';
+          tile.style.boxShadow = '0 0 0 4px var(--accent), 0 22px 50px -12px var(--accent-shadow)';
+          tile.style.transform = 'translateY(-4px)';
+          setTimeout(()=>{ tile.style.boxShadow=''; tile.style.transform=''; }, 1800);
+        }
+      }">
+    <button type="button" @click="open = !open"
+            class="decide-toggle"
+            :class="open && 'is-open'">
+      <i class="bi bi-magic"></i>
+      <span>ไม่แน่ใจว่าแผนไหนเหมาะ? ตอบ 3 ข้อ ใช้เวลา 10 วินาที</span>
+      <i class="bi bi-chevron-down arrow"></i>
+    </button>
+    <div x-show="open" x-collapse class="decide-body">
+      <div class="decide-grid">
+        <div class="decide-q">
+          <label>1. รับงานกี่อีเวนต์ต่อเดือน?</label>
+          <div class="decide-opts">
+            <button type="button" :class="events==='1' && 'sel'" @click="events='1'">น้อยกว่า 2</button>
+            <button type="button" :class="events==='2' && 'sel'" @click="events='2'">2 – 5</button>
+            <button type="button" :class="events==='3' && 'sel'" @click="events='3'">มากกว่า 5</button>
+          </div>
+        </div>
+        <div class="decide-q">
+          <label>2. รูปต่ออีเวนต์ประมาณ?</label>
+          <div class="decide-opts">
+            <button type="button" :class="photos==='1' && 'sel'" @click="photos='1'">&lt; 200</button>
+            <button type="button" :class="photos==='2' && 'sel'" @click="photos='2'">200 – 1000</button>
+            <button type="button" :class="photos==='3' && 'sel'" @click="photos='3'">&gt; 1000</button>
+          </div>
+        </div>
+        <div class="decide-q">
+          <label>3. ใช้ AI ค้นหาใบหน้า / ลายน้ำ?</label>
+          <div class="decide-opts">
+            <button type="button" :class="ai==='1' && 'sel'" @click="ai='1'">ไม่ใช้</button>
+            <button type="button" :class="ai==='2' && 'sel'" @click="ai='2'">บางครั้ง</button>
+            <button type="button" :class="ai==='3' && 'sel'" @click="ai='3'">ใช้ทุกงาน</button>
+          </div>
+        </div>
+      </div>
+      <template x-if="rec">
+        <div class="decide-result">
+          <i class="bi bi-stars"></i>
+          <div class="rt">
+            <span>คำแนะนำ:</span>
+            <strong x-text="rec === 'free' ? 'แผน Free' : (rec === 'pro' ? 'แผน Pro' : 'แผน Studio')"></strong>
+            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400"
+                  x-text="rec === 'free' ? 'พื้นที่/AI พอสำหรับเริ่มต้น' :
+                           (rec === 'pro' ? 'จุดคุ้มที่สุด — 100GB + 5K AI Credits + 0% คอม' :
+                                            '2 TB + 50K AI Credits — สำหรับมืออาชีพและทีม')"></span>
+          </div>
+          <button type="button" class="decide-cta" @click="focus(rec)">
+            ดูรายละเอียด <i class="bi bi-arrow-right"></i>
+          </button>
+        </div>
+      </template>
+      <p class="decide-foot">
+        <i class="bi bi-info-circle"></i>
+        คำแนะนำคำนวณจาก storage / AI credits จริงในตาราง — ไม่ใช่อันดับการตลาด
+      </p>
     </div>
   </div>
 

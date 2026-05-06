@@ -235,6 +235,22 @@ Schedule::command('digest:send-weekly')
     ->withoutOverlapping()
     ->runInBackground();
 
+// ── Anonymous subscriber weekly digest ────────────────────────────
+// Distinct from the per-province digest above — that one targets
+// logged-in auth_users; this one targets the public newsletter list
+// (marketing_subscribers table). Sent Tuesday 10:00 to deliberately
+// stagger from the province digest, so anyone on BOTH lists doesn't
+// get two emails in 24h. Body is province-agnostic:
+//   • New events published in past 7 days (≤6 items)
+//   • Active site-wide promo coupons (≤3, expiring-soonest first)
+//   • One rotating photographer/buyer tip (rotates by ISO week)
+// Auto-skips the entire send when there's no event AND no promo
+// (a tip alone isn't enough — we don't fill inboxes for low value).
+Schedule::command('subscribers:send-weekly')
+    ->weeklyOn(2, '10:00')   // 2 = Tuesday
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Warn photographers 24h before their events are auto-deleted.
 // Runs FIRST (02:00) so warnings are sent before the purge at 02:30.
 // No-ops silently if retention_warning_enabled=0.

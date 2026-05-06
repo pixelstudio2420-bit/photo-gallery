@@ -626,7 +626,7 @@
     @endif
 
     @if($can('payment_methods'))
-    @php $payOpen = request()->routeIs('admin.payments.methods') || request()->routeIs('admin.payments.banks') || request()->routeIs('admin.payments.payouts') || request()->routeIs('admin.payments.payouts.automation*'); @endphp
+    @php $payOpen = request()->routeIs('admin.payments.methods') || request()->routeIs('admin.payments.banks') || request()->routeIs('admin.payments.payouts') || request()->routeIs('admin.payments.payouts.automation*') || request()->routeIs('admin.payment-readiness.*'); @endphp
     <div x-data="{ open: {{ $payOpen ? 'true' : 'false' }} }">
       <button class="{{ $linkCls }} w-full {{ $payOpen ? '!text-white !bg-indigo-500/10' : '' }}"
         @click="open = !open" type="button"
@@ -636,6 +636,7 @@
         <i class="{{ $chevronCls }}" :class="{ '!rotate-90 !opacity-80': open }" x-show="!sidebarCollapsed"></i>
       </button>
       <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="pb-1">
+        <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.payment-readiness.*') ? $sublinkActive : '' }}" href="{{ route('admin.payment-readiness.index') }}">🩺 Readiness Check</a>
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.payments.methods') ? $sublinkActive : '' }}" href="{{ route('admin.payments.methods') }}">วิธีชำระเงิน</a>
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.payments.banks') ? $sublinkActive : '' }}" href="{{ route('admin.payments.banks') }}">บัญชีธนาคาร</a>
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.payments.payouts') ? $sublinkActive : '' }}" href="{{ route('admin.payments.payouts') }}">โอนเงินช่างภาพ</a>

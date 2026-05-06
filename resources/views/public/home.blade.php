@@ -25,28 +25,33 @@
   <div class="max-w-7xl mx-auto px-4 relative py-12 md:py-16">
     <div class="grid grid-cols-1 lg:grid-cols-12 items-center gap-8 py-4">
       <div class="lg:col-span-7 relative z-[1]">
-        {{-- Badge --}}
+        {{-- Badge — outcome-focused promise, not unverifiable ranking.
+             Old copy claimed "อันดับ 1 ในไทย" which we cannot verify; the
+             new badge states what we actually do that nobody else does
+             clearly: AI face search → instant download. --}}
         <span class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md border bg-white/70 dark:bg-white/10 border-indigo-200/60 dark:border-white/10 text-indigo-700 dark:text-indigo-200 shadow-sm mb-5">
           <span class="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse"></span>
-          แพลตฟอร์มภาพอีเวนต์ อันดับ 1 ในไทย
+          AI ค้นหาใบหน้า · จ่ายผ่าน PromptPay · ดาวน์โหลดทันที
         </span>
 
-        {{-- Headline --}}
+        {{-- Headline — concrete outcome ("เจอรูปของคุณภายในไม่กี่วินาที"),
+             paired with a specific delivery promise ("ดาวน์โหลดทันที"). --}}
         <h1 class="font-extrabold mb-5 text-4xl sm:text-5xl lg:text-6xl xl:text-7xl leading-[1.15] tracking-tight">
           <span class="block bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 dark:from-indigo-300 dark:via-violet-300 dark:to-fuchsia-300 bg-clip-text text-transparent">
-            ค้นหาและซื้อรูปภาพ
+            เจอรูปของคุณ
           </span>
           <span class="block bg-gradient-to-br from-pink-500 via-rose-500 to-orange-400 dark:from-pink-400 dark:via-rose-300 dark:to-amber-300 bg-clip-text text-transparent">
-            จากงานอีเวนต์ของคุณ
+            ภายในไม่กี่วินาที
           </span>
           <span class="block mt-2 text-slate-800 dark:text-white text-2xl sm:text-3xl lg:text-4xl font-bold">
-            คุณภาพระดับมืออาชีพ
+            ด้วย AI ค้นหาใบหน้า
             <i class="bi bi-stars text-amber-500 dark:text-amber-300"></i>
           </span>
         </h1>
 
         <p class="mb-6 text-base sm:text-lg text-slate-600 dark:text-slate-300/80 max-w-xl" style="line-height:1.7;">
-          เรียกดูและซื้อภาพถ่ายจากงานอีเวนต์ต่างๆ ได้ง่ายดาย รวดเร็ว พร้อมดาวน์โหลดทันทีที่ชำระเงิน
+          อัปโหลดเซลฟี่ครั้งเดียว ระบบจะหารูปคุณจากงานทุกภาพให้
+          จ่ายแล้วได้ลิงก์ดาวน์โหลดทันทีในอีเมล — ไฟล์เต็มคุณภาพ ไม่มีลายน้ำ
         </p>
 
         {{-- Search --}}
@@ -87,7 +92,7 @@
             <div class="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md mb-2">
               <i class="bi bi-calendar-event text-sm"></i>
             </div>
-            <div class="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white leading-none hero-stat-number">{{ $categories->sum('events_count') ?? 0 }}+</div>
+            <div class="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white leading-none hero-stat-number">{{ $categories->sum('events_count') ?? 0 }}</div>
             <div class="text-[11px] sm:text-xs font-medium text-slate-500 dark:text-slate-300/70 mt-1 uppercase tracking-wider">อีเวนต์</div>
           </div>
           {{-- Photographers --}}
@@ -508,10 +513,17 @@
   {{-- Buyer flow --}}
   <div x-show="role === 'buyer'" x-transition class="grid grid-cols-1 md:grid-cols-3 gap-5">
     @php
+      // Buyer "3 steps" — every claim must reflect actual flow:
+      //   1. Search/Face Search → SearchController + FaceSearchService
+      //   2. Payment → Omise (cards) / PromptPay QR / slip upload
+      //      (slip auto-verify via SlipOK is OFF by default; admin
+      //      enables per-environment, so we don't promise "instant").
+      //   3. Delivery → DeliverOrderViaLineJob (when LINE bound) +
+      //      email link via OrderController::download (always).
       $buyerSteps = [
-        ['n' => '1', 'icon' => 'search', 'title' => 'ค้นหารูปงานคุณ', 'desc' => 'พิมพ์ชื่ออีเวนต์ หรือใช้ AI Face Search อัพโหลดรูปตัวเอง — ระบบหาให้ใน 3 วินาที'],
-        ['n' => '2', 'icon' => 'qr-code', 'title' => 'จ่ายผ่าน PromptPay', 'desc' => 'สแกน QR + แนบสลิป — ระบบ AI ตรวจสลิปอัตโนมัติใน 3 วินาที'],
-        ['n' => '3', 'icon' => 'line', 'title' => 'รับรูปเข้า LINE', 'desc' => 'ภายใน 30 วินาทีหลังจ่าย ภาพต้นฉบับเข้า LINE คุณทันที — ดาวน์โหลดได้ตลอด'],
+        ['n' => '1', 'icon' => 'search', 'title' => 'ค้นหารูปงานคุณ', 'desc' => 'พิมพ์ชื่ออีเวนต์ หรือใช้ AI Face Search ผ่าน AWS Rekognition — อัปโหลดเซลฟี่ระบบหาให้'],
+        ['n' => '2', 'icon' => 'qr-code', 'title' => 'จ่ายผ่าน PromptPay / บัตร', 'desc' => 'สแกน QR หรือใช้บัตรเครดิต · โอนผ่านธนาคารแล้วอัปโหลดสลิปก็ได้'],
+        ['n' => '3', 'icon' => 'line', 'title' => 'รับลิงก์ดาวน์โหลด', 'desc' => 'ได้ลิงก์ดาวน์โหลดในอีเมลทันที · เข้า LINE อัตโนมัติถ้าผูก LINE ไว้ · ไฟล์เต็มไม่มีลายน้ำ'],
       ];
     @endphp
     @foreach($buyerSteps as $step)

@@ -25,9 +25,9 @@
     @elseif($variant === 'footer')
         <div {{ $attributes->merge(['class' => 'w-full']) }}>
             <h3 class="text-sm font-bold text-white mb-2">
-                <i class="bi bi-envelope-heart text-pink-400"></i> {{ $heading ?? 'รับข่าวสาร + promotion' }}
+                <i class="bi bi-envelope-heart text-pink-400"></i> {{ $heading ?? 'รับข่าวสาร & โปรโมชั่น' }}
             </h3>
-            <p class="text-xs text-slate-400 mb-3">{{ $body ?? 'สมัครรับจดหมายข่าว — ไม่มี spam' }}</p>
+            <p class="text-xs text-slate-400 mb-3">{{ $body ?? 'สรุปทุกวันอังคาร เมื่อมีอีเวนต์ใหม่หรือโปรโมชั่น · ยกเลิกได้ทุกเมื่อ' }}</p>
             <form method="POST" action="{{ route('newsletter.subscribe') }}" class="flex gap-2">
                 @csrf
                 <input type="hidden" name="source" value="footer">
@@ -47,10 +47,10 @@
         <div {{ $attributes->merge(['class' => 'rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 p-6']) }}>
             <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
                 <i class="bi bi-envelope-heart text-pink-500"></i>
-                {{ $heading ?? 'รับข่าวสาร + ส่วนลด' }}
+                {{ $heading ?? 'รับข่าวสาร & โปรโมชั่น' }}
             </h3>
             <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">
-                {{ $body ?? 'สมัครรับจดหมายข่าวรายเดือน — ได้รับ promotion, tips, และข่าวใหม่ก่อนใคร' }}
+                {{ $body ?? 'สรุปทุกวันอังคาร — อีเวนต์ใหม่ + โปรโมชั่นที่กำลังใช้งาน + เคล็ดลับ 1 ข้อ · ส่งเมื่อมีของใหม่จริง (ไม่มี = ไม่ส่ง)' }}
             </p>
             <form method="POST" action="{{ route('newsletter.subscribe') }}" class="space-y-3">
                 @csrf

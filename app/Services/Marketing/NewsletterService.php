@@ -186,11 +186,15 @@ HTML;
         $name = e($sub->name ?: 'คุณ');
         $app  = e(config('app.name'));
         $unsub = route('newsletter.unsubscribe', ['email' => $sub->email]);
+        // Cadence statement matches the actual cron in routes/console.php:
+        //   subscribers:send-weekly → Tuesdays 10:00, auto-skipped on
+        //   weeks with no fresh events + no active promotions.
         return <<<HTML
 <div style="font-family:Arial,sans-serif;max-width:580px;margin:0 auto;padding:24px;color:#111">
     <h2>ยินดีต้อนรับ {$name} 🎉</h2>
     <p>ตอนนี้คุณได้เข้าร่วมจดหมายข่าวของ <strong>{$app}</strong> เรียบร้อย</p>
-    <p>เราจะส่งข่าวสาร promotion + content คุณภาพให้เดือนละ 1-2 ครั้ง</p>
+    <p>เราจะสรุปอีเวนต์ใหม่ + โปรโมชั่น + เคล็ดลับ 1 ข้อ ส่งให้ทุกวันอังคาร —
+    ถ้าสัปดาห์ไหนไม่มีของใหม่จริงๆ เราจะข้ามไป ไม่ส่งอีเมลเปล่า</p>
     <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
     <p style="font-size:12px;color:#999">ไม่อยากรับอีเมล? <a href="{$unsub}">ยกเลิกการรับอีเมลที่นี่</a></p>
 </div>

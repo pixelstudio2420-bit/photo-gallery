@@ -23,12 +23,24 @@
 @endphp
 
 @section('content')
+@php
+  // Hero CTA copy adapts to plan state — Free sees a punchy "เริ่มขายเลย",
+  // existing paying users see neutral "เปลี่ยน/อัปเกรดแผน". The CTA always
+  // routes to the plan picker; the label difference is purely psychological
+  // (action verb for cold visitors, neutral for warm ones).
+  $heroCta = $isFree
+    ? '<a href="'.route('photographer.subscription.plans').'" class="pg-btn-primary"><i class="bi bi-rocket-takeoff"></i> เลือกแผนเริ่มขายวันนี้</a>'
+    : '<a href="'.route('photographer.subscription.plans').'" class="pg-btn-primary"><i class="bi bi-arrow-up-circle"></i> เปลี่ยน / อัปเกรดแผน</a>';
+  $heroSubtitle = $isFree
+    ? 'อยู่ในแผน Free — อัปโหลดได้ '.number_format($summary['storage_quota_gb'], 0).' GB · หัก '.rtrim(rtrim(number_format((float)($summary['commission_pct'] ?? 0), 1), '0'), '.').'% ทุกออเดอร์ · อัปเกรดเพื่อปลดล็อกค่าคอมต่ำลง + พื้นที่เพิ่ม'
+    : 'พื้นที่จัดเก็บ · ค่าคอมมิชชั่น · ฟีเจอร์ AI ที่ปลดล็อก';
+@endphp
 @include('photographer.partials.page-hero', [
   'icon'     => 'bi-stars',
   'eyebrow'  => 'บริการเสริม',
   'title'    => 'แผนสมัครสมาชิกของฉัน',
-  'subtitle' => 'พื้นที่จัดเก็บ · ค่าคอมมิชชั่น · ฟีเจอร์ AI ที่ปลดล็อก',
-  'actions'  => '<a href="'.route('photographer.subscription.plans').'" class="pg-btn-primary"><i class="bi bi-arrow-up-circle"></i> '.($isFree ? 'ดูแผนทั้งหมด' : 'เปลี่ยน / อัปเกรดแผน').'</a>',
+  'subtitle' => $heroSubtitle,
+  'actions'  => $heroCta,
 ])
 
 @if(session('success'))
@@ -277,6 +289,84 @@
     @endforeach
   </div>
 </div>
+
+{{-- ─────────────────── Free-plan upgrade nudge ─────────────────────────
+     Renders only for Free users. Numbers below pull straight from the
+     SubscriptionPlan table — no marketing claims, every value is the
+     actual delta the photographer would unlock. The upgrade target is
+     the next public paid plan ordered by price (typically Pro/Lite),
+     so we always recommend the lowest-cost upgrade path.
+     ─────────────────────────────────────────────────────────────────── --}}
+@if($isFree)
+  @php
+    $upgradeTarget = \App\Models\SubscriptionPlan::active()->public()
+      ->where('price_thb', '>', 0)
+      ->orderBy('price_thb', 'asc')
+      ->first();
+  @endphp
+  @if($upgradeTarget)
+    @php
+      $deltaStorage = max(0, (int) $upgradeTarget->storage_gb - (int) ($summary['storage_quota_gb'] ?? 0));
+      $deltaAi      = max(0, (int) $upgradeTarget->monthly_ai_credits - (int) ($summary['ai_credits_cap'] ?? 0));
+      $deltaCommPp  = (float) ($summary['commission_pct'] ?? 0) - (float) $upgradeTarget->commission_pct;
+    @endphp
+    <div class="mb-6 rounded-2xl overflow-hidden relative shadow-lg shadow-indigo-900/10"
+         style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 50%,#ec4899 100%);">
+      <div class="absolute inset-0 opacity-30 pointer-events-none"
+           style="background:radial-gradient(800px 400px at 90% 0%, rgba(255,255,255,.18), transparent 60%);"></div>
+      <div class="relative p-5 sm:p-6 text-white">
+        <div class="flex items-start justify-between gap-3 flex-wrap">
+          <div class="flex-1 min-w-[240px]">
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-sm text-[10px] font-bold uppercase tracking-[0.14em] mb-3">
+              <i class="bi bi-stars"></i> อัปเกรดได้ทันที
+            </div>
+            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight leading-tight">
+              ขยับมา <span class="text-amber-200">{{ $upgradeTarget->name }}</span> วันนี้ —
+              <span class="block sm:inline">ปลดล็อกแบบนี้</span>
+            </h3>
+            <p class="text-white/80 text-sm mt-1.5">
+              เริ่มต้น ฿{{ number_format((float) $upgradeTarget->price_thb, 0) }}/เดือน
+              · ยกเลิกได้ทุกเมื่อ · ดาวน์เกรดไฟล์ยังอยู่ครบ
+            </p>
+          </div>
+          <a href="{{ route('photographer.subscription.plans') }}"
+             class="inline-flex items-center gap-2 bg-white text-indigo-700 hover:bg-indigo-50 font-bold text-sm px-5 py-2.5 rounded-xl shadow-lg transition-transform hover:-translate-y-0.5">
+            ดูแผนทั้งหมด <i class="bi bi-arrow-right"></i>
+          </a>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
+          @if($deltaStorage > 0)
+          <div class="rounded-xl bg-white/10 backdrop-blur-sm p-3 border border-white/10">
+            <p class="text-[10px] uppercase tracking-wider text-white/70 font-bold">+ พื้นที่เก็บภาพ</p>
+            <p class="text-2xl font-extrabold mt-0.5">+{{ number_format($deltaStorage) }} <span class="text-sm font-semibold">GB</span></p>
+            <p class="text-[11px] text-white/70 mt-0.5">รวม {{ number_format($upgradeTarget->storage_gb) }} GB</p>
+          </div>
+          @endif
+          @if($deltaCommPp > 0)
+          <div class="rounded-xl bg-white/10 backdrop-blur-sm p-3 border border-white/10">
+            <p class="text-[10px] uppercase tracking-wider text-white/70 font-bold">– ค่าคอมมิชชั่น</p>
+            <p class="text-2xl font-extrabold mt-0.5">−{{ rtrim(rtrim(number_format($deltaCommPp, 1), '0'), '.') }}<span class="text-sm font-semibold">pp</span></p>
+            <p class="text-[11px] text-white/70 mt-0.5">เหลือ {{ rtrim(rtrim(number_format((float) $upgradeTarget->commission_pct, 1), '0'), '.') }}% ทุกออเดอร์</p>
+          </div>
+          @endif
+          @if($deltaAi > 0)
+          <div class="rounded-xl bg-white/10 backdrop-blur-sm p-3 border border-white/10">
+            <p class="text-[10px] uppercase tracking-wider text-white/70 font-bold">+ AI Credits / เดือน</p>
+            <p class="text-2xl font-extrabold mt-0.5">+{{ number_format($deltaAi) }}</p>
+            <p class="text-[11px] text-white/70 mt-0.5">ค้นหาหน้า / ลายน้ำ / OCR</p>
+          </div>
+          @endif
+        </div>
+
+        <p class="text-[11px] text-white/65 mt-3 flex items-center gap-1.5">
+          <i class="bi bi-info-circle"></i>
+          ตัวเลขทั้งหมดอ่านจากตาราง subscription_plans จริง — ไม่ได้สร้างขึ้นเพื่อโฆษณา
+        </p>
+      </div>
+    </div>
+  @endif
+@endif
 
 {{-- ─────────────────── Action Buttons ─────────────────── --}}
 @if(!$isFree)

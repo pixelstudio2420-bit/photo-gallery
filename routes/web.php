@@ -965,6 +965,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/bulk', [\App\Http\Controllers\Admin\CommissionController::class, 'bulkUpdate'])->name('bulk.update');
         });
 
+        // Payment readiness — diagnostic page answering "ระบบซื้อแผนใช้งาน
+        // ได้แล้วใช่ไหม?" with a traffic-light checklist + per-gateway
+        // status. The /health endpoint returns 200/503 for uptime probes.
+        // Routes registered OUTSIDE the payments. group so they get short
+        // names admin.payment-readiness.* — easy to remember.
+        Route::prefix('payment-readiness')->name('payment-readiness.')->group(function () {
+            Route::get('/',       [\App\Http\Controllers\Admin\PaymentReadinessController::class, 'index'])->name('index');
+            Route::get('/health', [\App\Http\Controllers\Admin\PaymentReadinessController::class, 'health'])->name('health');
+        });
+
         // Payments
         Route::prefix('payments')->name('payments.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\PaymentController::class, 'index'])->name('index');

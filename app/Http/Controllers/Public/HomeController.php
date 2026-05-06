@@ -162,8 +162,8 @@ class HomeController extends Controller
         try {
             $seo = app(\App\Services\SeoService::class);
             $seo->set([
-                'title'       => 'เริ่มขายรูปออนไลน์ — 0% commission · ส่งเข้า LINE อัตโนมัติ',
-                'description' => 'แพลตฟอร์มขายรูปอีเวนต์สำหรับช่างภาพไทย — AI Face Search, ส่งเข้า LINE หลังจ่ายเงิน, e-Tax, auto-payout, 0% commission',
+                'title'       => 'เริ่มขายรูปออนไลน์ — 0% คอมมิชชั่นบนแผน Pro/Studio · ส่งเข้า LINE อัตโนมัติ',
+                'description' => 'แพลตฟอร์มขายรูปอีเวนต์สำหรับช่างภาพไทย — AI Face Search ผ่าน AWS Rekognition, ส่งเข้า LINE หลังจ่ายเงิน, แจ้งถอนเข้าบัญชีไทย, 0% ค่าคอมมิชชั่นบนแผน Pro/Studio',
             ])->setBreadcrumbs([
                 ['name' => 'หน้าแรก', 'url' => route('home')],
                 ['name' => 'สำหรับช่างภาพ'],

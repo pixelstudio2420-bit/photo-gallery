@@ -254,8 +254,8 @@
                 <i class="bi bi-cash-coin"></i>
               </div>
               <div class="min-w-0">
-                <div class="text-strong font-bold text-sm">0% commission · auto-payout</div>
-                <div class="text-muted text-xs leading-relaxed">เก็บเต็ม 100% ใน paid tier · จ่ายเข้าบัญชีอัตโนมัติทุกวันจันทร์</div>
+                <div class="text-strong font-bold text-sm">0% คอม · แจ้งถอนเข้าบัญชีไทย</div>
+                <div class="text-muted text-xs leading-relaxed">แผน Pro/Studio: 0% ค่าคอมมิชชั่น · แจ้งถอนได้เมื่อยอดถึงขั้นต่ำ · โอนเข้าบัญชีไทยตามรอบ</div>
               </div>
             </div>
           </div>

@@ -274,10 +274,10 @@
                 <i class="bi bi-shield-check"></i>การรับประกันลูกค้า
               </p>
               <ul class="text-sm text-blue-800/80 dark:text-blue-300/80 space-y-1 list-disc list-inside">
-                <li>AI ตรวจสลิปอัตโนมัติ — ระบบไม่รับสลิปปลอม</li>
-                <li>ส่งรูปเข้า LINE อัตโนมัติหลังจ่าย — ไม่ต้องรอช่างภาพ</li>
-                <li>แชทกับช่างภาพได้ตรงในระบบก่อนตัดสินใจ</li>
-                <li>Money-back นโยบายตามแต่ละช่างภาพกำหนด — ดูในหน้าจอง</li>
+                <li>ระบบตรวจสลิปอัตโนมัติ (เปิด/ปิดได้) ลดโอกาสรับสลิปปลอม</li>
+                <li>ส่งรูปเข้า LINE หลังจ่ายอัตโนมัติ ถ้าช่างภาพเปิดใช้งาน</li>
+                <li>แชทกับช่างภาพได้ตรงในระบบก่อนตัดสินใจ (ตามแผนของช่างภาพ)</li>
+                <li>นโยบายขอคืนเงินตรวจตามเงื่อนไขจริง — ดูใน FAQ ของหน้าออเดอร์</li>
               </ul>
             </div>
 
@@ -326,18 +326,25 @@
           </thead>
           <tbody>
             @php
+              // Comparison rows: every "true" claim here must be backed
+              // by a real feature flag or service. Removed:
+              //   • "ใบเสร็จ/e-Tax อัตโนมัติ" — replaced with the real
+              //     online receipt feature (no formal e-Tax issuance).
+              //   • "ลูกค้าใหม่จากระบบ ✅ จัดให้" — we don't actively
+              //     route customers to specific photographers; replaced
+              //     with the marketplace placement reality.
               $rows = [
-                ['AI Face Search', true, false, false],
-                ['ระบบจองอัตโนมัติ', true, false, false],
+                ['AI Face Search (AWS Rekognition)', true, false, false],
+                ['ระบบจองล่วงหน้า', true, false, false],
                 ['LINE reminder กันลูกค้าลืม', true, false, false],
-                ['AI ตรวจสลิปอัตโนมัติ', true, false, false],
+                ['ตรวจสลิปอัตโนมัติ (เปิด/ปิดได้)', true, false, false],
                 ['ส่งรูปเข้า LINE หลังจ่าย', true, false, false],
                 ['Watermark + ป้องกันรูปขโมย', true, false, false],
-                ['ใบเสร็จ/e-Tax อัตโนมัติ', true, false, false],
+                ['ใบเสร็จออนไลน์ทุกออเดอร์', true, false, false],
                 ['SEO Profile (ติด Google)', true, false, true],
                 ['Boost / โปรโมต', true, true, true],
-                ['ค่าธรรมเนียม', '0% (Pro/Studio)', 'ฟรี', 'ฟรี'],
-                ['ลูกค้าใหม่จากระบบ', '✅ จัดให้', '❌ หาเอง', '❌ หาเอง'],
+                ['ค่าคอมมิชชั่น', '0% (Pro/Studio)', 'มี (ตามรอบ)', 'ตาม Marketplace'],
+                ['ปรากฏในผลค้นหา / หมวดหมู่', '✅ ติด featured ได้', '✅ ติดได้', '✅ ติดได้'],
               ];
             @endphp
             @foreach($rows as $i => $row)

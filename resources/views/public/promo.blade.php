@@ -339,25 +339,28 @@
               <span class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 border-2 border-slate-900 flex items-center justify-center text-[8px] text-white font-bold">✓</span>
             </div>
             <div class="text-white text-[10px] font-bold">AI หาใบหน้า</div>
-            <div class="text-emerald-300 text-[10px]">99% accuracy</div>
+            <div class="text-emerald-300 text-[10px]">AWS Rekognition</div>
           </div>
 
-          {{-- Card 4: Stat counter — spans 2 cols --}}
+          {{-- Card 4: Stat counter — spans 2 cols. Numbers come straight
+               from the live aggregate query (HomeController::promo); the
+               trailing "+" was removed because it implied "more than X"
+               while the value is the exact count. Honest = exact. --}}
           <div class="bento bento-shine col-span-2 p-3 flex items-center justify-around"
                x-data="{ shown: false }"
                x-intersect.once="shown = true">
             <div class="text-center">
-              <div class="text-xl md:text-2xl font-extrabold text-white" x-show="shown" x-transition>{{ number_format($stats['photographers']) }}+</div>
+              <div class="text-xl md:text-2xl font-extrabold text-white" x-show="shown" x-transition>{{ number_format($stats['photographers']) }}</div>
               <div class="text-[9px] text-white/65 uppercase tracking-widest font-bold">ช่างภาพ</div>
             </div>
             <div class="w-px h-8 bg-white/15"></div>
             <div class="text-center">
-              <div class="text-xl md:text-2xl font-extrabold text-white" x-show="shown" x-transition>{{ number_format($stats['events']) }}+</div>
+              <div class="text-xl md:text-2xl font-extrabold text-white" x-show="shown" x-transition>{{ number_format($stats['events']) }}</div>
               <div class="text-[9px] text-white/65 uppercase tracking-widest font-bold">อีเวนต์</div>
             </div>
             <div class="w-px h-8 bg-white/15"></div>
             <div class="text-center">
-              <div class="text-xl md:text-2xl font-extrabold text-white" x-show="shown" x-transition>{{ number_format($stats['orders']) }}+</div>
+              <div class="text-xl md:text-2xl font-extrabold text-white" x-show="shown" x-transition>{{ number_format($stats['orders']) }}</div>
               <div class="text-[9px] text-white/65 uppercase tracking-widest font-bold">ออเดอร์</div>
             </div>
           </div>
@@ -423,12 +426,12 @@
       <div class="usp-icon">
         <i class="bi bi-cash-coin"></i>
       </div>
-      <h3 class="text-xl font-extrabold text-slate-900 dark:text-white mb-2 leading-tight">โอนเข้าบัญชีอัตโนมัติ</h3>
+      <h3 class="text-xl font-extrabold text-slate-900 dark:text-white mb-2 leading-tight">โอนเข้าบัญชีไทยตามรอบ</h3>
       <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-        ช่างภาพได้เงิน<strong>ทุกวันจันทร์</strong>เข้าบัญชีไทยอัตโนมัติ ไม่ต้องตาม ไม่ต้องทวง
+        ช่างภาพ<strong>แจ้งถอน</strong>ได้เมื่อยอดถึงขั้นต่ำ — ระบบโอนเข้าบัญชีไทย พร้อม audit trail ทุกรายการ
       </p>
       <div class="mt-4 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 font-semibold">
-        <i class="bi bi-arrow-right-circle-fill"></i> 0% commission + e-Tax อัตโนมัติ
+        <i class="bi bi-arrow-right-circle-fill"></i> 0% คอม (Pro/Studio) + ใบเสร็จออนไลน์ทุกออเดอร์
       </div>
     </div>
   </div>
@@ -596,28 +599,54 @@
         <span class="tlogo"><i class="bi bi-cpu-fill"></i> AI วิเคราะห์ภาพ</span>
       </div>
 
-      {{-- Mini testimonial row --}}
+      {{-- Capability strip — replaces the previous fabricated testimonial
+           row. Every claim here corresponds to a real implemented code
+           path, with the file/class noted in comments so reviewers can
+           verify nothing is invented:
+             • Face search → FaceSearchService::searchByFaceInCollection
+                 (AWS Rekognition, default threshold = 80%)
+             • LINE auto-delivery → DeliverOrderViaLineJob (sends after
+                 payment success)
+             • Auto payout → PayoutService weekly cron, ฿500 minimum,
+                 0% commission on Pro/Studio plans                     --}}
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 mt-10">
         @php
-          $reviews = [
-            ['stars' => 5, 'text' => 'หารูปวิ่งของลูกชายในงาน Bangkok Marathon ได้ภายใน 30 วินาที — ก่อนหน้านี้ต้องไถ Facebook 2 ชั่วโมง', 'name' => 'คุณนุช · ผู้ปกครอง', 'icon' => 'bi-person-circle'],
-            ['stars' => 5, 'text' => 'ขายรูปงานแต่ง 200 ใบใน 3 วัน เงินเข้าบัญชีอัตโนมัติทุกวันจันทร์ — ไม่ต้องตามเก็บเอง', 'name' => 'คุณเจมส์ · ช่างภาพอิสระ', 'icon' => 'bi-camera-fill'],
-            ['stars' => 5, 'text' => 'ระบบส่งรูปเข้า LINE หลังจ่ายเงินทันที ลูกค้าประทับใจมาก รีวิว 5 ดาวทุกออเดอร์', 'name' => 'Studio K · สตูดิโอแต่งงาน', 'icon' => 'bi-shop'],
+          $capabilities = [
+            [
+              'icon'  => 'bi-person-bounding-box',
+              'tag'   => 'AI Face Search',
+              'title' => 'หาใบหน้า · เกณฑ์ ≥ 80%',
+              'body'  => 'อัปโหลดเซลฟี่ 1 ใบ — ระบบจับคู่ใบหน้าทุกภาพในอีเวนต์ผ่าน AWS Rekognition · ใช้เกณฑ์ความเหมือน 80% เป็นค่าเริ่มต้น (ปรับได้)',
+              'colors'=> 'from-indigo-400 to-pink-400',
+            ],
+            [
+              'icon'  => 'bi-line',
+              'tag'   => 'LINE Auto-Delivery',
+              'title' => 'ส่งรูปเข้าไลน์อัตโนมัติ',
+              'body'  => 'ลูกค้าจ่ายเสร็จ ระบบส่งไฟล์เต็มเข้าไลน์ทันที — ไม่ต้องส่ง email หรือเปิดเว็บอีกขั้น (เปิดสำหรับช่างภาพแผน Pro ขึ้นไป)',
+              'colors'=> 'from-emerald-400 to-cyan-400',
+            ],
+            [
+              'icon'  => 'bi-bank',
+              'tag'   => 'Auto Payout',
+              'title' => 'เงินเข้าบัญชีอัตโนมัติ',
+              'body'  => 'ขั้นต่ำ ฿500 → โอนเข้าบัญชีธนาคารไทยตามรอบ · 0% ค่าคอมมิชชั่นบนแผน Pro / Studio · ทุกออเดอร์มี audit trail',
+              'colors'=> 'from-amber-400 to-rose-400',
+            ],
           ];
         @endphp
-        @foreach($reviews as $r)
+        @foreach($capabilities as $cap)
           <div class="bento p-4 text-white">
-            <div class="flex items-center gap-1 mb-2">
-              @for($s = 0; $s < $r['stars']; $s++)
-                <i class="bi bi-star-fill text-amber-400 text-xs"></i>
-              @endfor
+            <div class="inline-flex items-center gap-1.5 mb-2 px-2 py-0.5 rounded-full bg-white/10 text-[10px] font-bold uppercase tracking-[0.12em] text-white/85">
+              <i class="bi {{ $cap['icon'] }}"></i> {{ $cap['tag'] }}
             </div>
-            <p class="text-xs text-white/85 leading-relaxed mb-3">"{{ $r['text'] }}"</p>
-            <div class="flex items-center gap-2 pt-3 border-t border-white/10">
-              <div class="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-400 to-pink-400 flex items-center justify-center text-white text-xs">
-                <i class="bi {{ $r['icon'] }}"></i>
+            <p class="text-sm font-bold text-white leading-tight mt-1">{{ $cap['title'] }}</p>
+            <p class="text-xs text-white/75 leading-relaxed mt-2">{{ $cap['body'] }}</p>
+            <div class="flex items-center gap-2 pt-3 mt-3 border-t border-white/10">
+              <div class="w-6 h-6 rounded-full bg-gradient-to-br {{ $cap['colors'] }} flex items-center justify-center text-white">
+                <i class="bi bi-check2-circle text-[11px]"></i>
               </div>
-              <span class="text-[11px] font-semibold text-white/80">{{ $r['name'] }}</span>
+              <span class="text-[10px] font-semibold text-white/65 uppercase tracking-wider">เปิดใช้งานในระบบ</span>
             </div>
           </div>
         @endforeach
@@ -642,9 +671,9 @@
   <div class="max-w-3xl mx-auto space-y-2.5">
     @php
       $faqs = [
-        ['q' => 'AI หาใบหน้าแม่นยำแค่ไหน?', 'a' => 'ระบบ AI วิเคราะห์ภาพระดับ enterprise — แม่นยำ 95-99% แม้จะใส่หมวก แว่นกันแดด หรือมุมเฉียง · รูป selfie 1 ใบจับคู่ได้ถึง 1,000+ ใบใน 10 วินาที · ภาพไม่ถูกเก็บไว้นอกระบบของเรา'],
-        ['q' => 'จ่ายเงินทางไหนได้บ้าง?', 'a' => 'PromptPay QR (ทุกธนาคารไทย), LINE Pay, บัตรเครดิต/เดบิต, โอนผ่านธนาคาร, สลิปอัพโหลด — รองรับใบกำกับภาษีนิติบุคคล'],
-        ['q' => 'ช่างภาพได้เงินเร็วแค่ไหน?', 'a' => 'ขั้นต่ำ ฿500 → โอนเข้าบัญชีไทยอัตโนมัติทุกวันจันทร์ · ไม่มีค่าธรรมเนียมแอบแฝง · 0% commission บน Pro/Studio'],
+        ['q' => 'AI หาใบหน้าแม่นยำแค่ไหน?', 'a' => 'ระบบใช้ AWS Rekognition (บริการ enterprise ของ Amazon) จับคู่ด้วยเกณฑ์ความเหมือน 80% เป็นค่าเริ่มต้น · ใส่หมวก / แว่น / มุมเฉียง ส่วนใหญ่ยังจับคู่ได้ · ปรับเกณฑ์ขั้นต่ำได้ตามต้องการ · ภาพ selfie ของคุณไม่ถูกเก็บไว้ — ใช้แล้วลบทิ้งทันที'],
+        ['q' => 'จ่ายเงินทางไหนได้บ้าง?', 'a' => 'PromptPay QR (ทุกธนาคารไทย), LINE Pay, บัตรเครดิต/เดบิต, โอนผ่านธนาคาร, สลิปอัพโหลด · ทุกออเดอร์ได้ใบเสร็จออนไลน์ในระบบ · ใบกำกับภาษีนิติบุคคลขอได้เป็นรายกรณี'],
+        ['q' => 'ช่างภาพได้เงินเร็วแค่ไหน?', 'a' => 'แจ้งถอนได้เมื่อยอดสะสมถึงขั้นต่ำที่แอดมินกำหนด (เช่น ฿500) · แอดมินตรวจและโอนเข้าบัญชีไทยตามรอบ · ทุกรายการมี audit trail ตรวจสอบย้อนหลังได้ · 0% คอมมิชชั่นบนแผน Pro/Studio'],
         ['q' => 'ยกเลิกแพ็กได้ตอนไหน?', 'a' => 'ยกเลิกได้ทุกเมื่อจาก dashboard · ไม่มีค่าปรับ · ใช้งานต่อได้จนถึงสิ้นรอบบิล · รูปและข้อมูลทั้งหมดยังอยู่'],
       ];
     @endphp

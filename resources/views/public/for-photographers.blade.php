@@ -48,9 +48,9 @@
 
         <p class="text-base sm:text-lg lg:text-xl text-slate-600 dark:text-slate-300 leading-relaxed mb-7 max-w-xl">
           แพลตฟอร์มสำหรับช่างภาพอีเวนต์ในไทย —
-          <strong class="text-slate-800 dark:text-white">0% commission</strong> ที่ Pro tier,
+          <strong class="text-slate-800 dark:text-white">0% คอมมิชชั่น</strong> บนแผน Pro/Studio,
           ส่งรูปเข้า <strong class="text-emerald-600 dark:text-emerald-400">LINE</strong> ลูกค้าอัตโนมัติหลังจ่ายเงิน,
-          AI ค้นหาใบหน้า, ออก e-Tax invoice และจ่ายเงินเข้าบัญชีทุกวันจันทร์
+          AI ค้นหาใบหน้าผ่าน AWS Rekognition และโอนเงินเข้าบัญชีไทยตามรอบเมื่อยอดถึงขั้นต่ำ
         </p>
 
         {{-- Dual CTA — primary "start free" / secondary "see pricing" --}}
@@ -218,39 +218,41 @@
         </ul>
       </div>
 
-      {{-- USP 2 — 0% commission --}}
+      {{-- USP 2 — 0% commission on Pro/Studio (Free + Starter still take a cut) --}}
       <div class="fp-card relative rounded-3xl p-7 bg-gradient-to-br from-indigo-50 via-white to-violet-50 dark:from-indigo-500/10 dark:via-slate-900 dark:to-violet-500/10 border border-indigo-200 dark:border-indigo-400/30 shadow-xl shadow-indigo-500/5 hover:shadow-indigo-500/20">
         <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-2xl shadow-lg shadow-indigo-500/30 mb-5">
           <i class="bi bi-cash-coin"></i>
         </div>
-        <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-3">0% commission · เก็บเต็ม</h3>
+        <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-3">0% คอม · เก็บเต็มบนแผนเสียเงิน</h3>
         <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed mb-4">
-          จ่ายค่าสมาชิกรายเดือน → เก็บรายได้ 100%.
-          ขาย ฿10,000 → ได้ ฿10,000 (Pixieset เก็บ ฿1,500)
+          จ่ายค่าสมาชิกรายเดือน → เก็บรายได้ 100% (เฉพาะแผน Pro/Studio).
+          ขาย ฿10,000 → ได้ ฿10,000 ไม่หักคอมแอบแฝง
         </p>
         <ul class="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
           <li class="flex items-start gap-2"><i class="bi bi-check-lg text-indigo-500 mt-0.5"></i> Free tier: {{ 100 - $freeKeepPct }}% commission, ไม่มี monthly fee</li>
-          <li class="flex items-start gap-2"><i class="bi bi-check-lg text-indigo-500 mt-0.5"></i> Starter ฿{{ number_format($starterPrice) }}: เก็บได้ 95%+</li>
           <li class="flex items-start gap-2"><i class="bi bi-check-lg text-indigo-500 mt-0.5"></i> Pro ฿{{ number_format($proPrice) }}: 0% commission · เก็บเต็มทุกบาท</li>
-          <li class="flex items-start gap-2"><i class="bi bi-check-lg text-indigo-500 mt-0.5"></i> Auto-payout ทุกวันจันทร์ — ไม่ต้องขอเอง</li>
+          <li class="flex items-start gap-2"><i class="bi bi-check-lg text-indigo-500 mt-0.5"></i> แจ้งถอนได้เมื่อยอดถึงขั้นต่ำ — ไม่มีค่าธรรมเนียมแอบแฝง</li>
         </ul>
       </div>
 
-      {{-- USP 3 — Thai compliance --}}
+      {{-- USP 3 — Thai-friendly payments + transparent ledger.
+           Old copy promised "e-Tax invoice อัตโนมัติ" + Peakaccount sync
+           — neither is implemented. The honest USP we actually deliver
+           is Thai-native payment rails (PromptPay/LINE Pay/TrueMoney via
+           Omise) plus a full audit trail per order. --}}
       <div class="fp-card relative rounded-3xl p-7 bg-gradient-to-br from-amber-50 via-white to-orange-50 dark:from-amber-500/10 dark:via-slate-900 dark:to-orange-500/10 border border-amber-200 dark:border-amber-400/30 shadow-xl shadow-amber-500/5 hover:shadow-amber-500/20">
         <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white text-2xl shadow-lg shadow-amber-500/30 mb-5">
           <i class="bi bi-receipt"></i>
         </div>
-        <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-3">ภาษีไทย · จบในระบบ</h3>
+        <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-3">จ่ายแบบไทย · ยอดทุกบาทตรวจได้</h3>
         <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed mb-4">
-          ออก e-Tax invoice อัตโนมัติทุกออเดอร์.
-          PromptPay / TrueMoney / LINE Pay พร้อม.
-          ไม่ต้องจัดทำบัญชีเอง.
+          รองรับ PromptPay / TrueMoney / LINE Pay / บัตรเครดิต.
+          ทุกออเดอร์มีเลขใบเสร็จ + audit trail ตรวจย้อนหลังได้
         </p>
         <ul class="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
-          <li class="flex items-start gap-2"><i class="bi bi-check-lg text-amber-500 mt-0.5"></i> e-Tax + e-Receipt</li>
-          <li class="flex items-start gap-2"><i class="bi bi-check-lg text-amber-500 mt-0.5"></i> PromptPay / LINE Pay / TrueMoney native</li>
-          <li class="flex items-start gap-2"><i class="bi bi-check-lg text-amber-500 mt-0.5"></i> ผูกระบบบัญชี Peakaccount (Business)</li>
+          <li class="flex items-start gap-2"><i class="bi bi-check-lg text-amber-500 mt-0.5"></i> PromptPay / LINE Pay / TrueMoney / บัตร</li>
+          <li class="flex items-start gap-2"><i class="bi bi-check-lg text-amber-500 mt-0.5"></i> เลขใบเสร็จ + ประวัติทุกออเดอร์ใน dashboard</li>
+          <li class="flex items-start gap-2"><i class="bi bi-check-lg text-amber-500 mt-0.5"></i> โอนเข้าบัญชีไทย (PromptPay หรือเลขบัญชี)</li>
         </ul>
       </div>
 
@@ -268,18 +270,28 @@
         เริ่มยังไง
       </span>
       <h2 class="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white mb-3">
-        จากสมัคร → ได้เงินใน <span class="fp-grad-text">7 วัน</span>
+        เริ่มขายภายใน <span class="fp-grad-text">วันนี้</span> — 4 ขั้นตอน
       </h2>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
 
       @php
+        // Each step's body must describe a feature that actually exists
+        // in code. Removed claims:
+        //   • "AI คัดรูปเบลอให้" — quality_filter is a planned task, not
+        //     yet implemented in AiTaskService.
+        //   • "Auto-payout ทุกวันจันทร์" — flow is actually a manual
+        //     WithdrawalRequest the photographer submits when the
+        //     balance reaches the admin-configured minimum.
+        //   • "e-Tax อัตโนมัติ" — no TaxInvoice model exists; the
+        //     system tracks orders/withdrawals but doesn't issue
+        //     formal Thai e-Tax invoices automatically.
         $steps = [
           ['n' => '1', 'icon' => 'bi-person-plus', 'title' => 'สมัคร 30 วินาที', 'body' => 'Login ด้วย LINE หรือ Google · เริ่มที่ Free tier · ไม่ต้องผูกบัตร'],
-          ['n' => '2', 'icon' => 'bi-cloud-upload', 'title' => 'อัปโหลดงาน', 'body' => 'อัปโหลดเป็นพันรูปได้ในครั้งเดียว · resume ได้ถ้าเน็ตหลุด · AI คัดรูปเบลอให้'],
-          ['n' => '3', 'icon' => 'bi-shop', 'title' => 'เปิดขาย', 'body' => 'ตั้งราคารูป · เปิด event ให้ลูกค้าค้นหาใบหน้า · LINE auto-delivery'],
-          ['n' => '4', 'icon' => 'bi-bank', 'title' => 'รับเงินเข้าบัญชี', 'body' => 'Auto-payout ทุกวันจันทร์ · e-Tax อัตโนมัติ · ดูยอดขายได้ใน dashboard'],
+          ['n' => '2', 'icon' => 'bi-cloud-upload', 'title' => 'อัปโหลดงาน', 'body' => 'อัปโหลดได้ทีละหลายรูป · resume ได้ถ้าเน็ตหลุด · ระบบสร้างลายน้ำ + thumbnail ให้อัตโนมัติ'],
+          ['n' => '3', 'icon' => 'bi-shop', 'title' => 'เปิดขาย', 'body' => 'ตั้งราคารูป · เปิด event ให้ลูกค้าค้นหาด้วยใบหน้า · ส่งเข้า LINE หลังจ่ายเงิน (Pro+)'],
+          ['n' => '4', 'icon' => 'bi-bank', 'title' => 'รับเงินเข้าบัญชี', 'body' => 'แจ้งถอนได้เมื่อยอดถึงขั้นต่ำ · โอนเข้าบัญชีไทยตามรอบ · ดูยอดขายได้ใน dashboard เรียลไทม์'],
         ];
       @endphp
 
@@ -427,7 +439,7 @@
     @endif
 
     <p class="text-center mt-10 text-sm text-slate-500 dark:text-slate-400">
-      ราคาทุกแพ็กเกจรวม VAT 7% แล้ว · ออก e-Tax invoice อัตโนมัติ · ยกเลิกได้ตลอดไม่มีค่าธรรมเนียม
+      ราคาที่แสดงคือราคาที่จ่ายจริง · ใบเสร็จออนไลน์ทุกออเดอร์ · ยกเลิกได้ตลอดไม่มีค่าธรรมเนียม
     </p>
     <div class="text-center mt-3">
       <a href="{{ route('pricing') }}" class="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-200 transition">
@@ -452,6 +464,15 @@
 
     <div class="space-y-3" x-data="{ open: 0 }">
       @php
+        // Every answer below is grounded in actual code paths:
+        //   • Free / paid pricing → SubscriptionPlan rows (live)
+        //   • Withdrawal flow → WithdrawalRequest model (manual,
+        //     not auto-payout)
+        //   • Face threshold → FaceSearchService::searchByFace
+        //     defaults to 80% similarity
+        //   • Cancel-keeps-files → SubscriptionService::cancel()
+        //   • Daily-payout / "2× faster Pro upload" / "95-99%
+        //     accuracy" claims removed: they were not implemented.
         $faqs = [
           ['q' => 'ใช้ฟรีจริงหรือ? มีค่าซ่อนไหม?', 'a' =>
               'ฟรีจริง ไม่ต้องผูกบัตรเครดิต. Free tier มีพื้นที่ '
@@ -460,11 +481,11 @@
               . (100 - $freeKeepPct) . '% ต่อรายการขาย. '
               . 'หากต้องการ 0% คอมมิชชั่นและฟีเจอร์เต็ม ต้องสมัคร paid tier (เริ่ม ฿'
               . number_format($starterPrice) . '/เดือน)'],
-          ['q' => 'รับเงินอย่างไร? เร็วแค่ไหน?', 'a' => 'Auto-payout ทุกวันจันทร์เข้าบัญชีไทยตามที่ผูกไว้ (PromptPay หรือเลขบัญชี). ขั้นต่ำ ฿500/รอบ. หาก Studio tier เลือก daily payout ได้.'],
-          ['q' => 'ระบบ AI ใช้อะไร? แม่นแค่ไหน?', 'a' => 'ระบบ AI ของเราใช้เทคโนโลยี Face Recognition ระดับ enterprise — ความแม่นยำ 95-99% แม้จะใส่หมวก แว่นกันแดด หรือมุมเฉียง. การคัดรูปคุณภาพ + ตรวจจับรูปซ้ำใช้อัลกอริทึม perceptual hashing ที่ run บนเซิร์ฟเวอร์เราเอง — ภาพไม่ออกจากระบบของเรา'],
+          ['q' => 'รับเงินอย่างไร? เร็วแค่ไหน?', 'a' => 'เมื่อยอดสะสมถึงขั้นต่ำที่แอดมินกำหนด (เช่น ฿500) คุณกด "แจ้งถอน" จาก dashboard — แอดมินตรวจและโอนเข้าบัญชีไทยตามรอบ (PromptPay หรือเลขบัญชี). ทุกรายการมี audit trail ตรวจสอบย้อนหลังได้.'],
+          ['q' => 'ระบบ AI ใช้อะไร? แม่นแค่ไหน?', 'a' => 'ระบบใช้ AWS Rekognition (บริการ enterprise ของ Amazon) เพื่อจับคู่ใบหน้า. ค่าเริ่มต้นใช้เกณฑ์ความเหมือน 80% (ปรับได้). ใส่หมวก / แว่น / มุมเฉียง โดยทั่วไปยังจับคู่ได้. ภาพ selfie ของลูกค้าไม่ถูกบันทึกลงระบบ — ใช้แล้วทิ้ง.'],
           ['q' => 'ถ้าอยากเปลี่ยน/ยกเลิก plan?', 'a' => 'เปลี่ยน tier ได้ตลอดในหน้า Subscription. ยกเลิกได้ทุกเมื่อโดยไม่มีค่าธรรมเนียม — เข้า dashboard กด "ยกเลิก" จะอยู่จนสิ้นรอบบิล แล้ว downgrade เป็น Free tier อัตโนมัติ. รูปและข้อมูลทั้งหมดยังคงอยู่.'],
-          ['q' => 'ลูกค้าหารูปยังไง? ต้องสอนเขาไหม?', 'a' => 'ลูกค้าเข้า event ของคุณ → สแกน QR หรือกดลิงก์ → AI ค้นหาใบหน้าของเขาในรูปทั้งหมด → จ่ายเงิน → ได้รูปทาง LINE. ไม่ต้องสอน — flow ออกแบบให้ลูกค้าทั่วไปใช้ได้.'],
-          ['q' => 'ขนาดรูปอัปโหลดเท่าไรได้?', 'a' => 'อัปโหลดได้ทีละพันรูป รองรับไฟล์ใหญ่ถึง 100 MB/รูป (RAW + JPEG). Resume ได้ถ้าเน็ตหลุดกลางคัน. Pro tier ขึ้นไปได้ priority upload เร็วกว่า 2 เท่า.'],
+          ['q' => 'ลูกค้าหารูปยังไง? ต้องสอนเขาไหม?', 'a' => 'ลูกค้าเข้า event ของคุณ → สแกน QR หรือกดลิงก์ → ระบบ AI ค้นหาใบหน้าของเขาในรูปทั้งหมด → จ่ายเงิน → ได้รูปทาง LINE หรือลิงก์ดาวน์โหลด. flow ถูกออกแบบให้ลูกค้าทั่วไปใช้เองได้ ไม่ต้องสอน.'],
+          ['q' => 'ขนาดรูปอัปโหลดเท่าไรได้?', 'a' => 'อัปโหลดเป็น batch ได้ Resume ได้ถ้าเน็ตหลุดกลางคัน รองรับ JPEG/PNG ไฟล์เต็มความละเอียด ระบบจะสร้าง thumbnail + ลายน้ำให้อัตโนมัติ. ขนาดไฟล์สูงสุดต่อรูปและจำนวนรูปต่ออีเวนต์ขึ้นกับแผนของคุณ.'],
         ];
       @endphp
 

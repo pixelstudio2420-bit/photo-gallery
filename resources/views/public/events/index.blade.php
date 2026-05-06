@@ -25,12 +25,17 @@
     {{-- Title --}}
     <div class="text-center mb-8">
       <span class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md border bg-white/70 dark:bg-white/10 border-indigo-200/60 dark:border-white/10 text-indigo-700 dark:text-indigo-200 shadow-sm mb-4">
-        <i class="bi bi-camera-reels"></i> Event Photography
+        <i class="bi bi-person-bounding-box"></i> ค้นหาด้วยใบหน้า · จ่ายแล้วดาวน์โหลดทันที
       </span>
       <h1 class="font-extrabold text-3xl sm:text-4xl md:text-5xl lg:text-6xl tracking-tight leading-[1.2] mb-3">
-        <span class="bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 dark:from-indigo-300 dark:via-violet-300 dark:to-fuchsia-300 bg-clip-text text-transparent">ค้นหาอีเวนต์ถ่ายภาพ</span>
+        <span class="bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 dark:from-indigo-300 dark:via-violet-300 dark:to-fuchsia-300 bg-clip-text text-transparent">ค้นหาภาพของคุณจากงาน</span>
       </h1>
-      <p class="text-slate-600 dark:text-slate-300/80 text-sm sm:text-base max-w-2xl mx-auto">ค้นหาและเลือกซื้อภาพถ่ายจากงานอีเวนต์ต่างๆ ได้ง่ายดาย พร้อมดาวน์โหลดทันที</p>
+      <p class="text-slate-600 dark:text-slate-300/80 text-sm sm:text-base max-w-2xl mx-auto">
+        เลือกงานที่คุณเข้าร่วม → อัปโหลดเซลฟี่ → ระบบ AI หารูปคุณให้ทุกภาพ
+        <span class="block mt-1 text-xs text-slate-500 dark:text-slate-400">
+          จ่ายด้วย PromptPay / บัตรเครดิต · ได้ลิงก์ดาวน์โหลดทันทีในอีเมล · ความละเอียดสูงไม่มีลายน้ำ
+        </span>
+      </p>
     </div>
 
     {{-- Search Input --}}

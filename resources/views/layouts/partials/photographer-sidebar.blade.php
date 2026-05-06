@@ -103,6 +103,7 @@
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('photographer.dashboard') ? 'pg-link-active' : '' }}"
           href="{{ route('photographer.dashboard') }}"
+          title="Dashboard — ภาพรวมรายได้และยอดขาย"
           :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
           <i class="bi bi-grid-1x2-fill text-lg w-[22px] text-center"></i>
           <span x-show="!collapsed" x-transition>Dashboard</span>
@@ -118,9 +119,10 @@
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('photographer.events.*') ? 'pg-link-active' : '' }}"
           href="{{ route('photographer.events.index') }}"
+          title="อีเวนต์ — เปิดงาน อัปโหลดรูป ขายภาพ"
           :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
           <i class="bi bi-calendar-event text-lg w-[22px] text-center"></i>
-          <span x-show="!collapsed" x-transition>อีเวนต์</span>
+          <span x-show="!collapsed" x-transition>อีเวนต์ขายภาพ</span>
         </a>
       </li>
 
@@ -128,9 +130,10 @@
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('photographer.bookings*') ? 'pg-link-active' : '' }}"
           href="{{ route('photographer.bookings') }}"
+          title="คิวงาน — รายการจองล่วงหน้า"
           :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
           <i class="bi bi-calendar-check text-lg w-[22px] text-center"></i>
-          <span x-show="!collapsed" x-transition>คิวงาน</span>
+          <span x-show="!collapsed" x-transition>คิวงาน · จองล่วงหน้า</span>
           @php
             $_pendingBookings = \App\Models\Booking::where('photographer_id', auth()->id())
               ->where('status', 'pending')->count();
@@ -145,6 +148,7 @@
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('photographer.availability*') ? 'pg-link-active' : '' }}"
           href="{{ route('photographer.availability') }}"
+          title="เวลาทำงาน — ชั่วโมงเปิดรับงานต่อสัปดาห์"
           :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
           <i class="bi bi-clock-history text-lg w-[22px] text-center"></i>
           <span x-show="!collapsed" x-transition>เวลาทำงาน</span>
@@ -175,18 +179,20 @@
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('photographer.reviews*') ? 'pg-link-active' : '' }}"
           href="{{ route('photographer.reviews') }}"
+          title="รีวิวจากลูกค้า — ตอบ/พินรีวิวเด่น"
           :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
           <i class="bi bi-star text-lg w-[22px] text-center"></i>
-          <span x-show="!collapsed" x-transition>รีวิว</span>
+          <span x-show="!collapsed" x-transition>รีวิวจากลูกค้า</span>
         </a>
       </li>
 
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('photographer.analytics') ? 'pg-link-active' : '' }}"
           href="{{ route('photographer.analytics') }}"
+          title="Analytics — สถิติการดู/ขาย/รายได้"
           :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
           <i class="bi bi-graph-up-arrow text-lg w-[22px] text-center"></i>
-          <span x-show="!collapsed" x-transition>Analytics</span>
+          <span x-show="!collapsed" x-transition>สถิติ · Analytics</span>
         </a>
       </li>
 
@@ -199,18 +205,20 @@
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('photographer.earnings') ? 'pg-link-active' : '' }}"
           href="{{ route('photographer.earnings') }}"
+          title="รายได้ — ยอดขาย/ค่าคอม/แจ้งถอนเงิน"
           :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
           <i class="bi bi-wallet2 text-lg w-[22px] text-center"></i>
-          <span x-show="!collapsed" x-transition>รายได้</span>
+          <span x-show="!collapsed" x-transition>รายได้ · ถอนเงิน</span>
         </a>
       </li>
 
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('photographer.setup-bank') ? 'pg-link-active' : '' }}"
           href="{{ route('photographer.setup-bank') }}"
+          title="บัญชีธนาคาร — ปลายทางรับเงินจากระบบ"
           :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
           <i class="bi bi-bank text-lg w-[22px] text-center"></i>
-          <span x-show="!collapsed" x-transition>ข้อมูลธนาคาร</span>
+          <span x-show="!collapsed" x-transition>บัญชีธนาคาร</span>
         </a>
       </li>
 
@@ -225,6 +233,7 @@
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('photographer.subscription.*') ? 'pg-link-active' : '' }}"
           href="{{ route('photographer.subscription.index') }}"
+          title="แผนสมัครสมาชิก — Free/Pro/Studio · เปลี่ยนได้ทุกเมื่อ"
           :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
           <i class="bi bi-stars text-lg w-[22px] text-center"></i>
           <span x-show="!collapsed" x-transition>แผนสมัครสมาชิก</span>
@@ -237,17 +246,19 @@
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('photographer.ai.*') ? 'pg-link-active' : '' }}"
           href="{{ route('photographer.ai.index') }}"
+          title="AI Tools — ค้นหาใบหน้า · ลายน้ำ · OCR"
           :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
           <i class="bi bi-cpu text-lg w-[22px] text-center"></i>
-          <span x-show="!collapsed" x-transition>AI Tools</span>
+          <span x-show="!collapsed" x-transition>AI Tools · ค้นหาหน้า</span>
         </a>
       </li>
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('photographer.presets.*') ? 'pg-link-active' : '' }}"
           href="{{ route('photographer.presets.index') }}"
+          title="Presets — บันทึกค่าตกแต่งภาพ และนำไปใช้ซ้ำ"
           :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
           <i class="bi bi-sliders text-lg w-[22px] text-center"></i>
-          <span x-show="!collapsed" x-transition>Presets</span>
+          <span x-show="!collapsed" x-transition>Presets · ปรับสีอัตโนมัติ</span>
         </a>
       </li>
       {{-- Team / API Keys are deprecated for MVP — feature.global flags
@@ -266,9 +277,10 @@
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('photographer.branding.*') ? 'pg-link-active' : '' }}"
           href="{{ route('photographer.branding.edit') }}"
+          title="Branding — โลโก้ สี และลายน้ำของคุณ"
           :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
           <i class="bi bi-palette text-lg w-[22px] text-center"></i>
-          <span x-show="!collapsed" x-transition>Branding</span>
+          <span x-show="!collapsed" x-transition>Branding · โลโก้/สี</span>
         </a>
       </li>
       @if(app(\App\Services\SubscriptionService::class)->featureGloballyEnabled('api_access'))
@@ -287,6 +299,7 @@
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('photographer.credits.*') ? 'pg-link-active' : '' }}"
           href="{{ route('photographer.credits.index') }}"
+          title="เครดิตอัปโหลด — จ่ายตามจำนวนรูป (ไม่ใช่รายเดือน)"
           :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
           <i class="bi bi-coin text-lg w-[22px] text-center"></i>
           <span x-show="!collapsed" x-transition>เครดิตอัปโหลด</span>
@@ -299,9 +312,10 @@
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('photographer.store.*') ? 'pg-link-active' : '' }}"
           href="{{ route('photographer.store.index') }}"
+          title="Store — ซื้อ Boost / Featured Slot / บริการเสริม"
           :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
           <i class="bi bi-bag-heart text-lg w-[22px] text-center"></i>
-          <span x-show="!collapsed" x-transition>Store · โปรโมท + บริการเสริม</span>
+          <span x-show="!collapsed" x-transition>Store · โปรโมท · เสริม</span>
         </a>
       </li>
       @endif
@@ -315,18 +329,20 @@
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('photographer.profile') ? 'pg-link-active' : '' }}"
           href="{{ route('photographer.profile') }}"
+          title="โปรไฟล์ — แก้ไขข้อมูลส่วนตัว"
           :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
           <i class="bi bi-person-circle text-lg w-[22px] text-center"></i>
-          <span x-show="!collapsed" x-transition>โปรไฟล์</span>
+          <span x-show="!collapsed" x-transition>โปรไฟล์ของฉัน</span>
         </a>
       </li>
 
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('profile.referrals') ? 'pg-link-active' : '' }}"
           href="{{ route('profile.referrals') }}"
+          title="แนะนำเพื่อน — รับรางวัลเมื่อมีคนสมัครและซื้อตามลิงก์ของคุณ"
           :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
           <i class="bi bi-people-fill text-lg w-[22px] text-center"></i>
-          <span x-show="!collapsed" x-transition>แนะนำเพื่อน</span>
+          <span x-show="!collapsed" x-transition>แนะนำเพื่อน · รับรางวัล</span>
         </a>
       </li>
     </ul>
@@ -334,11 +350,15 @@
 
   <div class="p-4 px-5 border-t border-white/[0.08] space-y-2 relative z-10">
     {{-- Switch back to customer mode (same account, different dashboard) --}}
-    <a href="{{ route('home') }}" class="pg-switch-btn flex items-center gap-2 px-4 py-2.5 rounded-[12px] text-white no-underline text-sm font-semibold w-full justify-center">
+    <a href="{{ route('home') }}"
+       title="กลับสู่หน้าจอลูกค้า — ดูเว็บไซต์เหมือนผู้ซื้อภาพทั่วไป"
+       class="pg-switch-btn flex items-center gap-2 px-4 py-2.5 rounded-[12px] text-white no-underline text-sm font-semibold w-full justify-center">
       <i class="bi bi-arrow-left-right"></i>
       <span x-show="!collapsed" x-transition>กลับโหมดลูกค้า</span>
     </a>
-    <a href="{{ route('home') }}" class="flex items-center gap-2 px-4 py-1.5 text-white/55 hover:text-white text-[0.78rem] font-medium transition-all w-full justify-center rounded-lg hover:bg-white/[0.06]" target="_blank">
+    <a href="{{ route('home') }}"
+       title="เปิดเว็บไซต์หลักในแท็บใหม่"
+       class="flex items-center gap-2 px-4 py-1.5 text-white/55 hover:text-white text-[0.78rem] font-medium transition-all w-full justify-center rounded-lg hover:bg-white/[0.06]" target="_blank">
       <i class="bi bi-box-arrow-up-right"></i>
       <span x-show="!collapsed" x-transition>เปิดเว็บไซต์ในแท็บใหม่</span>
     </a>
