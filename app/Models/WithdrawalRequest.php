@@ -44,6 +44,7 @@ class WithdrawalRequest extends Model
         'rejection_reason',
         'payment_slip_url',
         'payment_reference',
+        'disbursement_id',
         'reviewed_by_admin_id',
         'reviewed_at',
         'paid_at',
@@ -68,6 +69,17 @@ class WithdrawalRequest extends Model
     public function reviewedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by_admin_id');
+    }
+
+    /**
+     * Disbursement created on mark-paid — links the manual request back to
+     * the per-transfer ledger so the photographer's earnings dashboard
+     * (which sums PhotographerDisbursement WHERE status='succeeded' for
+     * total_paid) shows manual payments alongside auto-payouts.
+     */
+    public function disbursement(): BelongsTo
+    {
+        return $this->belongsTo(PhotographerDisbursement::class, 'disbursement_id');
     }
 
     /* ──────────────── Scopes ──────────────── */

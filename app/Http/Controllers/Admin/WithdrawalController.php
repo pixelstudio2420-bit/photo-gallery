@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AppSetting;
+use App\Models\PhotographerDisbursement;
+use App\Models\PhotographerPayout;
 use App\Models\WithdrawalRequest;
 use App\Services\LineNotifyService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
@@ -123,7 +126,35 @@ class WithdrawalController extends Controller
         return back()->with('success', 'ปฏิเสธคำขอแล้ว');
     }
 
-    /** Move pending/approved → paid (terminal). Slip URL + reference required. */
+    /**
+     * Move pending/approved → paid (terminal). Slip URL + reference required.
+     *
+     * What this does to the EARNINGS LEDGER (the part that took years to get
+     * right and is the answer to "หลังโอนเงินแล้วระบบรีเซ็ตรายได้ไหม?"):
+     *
+     *   • PhotographerPayout rows ARE NOT deleted, ever. Each row is one
+     *     sale's commission slice. Lifetime history is preserved.
+     *   • What changes is the row's `status` ('pending' → 'paid') and a
+     *     `paid_at` timestamp + `disbursement_id` foreign key get stamped
+     *     so the photographer dashboard's "ยอดที่ถอนได้" gauge correctly
+     *     drops by the paid amount.
+     *   • A PhotographerDisbursement row is created — same shape as the
+     *     auto-payout cron produces. The photographer's /earnings page
+     *     unifies both into one "ประวัติการโอน" list.
+     *   • Stats that show on the photographer dashboard (total_earnings,
+     *     total_paid, pending_amount) recompute LIVE from these tables on
+     *     every page render — there are no cached counters that need
+     *     resetting. They self-heal as soon as the ledger settles.
+     *
+     * The bug this commit fixes: the original implementation flipped the
+     * WithdrawalRequest row to 'paid' but left the underlying payouts at
+     * status='pending', so available_balance (computed `unpaid_payouts −
+     * active_requests`) re-included the just-paid amount the moment the
+     * request scope filtered itself out — letting the photographer
+     * request the same money TWICE. The migration's docblock claimed
+     * "controller logic flips the attached payouts" but no controller
+     * ever did. Now it does.
+     */
     public function markPaid(Request $request, int $id): RedirectResponse
     {
         $request->validate([
@@ -136,22 +167,146 @@ class WithdrawalController extends Controller
             return back()->with('error', 'ทำได้เฉพาะรายการที่รอตรวจสอบหรืออนุมัติแล้ว');
         }
 
-        $req->update([
-            'status'                => WithdrawalRequest::STATUS_PAID,
-            'payment_slip_url'      => $request->input('payment_slip_url'),
-            'payment_reference'     => $request->input('payment_reference'),
-            'admin_note'            => $request->input('admin_note') ?: $req->admin_note,
-            'reviewed_by_admin_id'  => $req->reviewed_by_admin_id ?: Auth::id(),
-            'reviewed_at'           => $req->reviewed_at ?: now(),
-            'paid_at'               => now(),
-        ]);
+        try {
+            $disbursement = DB::transaction(function () use ($req, $request) {
+                // Pick FIFO-oldest pending payouts to cover the request amount.
+                // lockForUpdate keeps concurrent admin actions on the same
+                // photographer from picking the same rows. If two admins
+                // markPaid two different requests for the same photographer
+                // simultaneously, the second one waits at this lock then sees
+                // fewer pending rows — exactly what we want.
+                $remaining = (float) $req->amount_thb;
+                $picked    = collect();
 
-        $this->notifyPhotographer($req,
+                $pending = PhotographerPayout::where('photographer_id', $req->photographer_id)
+                    ->where('status', 'pending')
+                    ->whereNull('disbursement_id')
+                    ->orderBy('created_at')
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+
+                foreach ($pending as $row) {
+                    if ($remaining <= 0) break;
+                    $picked->push($row);
+                    $remaining -= (float) $row->payout_amount;
+                }
+
+                $coveredAmount = (float) $picked->sum('payout_amount');
+
+                // Defensive: if the photographer's pending pool somehow
+                // shrank below the request amount between request creation
+                // and markPaid (admin sat on the request for days while a
+                // refund/credit clawed back a payout), we still mark the
+                // request paid — admin already moved real money — but log
+                // loudly so accounting can investigate.
+                if ($coveredAmount + 0.01 < (float) $req->amount_thb) {
+                    Log::warning('withdrawal.mark_paid_undercovered', [
+                        'withdrawal_request_id' => $req->id,
+                        'photographer_id'       => $req->photographer_id,
+                        'request_amount'        => (float) $req->amount_thb,
+                        'covered_amount'        => $coveredAmount,
+                        'shortfall'             => round((float) $req->amount_thb - $coveredAmount, 2),
+                    ]);
+                }
+
+                // Create a unified-ledger disbursement at status='succeeded'
+                // immediately — admin already moved real money, the
+                // disbursement IS settled the moment they click "paid". Going
+                // through the markSucceeded() lifecycle helper here would
+                // pull notification/email/LINE side-effects INTO the
+                // transaction, and any one of them with a nested SQL hiccup
+                // poisons the whole tx (PostgreSQL aborts the connection on
+                // any failed query inside a tx, even when PHP catches the
+                // exception). We do the ledger writes here, then fire the
+                // notifications outside the transaction below.
+                //
+                // Idempotency key encodes the WithdrawalRequest ID so re-
+                // submits of the same admin POST can never create duplicate
+                // disbursements (would over-deduct the photographer's
+                // earnings if they did).
+                $disbursement = PhotographerDisbursement::create([
+                    'photographer_id' => $req->photographer_id,
+                    'amount_thb'      => $coveredAmount > 0 ? $coveredAmount : (float) $req->amount_thb,
+                    'payout_count'    => $picked->count(),
+                    'provider'        => 'manual_admin',
+                    'idempotency_key' => 'wr-' . $req->id,
+                    'provider_txn_id' => $request->input('payment_reference') ?: ('manual-' . $req->id),
+                    'status'          => PhotographerDisbursement::STATUS_SUCCEEDED,
+                    'trigger_type'    => PhotographerDisbursement::TRIGGER_MANUAL,
+                    'attempted_at'    => now(),
+                    'settled_at'      => now(),
+                    'attempts'        => 1,
+                    'raw_response'    => [
+                        'source'                => 'admin_manual_mark_paid',
+                        'admin_id'              => Auth::id(),
+                        'withdrawal_request_id' => $req->id,
+                        'slip_url'              => $request->input('payment_slip_url'),
+                    ],
+                ]);
+
+                // Flip the picked payouts to 'paid' AND attach them to the
+                // disbursement in one update. This is the authoritative
+                // ledger write that closes the double-spend window.
+                if ($picked->isNotEmpty()) {
+                    PhotographerPayout::whereIn('id', $picked->pluck('id'))
+                        ->update([
+                            'disbursement_id' => $disbursement->id,
+                            'status'          => 'paid',
+                            'paid_at'         => now(),
+                        ]);
+                }
+
+                $req->update([
+                    'status'                => WithdrawalRequest::STATUS_PAID,
+                    'payment_slip_url'      => $request->input('payment_slip_url'),
+                    'payment_reference'     => $request->input('payment_reference'),
+                    'admin_note'            => $request->input('admin_note') ?: $req->admin_note,
+                    'reviewed_by_admin_id'  => $req->reviewed_by_admin_id ?: Auth::id(),
+                    'reviewed_at'           => $req->reviewed_at ?: now(),
+                    'paid_at'               => now(),
+                    'disbursement_id'       => $disbursement->id,
+                ]);
+
+                return $disbursement;
+            });
+        } catch (\Throwable $e) {
+            Log::error('withdrawal.mark_paid_failed', [
+                'withdrawal_request_id' => $req->id,
+                'error'                 => $e->getMessage(),
+            ]);
+            return back()->with('error', 'บันทึกการโอนล้มเหลว: ' . $e->getMessage());
+        }
+
+        // Notifications run AFTER the ledger commits. Any failure here is
+        // best-effort — the money is already recorded settled, the
+        // photographer's dashboard already shows accurate balances. A
+        // failed LINE push or admin-bell ping doesn't reverse anything.
+        try {
+            \App\Models\AdminNotification::disbursementSuccess($disbursement);
+        } catch (\Throwable $e) {
+            Log::warning('withdrawal.admin_notification_failed', [
+                'disbursement_id' => $disbursement->id, 'error' => $e->getMessage(),
+            ]);
+        }
+        try {
+            \App\Models\UserNotification::payoutProcessed(
+                $req->photographer_id,
+                (float) $disbursement->amount_thb,
+                $disbursement
+            );
+        } catch (\Throwable $e) {
+            Log::warning('withdrawal.user_notification_failed', [
+                'disbursement_id' => $disbursement->id, 'error' => $e->getMessage(),
+            ]);
+        }
+
+        $this->notifyPhotographer($req->fresh(),
             "💰 โอนเงินถอน ฿" . number_format((float) $req->amount_thb, 2) . " เรียบร้อยแล้ว"
             . ($req->payment_reference ? "\nReference: {$req->payment_reference}" : '')
         );
 
-        return back()->with('success', 'บันทึกการโอนเรียบร้อย');
+        return back()->with('success', 'บันทึกการโอนเรียบร้อย — รายได้ในระบบอัพเดทแล้ว');
     }
 
     /* ────────── Settings page ────────── */
