@@ -94,6 +94,24 @@ class SubscriptionController extends Controller
         $profile = $this->profile();
         $annual  = (bool) $request->boolean('annual');
 
+        // Pre-flight: refuse hard blockers (e.g. downgrade with files
+        // that won't fit). Without this server-side gate, a determined
+        // user could craft a POST that bypasses the modal-confirm UI
+        // and put themselves on a plan that immediately blocks every
+        // upload they try. The check returns blockers/warnings/diff —
+        // we only enforce blockers here; soft warnings are surfaced by
+        // the UI's confirmation modal and the user can opt past them.
+        if ($code !== 'free' || ($plan->isFree())) {
+            // (free plan can always be picked — the confirm flow elsewhere
+            // already prevents accidental free-plan subscription, and we
+            // never want to block somebody from going free.)
+        }
+        $preflight = app(\App\Services\PlanChangePreflightService::class)->check($profile, $plan);
+        if (!$preflight['allowed'] && !empty($preflight['blockers'])) {
+            $first = $preflight['blockers'][0];
+            return back()->with('error', $first['detail']);
+        }
+
         try {
             $sub = $this->subs->subscribe(
                 $profile,
@@ -190,6 +208,16 @@ class SubscriptionController extends Controller
             return back()->with('info', 'คุณอยู่ในแผนนี้แล้ว');
         }
 
+        // Server-side pre-flight refuses downgrade-with-overflow before
+        // we touch the sub. UI's confirmation modal calls the same
+        // service; this is the defense-in-depth layer in case the
+        // modal is bypassed.
+        $preflight = app(\App\Services\PlanChangePreflightService::class)->check($profile, $newPlan);
+        if (!$preflight['allowed'] && !empty($preflight['blockers'])) {
+            $first = $preflight['blockers'][0];
+            return back()->with('error', $first['detail']);
+        }
+
         try {
             $result = $this->subs->changePlan($sub, $newPlan, prorateImmediately: true);
         } catch (\Throwable $e) {
@@ -218,6 +246,32 @@ class SubscriptionController extends Controller
         return redirect()
             ->route('payment.checkout', ['order' => $result['order']->id])
             ->with('success', "เปลี่ยนแผนเป็น {$newPlan->name} — กรุณาชำระเงินส่วนต่างเพื่อเปิดใช้งาน");
+    }
+
+    /**
+     * JSON pre-flight endpoint — used by the confirmation modal on the
+     * plans page to render the diff (gained/lost) and any warnings or
+     * blockers BEFORE the user submits the subscribe / change form.
+     *
+     * Returns the same packet the change()/subscribe() methods use to
+     * gate server-side, so the UI's "Submit" button can mirror exactly
+     * what the server will accept.
+     */
+    public function preflight(Request $request, string $code)
+    {
+        $profile = $this->profile();
+        $plan = SubscriptionPlan::active()->byCode($code)->first();
+        if (!$plan) {
+            return response()->json([
+                'allowed'  => false,
+                'blockers' => [['code' => 'plan_not_found', 'label' => 'ไม่พบแผนที่เลือก', 'detail' => '']],
+                'warnings' => [],
+                'diff'     => [],
+            ], 404);
+        }
+
+        $report = app(\App\Services\PlanChangePreflightService::class)->check($profile, $plan);
+        return response()->json($report);
     }
 
     // ─────────────────────────────────────────────────────────────────────

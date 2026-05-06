@@ -1224,6 +1224,148 @@ html.dark .decide-foot{color:#64748b;}
                 </div>
               </template>
 
+              {{-- ── Preflight diff / blockers / warnings ─────────────────
+                   Server returns the diff (gained/lost features, storage
+                   delta, AI delta, commission change) plus blockers
+                   (downgrade-with-overflow) and warnings (events over
+                   cap, features that will lock). UI mirrors the same
+                   gating server-side does so submit only enables when
+                   the plan change is actually permitted. --}}
+              <div x-show="!plan.is_free" class="mb-5 space-y-3">
+                {{-- Loading state --}}
+                <template x-if="preflightLoading">
+                  <div class="rounded-xl p-3 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 inline-flex items-center gap-2">
+                    <i class="bi bi-arrow-repeat animate-spin"></i>
+                    กำลังตรวจข้อมูลแผน...
+                  </div>
+                </template>
+
+                {{-- Diff card — shown when preflight loaded --}}
+                <template x-if="preflight && preflight.diff && !preflightLoading">
+                  <div class="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.02] overflow-hidden">
+                    <div class="px-3.5 py-2 bg-slate-100/60 dark:bg-white/[0.04] border-b border-slate-200 dark:border-white/10 flex items-center gap-1.5">
+                      <i class="bi bi-arrow-left-right text-indigo-500"></i>
+                      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">สิ่งที่จะเปลี่ยนแปลง</span>
+                    </div>
+                    <div class="p-3.5 space-y-2 text-xs">
+                      {{-- Storage delta --}}
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-slate-500 dark:text-slate-400">พื้นที่จัดเก็บ</span>
+                        <span class="font-mono font-semibold text-slate-900 dark:text-white">
+                          <span x-text="preflight.diff.storage.current_gb + ' GB'"></span>
+                          <i class="bi bi-arrow-right mx-1 text-slate-400"></i>
+                          <span x-text="preflight.diff.storage.new_gb + ' GB'"
+                                :class="{
+                                  'text-emerald-600 dark:text-emerald-400': preflight.diff.storage.direction === 'up',
+                                  'text-amber-600 dark:text-amber-400': preflight.diff.storage.direction === 'down',
+                                }"></span>
+                        </span>
+                      </div>
+                      {{-- AI credits delta --}}
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-slate-500 dark:text-slate-400">AI Credits / เดือน</span>
+                        <span class="font-mono font-semibold text-slate-900 dark:text-white">
+                          <span x-text="preflight.diff.ai_credits.current.toLocaleString()"></span>
+                          <i class="bi bi-arrow-right mx-1 text-slate-400"></i>
+                          <span x-text="preflight.diff.ai_credits.new.toLocaleString()"
+                                :class="{
+                                  'text-emerald-600 dark:text-emerald-400': preflight.diff.ai_credits.direction === 'up',
+                                  'text-amber-600 dark:text-amber-400': preflight.diff.ai_credits.direction === 'down',
+                                }"></span>
+                        </span>
+                      </div>
+                      {{-- Commission delta --}}
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-slate-500 dark:text-slate-400">ค่าคอมมิชชั่น</span>
+                        <span class="font-mono font-semibold text-slate-900 dark:text-white">
+                          <span x-text="preflight.diff.commission_pct.current + '%'"></span>
+                          <i class="bi bi-arrow-right mx-1 text-slate-400"></i>
+                          <span x-text="preflight.diff.commission_pct.new + '%'"
+                                :class="{
+                                  'text-emerald-600 dark:text-emerald-400': preflight.diff.commission_pct.direction === 'up',
+                                  'text-amber-600 dark:text-amber-400': preflight.diff.commission_pct.direction === 'down',
+                                }"></span>
+                        </span>
+                      </div>
+                      {{-- Features gained --}}
+                      <template x-if="preflight.diff.features_gained && preflight.diff.features_gained.length > 0">
+                        <div class="pt-2 border-t border-slate-200 dark:border-white/10">
+                          <div class="text-[10px] uppercase tracking-wider font-bold text-emerald-600 dark:text-emerald-400 mb-1.5">
+                            <i class="bi bi-plus-circle-fill"></i> ปลดล็อกฟีเจอร์
+                          </div>
+                          <div class="flex flex-wrap gap-1">
+                            <template x-for="f in preflight.diff.features_gained" :key="f.code">
+                              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                                <i class="bi bi-check-lg text-[8px]"></i>
+                                <span x-text="f.label"></span>
+                              </span>
+                            </template>
+                          </div>
+                        </div>
+                      </template>
+                      {{-- Features lost --}}
+                      <template x-if="preflight.diff.features_lost && preflight.diff.features_lost.length > 0">
+                        <div class="pt-2 border-t border-slate-200 dark:border-white/10">
+                          <div class="text-[10px] uppercase tracking-wider font-bold text-rose-600 dark:text-rose-400 mb-1.5">
+                            <i class="bi bi-dash-circle-fill"></i> ฟีเจอร์ที่จะถูกล็อก
+                          </div>
+                          <div class="flex flex-wrap gap-1">
+                            <template x-for="f in preflight.diff.features_lost" :key="f.code">
+                              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300">
+                                <i class="bi bi-x-lg text-[8px]"></i>
+                                <span x-text="f.label"></span>
+                              </span>
+                            </template>
+                          </div>
+                          <p class="text-[10px] text-rose-500 dark:text-rose-400/70 mt-1.5">
+                            <i class="bi bi-info-circle"></i>
+                            ข้อมูลเดิมยังอยู่ครบ ฟีเจอร์เหล่านี้แค่ล็อกใช้ใหม่ไม่ได้
+                          </p>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+
+                {{-- Hard blockers (red) — submit disabled --}}
+                <template x-for="b in blockerList" :key="b.code">
+                  <div class="rounded-xl border-2 border-rose-300 dark:border-rose-500/40 bg-rose-50 dark:bg-rose-950/30 p-3.5">
+                    <div class="flex items-start gap-2">
+                      <i class="bi bi-x-octagon-fill text-rose-600 dark:text-rose-400 text-base mt-0.5 shrink-0"></i>
+                      <div class="flex-1 min-w-0">
+                        <p class="font-bold text-sm text-rose-900 dark:text-rose-200" x-text="b.label"></p>
+                        <p class="text-xs text-rose-700 dark:text-rose-300/90 mt-1 leading-relaxed" x-text="b.detail"></p>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                {{-- Soft warnings (amber) — checkbox required --}}
+                <template x-if="warningList.length > 0 && blockerList.length === 0">
+                  <div class="rounded-xl border-2 border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 p-3.5">
+                    <div class="flex items-start gap-2 mb-3">
+                      <i class="bi bi-exclamation-triangle-fill text-amber-600 dark:text-amber-400 text-base mt-0.5 shrink-0"></i>
+                      <p class="font-bold text-sm text-amber-900 dark:text-amber-200">โปรดทราบก่อนเปลี่ยนแผน</p>
+                    </div>
+                    <ul class="space-y-2 mb-3">
+                      <template x-for="w in warningList" :key="w.code">
+                        <li class="text-xs text-amber-800 dark:text-amber-300/90 leading-relaxed">
+                          <strong x-text="w.label"></strong>
+                          <span class="block mt-0.5 text-amber-700 dark:text-amber-300/80" x-text="w.detail"></span>
+                        </li>
+                      </template>
+                    </ul>
+                    <label class="flex items-start gap-2 cursor-pointer">
+                      <input type="checkbox" x-model="acknowledgedWarning"
+                             class="mt-0.5 rounded border-amber-400 text-amber-600 focus:ring-amber-300">
+                      <span class="text-xs font-semibold text-amber-900 dark:text-amber-200">
+                        ฉันรับทราบและยังต้องการเปลี่ยนแผน
+                      </span>
+                    </label>
+                  </div>
+                </template>
+              </div>
+
               <div class="rounded-xl p-3.5 leading-relaxed text-sm border"
                    :class="plan.is_free ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-500/20 text-emerald-900 dark:text-emerald-200' : 'bg-sky-50 dark:bg-sky-950/30 border-sky-200 dark:border-sky-500/20 text-sky-900 dark:text-sky-200'">
                 <p class="font-semibold flex items-start gap-2 m-0">
@@ -1268,14 +1410,15 @@ html.dark .decide-foot{color:#64748b;}
                   ยกเลิก
                 </button>
                 <button type="submit"
-                        :class="submitting ? 'opacity-70 cursor-wait' : 'hover:brightness-110'"
+                        :disabled="!canSubmit"
+                        :class="!canSubmit ? 'opacity-50 cursor-not-allowed' : (submitting ? 'opacity-70 cursor-wait' : 'hover:brightness-110')"
                         class="flex-1 px-4 py-3 rounded-xl text-sm font-bold text-white inline-flex items-center justify-center gap-2 transition"
                         style="background:linear-gradient(135deg,#4f46e5,#7c3aed,#ec4899);box-shadow:0 8px 20px -4px rgba(124,58,237,.5);">
                   <i class="bi bi-arrow-repeat animate-spin" x-show="submitting"></i>
                   <template x-if="!submitting">
                     <span class="inline-flex items-center gap-2">
-                      <i :class="plan.is_free ? 'bi-rocket-takeoff' : (plan.is_upgrade ? 'bi-arrow-left-right' : 'bi-credit-card-fill')" class="bi"></i>
-                      <span x-text="plan.is_free ? 'เปิดใช้งานเลย' : (plan.is_upgrade ? 'ยืนยันเปลี่ยนแผน' : 'ดำเนินการชำระ')"></span>
+                      <i :class="blockerList.length > 0 ? 'bi-x-octagon' : (plan.is_free ? 'bi-rocket-takeoff' : (plan.is_upgrade ? 'bi-arrow-left-right' : 'bi-credit-card-fill'))" class="bi"></i>
+                      <span x-text="blockerList.length > 0 ? 'ไม่สามารถเปลี่ยนแผนได้' : (warningList.length > 0 && !acknowledgedWarning ? 'รับทราบก่อนยืนยัน' : (plan.is_free ? 'เปิดใช้งานเลย' : (plan.is_upgrade ? 'ยืนยันเปลี่ยนแผน' : 'ดำเนินการชำระ')))"></span>
                     </span>
                   </template>
                   <span x-show="submitting">กำลังดำเนินการ...</span>
@@ -1526,22 +1669,70 @@ html.dark .decide-foot{color:#64748b;}
       plan: null,
       submitting: false,
 
+      // Preflight state — fetched from server when modal opens. Drives
+      // the diff display + blocker / warning chips so the photographer
+      // sees exactly what changes BEFORE they commit. Server enforces
+      // the same rules; this is just better UX so the user isn't
+      // surprised by an error toast after submitting.
+      preflightLoading: false,
+      preflightError: '',
+      preflight: null,        // full server response
+      acknowledgedWarning: false,  // user explicitly clicked through warnings
+
       open(payload) {
-        // The card click carries the plan payload; we keep the user's
-        // current annual/monthly selection from the page-level toggle.
-        // (If the plan has no annual price, we automatically fall back
-        // to monthly so the modal doesn't show ฿0/year.)
         this.plan = payload;
         if (this.annual && (!payload || !payload.price_annual_thb)) {
           this.annual = false;
         }
         this.submitting = false;
+        this.preflight = null;
+        this.preflightError = '';
+        this.acknowledgedWarning = false;
         document.body.classList.add('overflow-hidden');
+        // Free plan doesn't need preflight — there's no downgrade
+        // overflow path that applies, and the existing controller
+        // already short-circuits same-plan attempts.
+        if (!payload || payload.is_free) return;
+        this.fetchPreflight(payload.code);
       },
       close() {
         if (this.submitting) return;
         this.plan = null;
         document.body.classList.remove('overflow-hidden');
+      },
+      async fetchPreflight(code) {
+        this.preflightLoading = true;
+        try {
+          const url = '{{ url('/photographer/subscription/preflight/') }}/' + encodeURIComponent(code);
+          const resp = await fetch(url, {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+          });
+          if (!resp.ok && resp.status !== 422) throw new Error('HTTP ' + resp.status);
+          this.preflight = await resp.json();
+        } catch (e) {
+          this.preflightError = 'ตรวจข้อมูลไม่สำเร็จ — กรุณาลองใหม่หรือกดยืนยันได้เลย ระบบจะตรวจสอบที่ฝั่งเซิร์ฟเวอร์อีกชั้น';
+        } finally {
+          this.preflightLoading = false;
+        }
+      },
+      // Submit is blocked when:
+      //   1. preflight returned blockers (e.g. downgrade-with-overflow)
+      //   2. preflight returned warnings AND user hasn't checked the
+      //      "I understand" box yet (defense-in-depth — server still
+      //      lets warnings through, but the UI nudges deliberation)
+      get canSubmit() {
+        if (this.submitting) return false;
+        if (!this.preflight) return true;  // free plan or fetch failed → let server decide
+        if (this.preflight.blockers && this.preflight.blockers.length > 0) return false;
+        if (this.preflight.warnings && this.preflight.warnings.length > 0 && !this.acknowledgedWarning) return false;
+        return true;
+      },
+      get blockerList() {
+        return (this.preflight && this.preflight.blockers) || [];
+      },
+      get warningList() {
+        return (this.preflight && this.preflight.warnings) || [];
       },
       numberFmt(n) {
         return new Intl.NumberFormat('th-TH').format(Math.round(n || 0));

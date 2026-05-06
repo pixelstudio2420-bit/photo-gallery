@@ -2062,6 +2062,13 @@ Route::prefix('photographer')->name('photographer.')->group(function () {
                     ->middleware('rate.limit:20,1')->name('subscribe');
                 Route::post('/change/{code}',    [\App\Http\Controllers\Photographer\SubscriptionController::class, 'change'])
                     ->middleware('rate.limit:10,1')->name('change');
+                // JSON preflight — UI calls this before showing the
+                // confirmation modal so users see the gained/lost diff
+                // and any blockers (e.g. downgrade-with-overflow) before
+                // they commit. Higher rate-limit since it's read-only +
+                // safe to retry on every modal open.
+                Route::get('/preflight/{code}', [\App\Http\Controllers\Photographer\SubscriptionController::class, 'preflight'])
+                    ->middleware('rate.limit:60,1')->name('preflight');
                 Route::post('/cancel',       [\App\Http\Controllers\Photographer\SubscriptionController::class, 'cancel'])
                     ->middleware('rate.limit:10,1')->name('cancel');
                 Route::post('/resume',       [\App\Http\Controllers\Photographer\SubscriptionController::class, 'resume'])
