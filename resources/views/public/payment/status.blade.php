@@ -1,28 +1,52 @@
 @extends('layouts.app')
 
-@section('title', 'สถานะการชำระเงิน')
+@section('title', isset($plan) && $plan ? 'สถานะการสมัครแผน ' . $plan->name : 'สถานะการชำระเงิน')
 
 @section('content')
 @php
   $statuses = ['pending_payment', 'pending_review', 'paid'];
   $statusIdx = array_search($order->status, $statuses);
   $isCancelled = $order->status === 'cancelled';
+
+  // $subscription and $plan come from the controller when this order is a
+  // subscription purchase. Falsy = regular photo order → template uses the
+  // legacy download-link panel. The view-level branch keeps both flows in
+  // a single template so layout, polling, slip-status sidebar etc. stay
+  // shared — only the paid-state body and order-summary card swap.
+  $isSubscription = $order->isSubscriptionOrder() && !empty($plan);
 @endphp
 
 <div class="max-w-5xl mx-auto px-4 md:px-6 py-6">
 
-  {{-- Header --}}
+  {{-- Header — subscription orders get an emerald gradient + plan-specific
+       title to make it visually distinct from photo-order receipts. The
+       back-link also routes to the photographer subscription index for
+       subscription orders (vs orders.index for photo orders). --}}
   <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
     <h1 class="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-      <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-md">
-        <i class="bi bi-receipt"></i>
+      <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl text-white shadow-md
+                   {{ $isSubscription
+                      ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
+                      : 'bg-gradient-to-br from-indigo-500 to-purple-600' }}">
+        <i class="bi {{ $isSubscription ? 'bi-stars' : 'bi-receipt' }}"></i>
       </span>
-      สถานะการชำระเงิน
+      @if($isSubscription)
+        สมัครแผน {{ $plan->name }}
+      @else
+        สถานะการชำระเงิน
+      @endif
     </h1>
-    <a href="{{ route('orders.index') }}"
-       class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 text-sm transition">
-      <i class="bi bi-arrow-left"></i> คำสั่งซื้อทั้งหมด
-    </a>
+    @if($isSubscription && \Illuminate\Support\Facades\Route::has('photographer.subscription.index'))
+      <a href="{{ route('photographer.subscription.index') }}"
+         class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 text-sm transition">
+        <i class="bi bi-arrow-left"></i> แผนของฉัน
+      </a>
+    @else
+      <a href="{{ route('orders.index') }}"
+         class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 text-sm transition">
+        <i class="bi bi-arrow-left"></i> คำสั่งซื้อทั้งหมด
+      </a>
+    @endif
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -77,10 +101,17 @@
               <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white mb-3 shadow-md">
                 <i class="bi bi-wallet2 text-2xl"></i>
               </div>
-              <p class="text-sm text-slate-700 dark:text-slate-300 mb-4">กรุณาอัปโหลดสลิปการโอนเงินเพื่อดำเนินการต่อ</p>
+              <p class="text-sm text-slate-700 dark:text-slate-300 mb-4">
+                @if($isSubscription)
+                  กรุณาชำระเงินเพื่อเปิดใช้งาน <strong>{{ $plan->name }}</strong>
+                @else
+                  กรุณาอัปโหลดสลิปการโอนเงินเพื่อดำเนินการต่อ
+                @endif
+              </p>
               <a href="{{ route('payment.checkout', $order->id) }}"
                  class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold shadow-md hover:shadow-lg transition-all">
-                <i class="bi bi-upload"></i> อัปโหลดสลิป
+                <i class="bi bi-credit-card-fill"></i>
+                {{ $isSubscription ? 'ดำเนินการชำระเงิน' : 'อัปโหลดสลิป' }}
               </a>
             </div>
 
@@ -263,44 +294,126 @@
               } catch (\Throwable) {}
             @endphp
 
-            <div class="text-center p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20">
-              <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white mb-3 shadow-lg">
-                <i class="bi bi-check-circle-fill text-3xl"></i>
-              </div>
-              <h3 class="text-lg font-bold text-emerald-900 dark:text-emerald-200">ชำระเงินสำเร็จ!</h3>
-              <p class="text-sm text-emerald-800 dark:text-emerald-300/80 mb-4">คำสั่งซื้อของคุณได้รับการยืนยันแล้ว</p>
+            @if($isSubscription)
+              {{-- ═══════════ SUBSCRIPTION PAID PANEL ═══════════
+                   Plan purchase landed — celebrate it specifically.
+                   Show plan name, what just unlocked (storage / AI /
+                   commission), and the period dates so the user knows
+                   exactly what they paid for. Two CTAs: dashboard +
+                   subscription detail (history + cancel). --}}
+              @php
+                $storageGb = $plan ? (int) round(($plan->storage_bytes ?? 0) / 1073741824) : 0;
+                $aiCredits = (int) ($plan->monthly_ai_credits ?? 0);
+                $commissionPct = (float) ($plan->commission_pct ?? 0);
+                $periodEnd = $subscription?->current_period_end?->locale('th')->isoFormat('D MMMM YYYY');
+                $cycleLabel = ($subscription?->meta['billing_cycle'] ?? 'monthly') === 'annual' ? 'รายปี' : 'รายเดือน';
+              @endphp
 
-              {{-- LINE delivery confirmation pill — appears only when the
-                   buyer has a linked LINE account AND the delivery job
-                   has handed the message off. --}}
-              @if($userHasLine && $sentToLine)
-                <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 text-xs font-bold mb-3">
-                  <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="currentColor" aria-hidden="true"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zM24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>
-                  ส่งรูปเข้า LINE ของคุณแล้ว
-                </div>
-              @elseif($userHasLine)
-                {{-- Has LINE linked but delivery hasn't fired yet — typical
-                     for the brief moment between approval and the job
-                     finishing. The page polls itself; this just sets
-                     expectations. --}}
-                <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-200 text-xs font-bold mb-3">
-                  <i class="bi bi-arrow-repeat animate-spin"></i>
-                  กำลังส่งรูปเข้า LINE…
-                </div>
-              @endif
+              <div class="rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 text-white shadow-xl">
+                <div class="px-5 sm:px-6 pt-6 pb-5 text-center relative overflow-hidden">
+                  {{-- Confetti dots (decorative, no JS) --}}
+                  <div class="absolute -top-4 -right-4 w-32 h-32 rounded-full bg-white/15 blur-2xl pointer-events-none"></div>
+                  <div class="absolute -bottom-6 -left-6 w-32 h-32 rounded-full bg-white/10 blur-2xl pointer-events-none"></div>
 
-              @if($downloadTokens->isNotEmpty())
-                @php $allPhotosToken = $downloadTokens->whereNull('photo_id')->first() ?? $downloadTokens->first(); @endphp
-                <div class="block">
-                  <a href="{{ route('download.show', $allPhotosToken->token) }}"
-                     class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold shadow-md hover:shadow-lg transition-all">
-                    <i class="bi bi-download"></i> ดาวน์โหลดรูปภาพทั้งหมด ({{ $order->items->count() }} รูป)
+                  <div class="relative">
+                    <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm mb-3 shadow-lg">
+                      <i class="bi bi-stars text-3xl"></i>
+                    </div>
+                    <p class="text-[11px] font-bold uppercase tracking-[0.2em] opacity-90 mb-1.5">
+                      🎉 เปิดใช้งานสำเร็จ
+                    </p>
+                    <h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">
+                      ยินดีต้อนรับสู่ {{ $plan->name }}
+                    </h3>
+                    @if($periodEnd)
+                      <p class="text-sm opacity-90 mt-2">
+                        ใช้งานได้ถึง <strong>{{ $periodEnd }}</strong> · ต่ออายุ{{ $cycleLabel }}อัตโนมัติ
+                      </p>
+                    @endif
+                  </div>
+                </div>
+
+                {{-- What just unlocked (3 stat tiles) --}}
+                <div class="px-4 pb-4 grid grid-cols-3 gap-2">
+                  <div class="rounded-xl bg-white/15 backdrop-blur-sm p-3 text-center">
+                    <p class="text-[10px] uppercase tracking-wider opacity-75 font-bold">พื้นที่</p>
+                    <p class="text-lg font-extrabold mt-0.5">{{ number_format($storageGb) }}</p>
+                    <p class="text-[10px] opacity-80">GB</p>
+                  </div>
+                  <div class="rounded-xl bg-white/15 backdrop-blur-sm p-3 text-center">
+                    <p class="text-[10px] uppercase tracking-wider opacity-75 font-bold">AI/เดือน</p>
+                    <p class="text-lg font-extrabold mt-0.5">{{ number_format($aiCredits) }}</p>
+                    <p class="text-[10px] opacity-80">เครดิต</p>
+                  </div>
+                  <div class="rounded-xl bg-white/15 backdrop-blur-sm p-3 text-center">
+                    <p class="text-[10px] uppercase tracking-wider opacity-75 font-bold">ค่าคอม</p>
+                    <p class="text-lg font-extrabold mt-0.5">{{ rtrim(rtrim(number_format($commissionPct, 1), '0'), '.') }}%</p>
+                    <p class="text-[10px] opacity-80">หักจากยอดขาย</p>
+                  </div>
+                </div>
+
+                {{-- CTAs --}}
+                <div class="px-4 sm:px-5 pb-5 space-y-2">
+                  <a href="{{ route('photographer.dashboard') }}"
+                     class="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white text-emerald-700 font-bold text-sm shadow-md hover:shadow-lg transition-all">
+                    <i class="bi bi-grid-1x2-fill"></i>
+                    ไปที่ Dashboard ของฉัน
                   </a>
+                  @if(\Illuminate\Support\Facades\Route::has('photographer.subscription.index'))
+                    <a href="{{ route('photographer.subscription.index') }}"
+                       class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/15 backdrop-blur-sm text-white font-semibold text-xs hover:bg-white/25 transition border border-white/20">
+                      <i class="bi bi-stars"></i>
+                      ดูรายละเอียดแผน + ประวัติบิล
+                    </a>
+                  @endif
                 </div>
-              @else
-                <p class="text-xs text-slate-500 dark:text-slate-400">ลิงก์ดาวน์โหลดจะถูกส่งทางอีเมลของคุณ</p>
-              @endif
-            </div>
+              </div>
+
+              {{-- Receipt link — same as photo orders, but framed as a
+                   plan-purchase receipt. --}}
+              <div class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">
+                <i class="bi bi-receipt"></i>
+                ใบเสร็จเลขที่ <span class="font-mono font-semibold text-slate-700 dark:text-slate-300">#{{ $order->order_number ?? $order->id }}</span>
+                · เก็บไว้สำหรับอ้างอิง
+              </div>
+
+            @else
+              {{-- ═══════════ PHOTO-ORDER PAID PANEL (unchanged) ═══════════ --}}
+              <div class="text-center p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white mb-3 shadow-lg">
+                  <i class="bi bi-check-circle-fill text-3xl"></i>
+                </div>
+                <h3 class="text-lg font-bold text-emerald-900 dark:text-emerald-200">ชำระเงินสำเร็จ!</h3>
+                <p class="text-sm text-emerald-800 dark:text-emerald-300/80 mb-4">คำสั่งซื้อของคุณได้รับการยืนยันแล้ว</p>
+
+                {{-- LINE delivery confirmation pill — appears only when the
+                     buyer has a linked LINE account AND the delivery job
+                     has handed the message off. --}}
+                @if($userHasLine && $sentToLine)
+                  <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 text-xs font-bold mb-3">
+                    <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="currentColor" aria-hidden="true"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zM24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>
+                    ส่งรูปเข้า LINE ของคุณแล้ว
+                  </div>
+                @elseif($userHasLine)
+                  <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-200 text-xs font-bold mb-3">
+                    <i class="bi bi-arrow-repeat animate-spin"></i>
+                    กำลังส่งรูปเข้า LINE…
+                  </div>
+                @endif
+
+                @if($downloadTokens->isNotEmpty())
+                  @php $allPhotosToken = $downloadTokens->whereNull('photo_id')->first() ?? $downloadTokens->first(); @endphp
+                  <div class="block">
+                    <a href="{{ route('download.show', $allPhotosToken->token) }}"
+                       class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold shadow-md hover:shadow-lg transition-all">
+                      <i class="bi bi-download"></i> ดาวน์โหลดรูปภาพทั้งหมด ({{ $order->items->count() }} รูป)
+                    </a>
+                  </div>
+                @else
+                  <p class="text-xs text-slate-500 dark:text-slate-400">ลิงก์ดาวน์โหลดจะถูกส่งทางอีเมลของคุณ</p>
+                @endif
+              </div>
+            @endif
 
           @elseif($order->status === 'cancelled')
             <div class="text-center p-5 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20">
@@ -391,35 +504,93 @@
       @endif
     </div>
 
-    {{-- Sidebar --}}
+    {{-- Sidebar — order summary. For subscription orders we swap "จำนวนรายการ"
+         (which would say "1 รายการ" for any plan, useless info) with plan-
+         specific rows: storage, AI quota, billing cycle. The accent stripe
+         shifts to emerald for plans (signals "investment in growth")
+         vs the default pink-purple for photo orders. --}}
     <div class="lg:col-span-1">
       <div class="lg:sticky lg:top-24">
         <div class="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 shadow-lg overflow-hidden">
-          <div class="h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+          <div class="h-1.5 {{ $isSubscription
+              ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500'
+              : 'bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500' }}"></div>
           <div class="p-5">
             <h3 class="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 mb-4">
-              <i class="bi bi-bag text-indigo-500"></i> สรุปคำสั่งซื้อ
+              @if($isSubscription)
+                <i class="bi bi-stars text-emerald-500"></i> สรุปการสมัครแผน
+              @else
+                <i class="bi bi-bag text-indigo-500"></i> สรุปคำสั่งซื้อ
+              @endif
             </h3>
             <dl class="text-sm space-y-2.5 mb-4 pb-4 border-b border-slate-100 dark:border-white/5">
               <div class="flex justify-between">
-                <dt class="text-slate-500 dark:text-slate-400">เลขที่คำสั่งซื้อ</dt>
+                <dt class="text-slate-500 dark:text-slate-400">{{ $isSubscription ? 'เลขที่ใบเสร็จ' : 'เลขที่คำสั่งซื้อ' }}</dt>
                 <dd class="font-mono font-medium text-slate-900 dark:text-white">#{{ $order->order_number ?? $order->id }}</dd>
               </div>
               <div class="flex justify-between">
                 <dt class="text-slate-500 dark:text-slate-400">วันที่สั่งซื้อ</dt>
                 <dd class="text-slate-900 dark:text-white">{{ $order->created_at?->format('d/m/Y') }}</dd>
               </div>
-              <div class="flex justify-between">
-                <dt class="text-slate-500 dark:text-slate-400">จำนวนรายการ</dt>
-                <dd class="text-slate-900 dark:text-white">{{ $order->items->count() }} รายการ</dd>
-              </div>
+              @if($isSubscription)
+                <div class="flex justify-between">
+                  <dt class="text-slate-500 dark:text-slate-400">แผน</dt>
+                  <dd class="font-bold text-slate-900 dark:text-white">{{ $plan->name }}</dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-slate-500 dark:text-slate-400">รอบบิล</dt>
+                  <dd class="text-slate-900 dark:text-white">{{ ($subscription?->meta['billing_cycle'] ?? 'monthly') === 'annual' ? 'รายปี' : 'รายเดือน' }}</dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-slate-500 dark:text-slate-400">พื้นที่</dt>
+                  <dd class="text-slate-900 dark:text-white">{{ number_format((int) round(($plan->storage_bytes ?? 0) / 1073741824)) }} GB</dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-slate-500 dark:text-slate-400">AI Credits / เดือน</dt>
+                  <dd class="text-slate-900 dark:text-white">{{ number_format((int) ($plan->monthly_ai_credits ?? 0)) }}</dd>
+                </div>
+                @if((float) ($plan->commission_pct ?? 0) === 0.0)
+                  <div class="flex justify-between">
+                    <dt class="text-slate-500 dark:text-slate-400">ค่าคอมมิชชั่น</dt>
+                    <dd class="font-bold text-emerald-600 dark:text-emerald-400">0% (เก็บเต็ม)</dd>
+                  </div>
+                @endif
+              @else
+                <div class="flex justify-between">
+                  <dt class="text-slate-500 dark:text-slate-400">จำนวนรายการ</dt>
+                  <dd class="text-slate-900 dark:text-white">{{ $order->items->count() }} รายการ</dd>
+                </div>
+              @endif
             </dl>
             <div class="flex items-baseline justify-between">
               <span class="font-bold text-slate-900 dark:text-white">ยอดรวม</span>
-              <span class="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+              <span class="text-2xl font-bold {{ $isSubscription
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600'
+                  : 'bg-gradient-to-r from-indigo-600 to-purple-600' }} bg-clip-text text-transparent">
                 {{ number_format((float)$order->total, 0) }} ฿
               </span>
             </div>
+
+            {{-- Subscription guarantees — small reminders for buyer
+                 confidence. Each line maps to actual code paths in
+                 SubscriptionService (cancel preserves files, grace
+                 period, no contract). --}}
+            @if($isSubscription)
+              <div class="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 space-y-1.5 text-xs text-slate-500 dark:text-slate-400">
+                <div class="flex items-start gap-1.5">
+                  <i class="bi bi-shield-check text-emerald-500 mt-0.5"></i>
+                  <span>ยกเลิกได้ทุกเมื่อ ไม่มีค่าธรรมเนียม</span>
+                </div>
+                <div class="flex items-start gap-1.5">
+                  <i class="bi bi-folder-fill text-indigo-500 mt-0.5"></i>
+                  <span>ดาวน์เกรด → ไฟล์ทั้งหมดยังอยู่</span>
+                </div>
+                <div class="flex items-start gap-1.5">
+                  <i class="bi bi-clock-history text-amber-500 mt-0.5"></i>
+                  <span>ผ่อนผัน 7 วันถ้าตัดบัตรไม่ผ่าน</span>
+                </div>
+              </div>
+            @endif
           </div>
         </div>
       </div>

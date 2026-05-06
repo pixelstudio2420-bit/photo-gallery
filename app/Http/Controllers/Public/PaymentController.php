@@ -593,7 +593,23 @@ class PaymentController extends Controller
             ->orderByRaw('photo_id IS NULL DESC')
             ->get();
 
-        return view('public.payment.status', compact('order', 'latestSlip', 'downloadTokens'));
+        // Load subscription context when this order is a plan purchase so
+        // the view can show plan-specific copy (period dates, what unlocks,
+        // dashboard CTA) instead of the photo-order "download" panel.
+        // Falls back to null when this is a regular photo order — the
+        // template treats null as "non-subscription order".
+        $subscription = null;
+        $plan         = null;
+        if ($order->isSubscriptionOrder() && $order->subscription_invoice_id) {
+            $invoice = \App\Models\SubscriptionInvoice::with(['subscription.plan'])
+                ->find($order->subscription_invoice_id);
+            $subscription = $invoice?->subscription;
+            $plan         = $subscription?->plan;
+        }
+
+        return view('public.payment.status', compact(
+            'order', 'latestSlip', 'downloadTokens', 'subscription', 'plan'
+        ));
     }
 
     // -----------------------------------------------------------------------
