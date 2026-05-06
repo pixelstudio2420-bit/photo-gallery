@@ -6,6 +6,7 @@ use App\Models\AppSetting;
 use App\Models\BankAccount;
 use App\Models\PaymentMethod;
 use App\Models\SubscriptionPlan;
+use App\Services\Payment\SlipOKService;
 use Illuminate\Support\Collection;
 
 /**
@@ -58,6 +59,8 @@ class PaymentReadinessService
             $this->checkOmise(),
             $this->checkBankTransfer(),
             $this->checkManualGateway(),
+            $this->checkSlipOKVerification(),
+            $this->checkSlipAutoApproveMode(),
             $this->checkSubscriptionAutomation(),
             $this->checkRefundFlow(),
             $this->checkOrderFulfillment(),
@@ -297,6 +300,80 @@ class PaymentReadinessService
                 : 'method `manual` ปิดอยู่ใน payment_methods — admin จะ issue order ด้วยตัวเองไม่ได้',
             'fix'     => 'เปิด method type "manual" ใน /admin/payments/methods',
             'fix_url' => $this->safeRoute('admin.payments.methods'),
+        ];
+    }
+
+    /**
+     * SlipOK external API for slip verification — the engine that lets
+     * the system auto-confirm bank-transfer slips without an admin
+     * clicking approve. Same code path serves both photo orders and
+     * subscription orders (PaymentController::uploadSlip → SlipVerifier
+     * → SlipOKService), so configuring it once enables auto-verify
+     * across the whole site.
+     *
+     * Three keys must be present:
+     *   • slipok_enabled = '1'
+     *   • slipok_api_key = the dashboard key
+     *   • slipok_api_url = the full POST endpoint from the SlipOK
+     *     dashboard (or legacy slipok_branch_id which auto-builds it)
+     */
+    private function checkSlipOKVerification(): array
+    {
+        $svc = new SlipOKService();
+        $enabled    = $svc->isEnabled();
+        $configured = $svc->isConfigured();
+        $hasKey = !empty(AppSetting::get('slipok_api_key', ''));
+        $hasUrl = $svc->resolveApiUrl() !== null;
+
+        $pass = $enabled && $configured;
+
+        return [
+            'id'      => 'slipok_verify',
+            'label'   => 'SlipOK ตรวจสลิปอัตโนมัติ',
+            'pass'    => $pass,
+            'level'   => 'warn',
+            'detail'  => $pass
+                ? 'พร้อม — slip ที่อัปโหลดจะส่งไปตรวจกับ SlipOK API ก่อน'
+                : sprintf(
+                    'enabled=%s · api_key=%s · api_url=%s',
+                    $enabled ? 'ON' : 'OFF',
+                    $hasKey ? 'set' : 'EMPTY',
+                    $hasUrl ? 'set' : 'EMPTY'
+                ),
+            'fix'     => 'ตั้ง AppSetting `slipok_enabled`=1, `slipok_api_key` + `slipok_api_url` จาก SlipOK dashboard (https://slipok.com/)',
+            'fix_url' => $this->safeRoute('admin.payments.slips'),
+        ];
+    }
+
+    /**
+     * Auto-approve mode + threshold check. Without `slip_verify_mode`=auto,
+     * even a perfect SlipOK match still needs an admin to click approve.
+     * The SlipVerifier reads this flag at decision time
+     * (SlipVerifier::verify → $autoApprove = $verifyMode === 'auto' && …).
+     */
+    private function checkSlipAutoApproveMode(): array
+    {
+        $mode = (string) AppSetting::get('slip_verify_mode', 'manual');
+        $threshold = (int) AppSetting::get('slip_auto_approve_threshold', 80);
+        $requireSlipOK = AppSetting::get('slip_require_slipok_for_auto', '0') === '1';
+        $requireReceiver = AppSetting::get('slip_require_receiver_match', '0') === '1';
+
+        $isAuto = $mode === 'auto';
+
+        return [
+            'id'      => 'slip_auto_mode',
+            'label'   => 'โหมดอนุมัติสลิปอัตโนมัติ (ต้อง = auto เพื่อให้ตรวจอัตโนมัติทำงาน)',
+            'pass'    => $isAuto,
+            'level'   => 'warn',
+            'detail'  => sprintf(
+                'mode=%s · threshold=%d/100 · require_slipok=%s · require_receiver_match=%s',
+                $mode,
+                $threshold,
+                $requireSlipOK ? 'YES' : 'no',
+                $requireReceiver ? 'YES' : 'no'
+            ),
+            'fix'     => 'ตั้ง AppSetting `slip_verify_mode` = "auto" และปรับ `slip_auto_approve_threshold` (ค่าปกติ 80)',
+            'fix_url' => $this->safeRoute('admin.payments.slips'),
         ];
     }
 

@@ -135,6 +135,20 @@ class SlipVerifier
             && $score >= $threshold
             && empty($fraudFlags);
 
+        // When SlipOK is enabled (admin configured it), a SlipOK FAILURE must
+        // block auto-approve even when local heuristics say "looks fine".
+        // Local checks alone (file size, plausible amount, hash uniqueness)
+        // can be fooled by a well-crafted forgery — but the bank's real
+        // transRef can't be. So if SlipOK was supposed to verify and didn't
+        // (network error, slip not found at the bank, code 1012, etc.) we
+        // fall back to admin manual review rather than trust the local score.
+        // Without this gate, a fraudster could upload a forged slip image
+        // that passes local heuristics on a misconfigured/down SlipOK
+        // installation and get auto-approved.
+        if ($autoApprove && $slipok->isEnabled() && !($slipokResult['success'] ?? false)) {
+            $autoApprove = false;
+        }
+
         if ($autoApprove && $requireSlipOK) {
             $autoApprove = ($slipokResult['success'] ?? false) && $slipokAmount;
         }
@@ -293,6 +307,26 @@ class SlipVerifier
             $claimed = (float) ($normalised['amount'] ?? 0);
             if ($claimed > 0 && $claimed < $orderAmount * 0.5) {
                 $flags[] = 'amount_too_low';
+            }
+        }
+
+        // 6b. SlipOK reported a real amount but it doesn't match the order
+        //     within tolerance. The earlier check #6 only fires when the
+        //     amount_tier (computed from the user-claimed transfer_amount)
+        //     is 'none' — but a fraudster can claim 790 in the form while
+        //     the actual slip image they uploaded is for 500. SlipOK reads
+        //     500 from the image; if we don't flag this, the auto-approve
+        //     path will still see "amount_tier=exact" (from the lying form
+        //     field) and award 30 points, easily reaching the threshold.
+        //     This flag rejects the slip whenever the bank's authoritative
+        //     reading disagrees with the order, regardless of what the
+        //     user typed in the form.
+        $slipokReportedAmount = (float) ($normalised['amount'] ?? 0);
+        if ($checks['slipok_success'] && $slipokReportedAmount > 0 && $orderAmount > 0) {
+            $tolerancePct = max(0.1, min(5.0, (float) AppSetting::get('slip_amount_tolerance_percent', '1')));
+            $tolerance    = max(0.01, $orderAmount * ($tolerancePct / 100));
+            if (abs($slipokReportedAmount - $orderAmount) > $tolerance) {
+                $flags[] = 'slipok_amount_mismatch';
             }
         }
 
