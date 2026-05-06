@@ -113,10 +113,18 @@ class OrderObserver
             // photographer still gets paid by the disbursement cron —
             // the platform absorbs the loss twice (refund + payout).
             //
-            // Logic per payout row:
-            //   - 'pending'  → mark 'cancelled' (never disbursed yet)
+            // Logic per payout row (all paths land at status='reversed' —
+            // the schema CHECK constraint only allows pending/processing/
+            // paid/reversed; an earlier version tried 'cancelled' for the
+            // pending case but that violates the constraint and the
+            // exception was being swallowed by the outer try/catch,
+            // silently leaving the photographer's payout at status='pending'
+            // — meaning they could still withdraw money for a refunded sale).
+            //
+            //   - 'pending'  → mark 'reversed' (never disbursed yet, no clawback needed)
             //   - 'paid'     → mark 'reversed' + create a clawback note
             //   - 'reversed' → no-op (idempotent)
+            //
             // Photo orders only — credit/sub/storage have their own paths.
             if (in_array($order->status, ['refunded', 'cancelled'], true)
                 && $order->order_type !== Order::TYPE_CREDIT_PACKAGE
@@ -144,8 +152,12 @@ class OrderObserver
      */
     private function reversePhotographerPayouts(Order $order): void
     {
+        // Only `reversed` is a valid terminal status the schema's CHECK
+        // constraint allows ['pending','processing','paid','reversed'] so
+        // we filter out only that one — any other status (pending,
+        // processing, paid) needs to be transitioned to reversed.
         $payouts = PhotographerPayout::where('order_id', $order->id)
-            ->whereNotIn('status', ['reversed', 'cancelled'])
+            ->where('status', '!=', 'reversed')
             ->lockForUpdate()
             ->get();
 
@@ -153,33 +165,57 @@ class OrderObserver
 
         DB::transaction(function () use ($payouts, $order) {
             foreach ($payouts as $payout) {
-                if ($payout->status === 'pending' || $payout->status === 'requested') {
-                    // Never disbursed → just cancel.
-                    $payout->update([
-                        'status' => 'cancelled',
-                        'note'   => trim(($payout->note ?? '') . " [auto-cancelled by order.{$order->status}]"),
-                    ]);
-                } elseif ($payout->status === 'paid') {
-                    // Already disbursed → mark reversed for clawback.
-                    // The disbursement cron skips 'reversed' so it
-                    // won't try to settle again. Admin can follow up
-                    // for actual money recovery (manual or via
-                    // Omise transfer reverse).
-                    $payout->update([
-                        'status' => 'reversed',
-                        'note'   => trim(($payout->note ?? '') . " [reversed by order.{$order->status} — clawback required]"),
-                    ]);
+                $wasPaid = $payout->status === 'paid';
 
-                    // Notify the photographer. Best-effort.
+                // All non-reversed payouts (pending / processing / paid)
+                // land at 'reversed'. The note column distinguishes the
+                // two business cases (clawback-needed vs not). Trying any
+                // other status here used to silently fail at the DB layer
+                // and leave the row at its old status — letting the
+                // photographer withdraw money for a refunded sale.
+                $payout->update([
+                    'status'           => 'reversed',
+                    'reversed_at'      => now(),
+                    'reversal_reason'  => $wasPaid
+                        ? "order.{$order->status} — clawback required"
+                        : "order.{$order->status} — never disbursed",
+                    'note'             => trim(($payout->note ?? '') . ' ['
+                        . ($wasPaid
+                            ? "reversed by order.{$order->status} — clawback required"
+                            : "auto-reversed by order.{$order->status}")
+                        . ']'),
+                ]);
+
+                // If the payout was already attached to a draft (manual
+                // withdrawal in flight) we must release the lock so the
+                // draft Disbursement doesn't stay associated with a
+                // reversed payout. The WithdrawalRequest stays in pending
+                // status — admin/photographer can decide whether to
+                // cancel it or settle the residual.
+                if ($payout->disbursement_id) {
+                    \App\Models\PhotographerDisbursement::where('id', $payout->disbursement_id)
+                        ->where('status', \App\Models\PhotographerDisbursement::STATUS_PENDING)
+                        ->update(['payout_count' => DB::raw('GREATEST(payout_count - 1, 0)')]);
+                }
+
+                // Photographer notification — only for the clawback case
+                // (paid → reversed). For pending → reversed, the
+                // photographer never had the money in the first place,
+                // so nothing to clawback or apologise for.
+                if ($wasPaid) {
                     try {
                         \App\Models\UserNotification::notify(
                             $payout->photographer_id,
                             'payout_reversed',
-                            "↩️ ยอดขายถูกคืนเงิน",
-                            "คำสั่งซื้อ #{$order->order_number} ถูก{$order->status} — ยอด ฿".number_format((float) $payout->payout_amount, 2)." ถูก clawback",
+                            '↩️ ยอดขายถูกคืนเงิน',
+                            "คำสั่งซื้อ #{$order->order_number} ถูก{$order->status} — ยอด ฿"
+                                . number_format((float) $payout->payout_amount, 2)
+                                . ' ถูก clawback',
                             'photographer/earnings'
                         );
-                    } catch (\Throwable $e) {}
+                    } catch (\Throwable $e) {
+                        Log::debug('payout_reversed_notify_failed: ' . $e->getMessage());
+                    }
                 }
             }
         });

@@ -5,8 +5,21 @@ use Illuminate\Database\Eloquent\Model;
 class PhotographerPayout extends Model
 {
     protected $table = 'photographer_payouts';
-    protected $fillable = ['photographer_id','order_id','gross_amount','commission_rate','payout_amount','platform_fee','status','note','paid_at'];
-    protected $casts = ['gross_amount'=>'decimal:2','payout_amount'=>'decimal:2','platform_fee'=>'decimal:2','commission_rate'=>'decimal:2','paid_at'=>'datetime'];
+    protected $fillable = [
+        'photographer_id', 'order_id',
+        'gross_amount', 'commission_rate', 'payout_amount', 'platform_fee',
+        'status', 'note', 'paid_at',
+        'disbursement_id',                  // attached transfer (auto or manual)
+        'reversed_at', 'reversal_reason',   // set by OrderObserver on refund
+    ];
+    protected $casts = [
+        'gross_amount'    => 'decimal:2',
+        'payout_amount'   => 'decimal:2',
+        'platform_fee'    => 'decimal:2',
+        'commission_rate' => 'decimal:2',
+        'paid_at'         => 'datetime',
+        'reversed_at'     => 'datetime',
+    ];
     public function photographer() { return $this->belongsTo(User::class,'photographer_id'); }
     public function photographerProfile() { return $this->hasOne(PhotographerProfile::class,'user_id','photographer_id'); }
     public function order() { return $this->belongsTo(Order::class,'order_id'); }

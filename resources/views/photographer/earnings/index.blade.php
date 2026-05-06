@@ -463,12 +463,17 @@
             <td class="text-end is-mono font-bold text-indigo-700">{{ number_format($payout->payout_amount, 2) }}</td>
             <td>
               @php
+                // Pills mirror the schema's CHECK constraint exactly —
+                // pending / processing / paid / reversed are the only
+                // statuses a row can ever hold. ('requested' was a
+                // legacy status from a removed endpoint that the schema
+                // never accepted; the match arm has been removed.)
                 $payoutPill = match($payout->status) {
-                  'pending'   => ['pg-pill--amber', 'รอดำเนินการ'],
-                  'requested' => ['pg-pill--blue',  'ขอถอนแล้ว'],
-                  'paid'      => ['pg-pill--green', 'จ่ายแล้ว'],
-                  'failed'    => ['pg-pill--rose',  'ล้มเหลว'],
-                  default     => ['pg-pill--gray',  $payout->status],
+                  'pending'    => ['pg-pill--amber', 'รอดำเนินการ'],
+                  'processing' => ['pg-pill--blue',  'กำลังดำเนินการ'],
+                  'paid'       => ['pg-pill--green', 'จ่ายแล้ว'],
+                  'reversed'   => ['pg-pill--rose',  'คืนเงินแล้ว'],
+                  default      => ['pg-pill--gray',  $payout->status],
                 };
               @endphp
               <span class="pg-pill {{ $payoutPill[0] }}">{{ $payoutPill[1] }}</span>
