@@ -33,7 +33,8 @@ class DiagnosePurchaseFlowCommand extends Command
 {
     protected $signature = 'purchase:diagnose
                             {--plan=pro : The plan code to simulate (default: pro)}
-                            {--user= : Photographer user_id to test as (defaults to first photographer)}';
+                            {--user= : Photographer user_id to test as (defaults to first photographer)}
+                            {--email= : Photographer email to test as (alternative to --user)}';
 
     protected $description = 'Walk through the subscription purchase flow step-by-step and report the first blocker';
 
@@ -88,14 +89,55 @@ class DiagnosePurchaseFlowCommand extends Command
             $blockers[] = "ไม่พบแผน {$planCode} — เลือก code อื่นด้วย --plan=";
         } else {
             $userId = $this->option('user');
-            $user = $userId ? User::find($userId) : User::whereHas('photographerProfile')->first();
+            $email  = $this->option('email');
+            if ($email) {
+                $user = User::where('email', $email)->first();
+                if (!$user) {
+                    $this->error("  ✗ ไม่พบ user ที่ email = {$email}");
+                    $blockers[] = "user ที่ email '{$email}' ไม่มีในระบบ";
+                    return self::FAILURE;
+                }
+            } elseif ($userId) {
+                $user = User::find($userId);
+            } else {
+                $user = User::whereHas('photographerProfile')->first();
+            }
+
             if (!$user) {
                 $this->warn('  ⚠️  ไม่มี photographer ใน DB เพื่อทดสอบ — ข้าม simulation');
                 $warnings[] = 'ไม่มี photographer profile ใน DB — สร้าง test user ก่อนถ้าต้องการ end-to-end test';
             } else {
-                $this->line("  · simulating as photographer: {$user->email} (id={$user->id})");
+                $this->line("  · simulating as user: {$user->email} (id={$user->id})");
                 $this->line("  · plan: {$plan->name} (฿" . number_format((float) $plan->price_thb, 0) . "/m)");
-                $this->line('  ✓ subs->subscribe() จะสร้าง Order ทุกครั้งสำหรับ paid plan (verified ใน end-to-end tests)');
+
+                // The controller's profile() helper aborts(403) when the
+                // user has no photographer profile. This is THE most common
+                // cause of "I clicked subscribe and nothing happened" on
+                // production — admin tries to test as themselves but their
+                // user account isn't a photographer.
+                $hasProfile = $user->photographerProfile !== null;
+                if (!$hasProfile) {
+                    $this->error('  ✗ user นี้ไม่มี photographerProfile — POST subscribe จะ abort 403');
+                    $blockers[] = sprintf(
+                        '%s ไม่ใช่ photographer — ใช้ Impersonate ที่ /admin/photographers หรือสมัคร photographer account ก่อน',
+                        $user->email
+                    );
+                } else {
+                    $this->line('  ✓ photographerProfile id=' . $user->photographerProfile->id . ' พร้อมใช้งาน');
+
+                    // Probe current subscription — affects which controller
+                    // the form action posts to (subscribe vs change).
+                    $current = $subs->currentSubscription($user->photographerProfile);
+                    if ($current && $current->plan) {
+                        $this->line('  · current subscription: ' . $current->plan->code . ' (status=' . $current->status . ')');
+                        if ($current->plan->code === $planCode) {
+                            $this->warn('  ⚠️  user อยู่ในแผนนี้แล้ว — UI จะแสดงปุ่ม "แผนปัจจุบัน" (ปิด disabled) แทนปุ่ม Subscribe');
+                            $warnings[] = sprintf('%s อยู่แผน %s แล้ว — ทดสอบกับแผนอื่นด้วย --plan=', $user->email, $planCode);
+                        }
+                    } else {
+                        $this->line('  · ไม่มี subscription — UI จะ POST ไป /subscribe/' . $planCode);
+                    }
+                }
             }
         }
 
