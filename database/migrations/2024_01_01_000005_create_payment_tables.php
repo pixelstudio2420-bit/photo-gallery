@@ -9,7 +9,22 @@ return new class extends Migration {
         Schema::create('payment_methods', function (Blueprint $table) {
             $table->increments('id');
             $table->string('method_name', 100);
-            $table->enum('method_type', ['promptpay','bank_transfer','stripe','manual']);
+            // Full gateway list matches PaymentService::createGateway() —
+            // see PaymentMethodSeeder for the canonical row set. The
+            // 2026_05_09 migration rewrites this CHECK constraint on
+            // existing production DBs that ran on the original 4-value
+            // enum (mysql/pgsql); SQLite test DBs can't ALTER CHECK and
+            // were silently rejecting 'omise' inserts during seeding,
+            // which crashed 649 feature tests with SQLSTATE[23000]
+            // method_type CHECK violations. Defining the full set HERE
+            // means fresh installs (test + prod alike) get the right
+            // constraint from migration #1, and the 2026_05_09 extension
+            // becomes a safe no-op for new installs while still healing
+            // pre-existing legacy databases.
+            $table->enum('method_type', [
+                'promptpay', 'bank_transfer', 'stripe', 'omise',
+                'paypal', 'line_pay', 'truemoney', 'two_c_two_p', 'manual',
+            ]);
             $table->boolean('is_active')->default(true);
             $table->unsignedInteger('sort_order')->default(0);
         });
