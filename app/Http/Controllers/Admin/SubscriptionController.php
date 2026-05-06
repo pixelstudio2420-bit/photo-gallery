@@ -200,7 +200,10 @@ class SubscriptionController extends Controller
             'billing_cycle'         => 'monthly',
             'storage_bytes'         => $bytes,
             'commission_pct'        => $data['commission_pct'],
-            'max_concurrent_events' => $data['max_concurrent_events'],
+            // Validation marks this field nullable, so when the form omits
+            // the input entirely the key isn't in $data. Use ?? null so PHP
+            // 8.0+ undefined-key warnings don't bubble up to a 500.
+            'max_concurrent_events' => $data['max_concurrent_events'] ?? null,
             'max_team_seats'        => $data['max_team_seats'],
             'monthly_ai_credits'    => $data['monthly_ai_credits'],
             'badge'                 => $data['badge'] ?? null,
@@ -316,7 +319,10 @@ class SubscriptionController extends Controller
             'price_annual_thb'      => $data['price_annual_thb'] ?? null,
             'storage_bytes'         => $bytes,
             'commission_pct'        => $data['commission_pct'],
-            'max_concurrent_events' => $data['max_concurrent_events'],
+            // Validation marks this field nullable, so when the form omits
+            // the input entirely the key isn't in $data. Use ?? null so PHP
+            // 8.0+ undefined-key warnings don't bubble up to a 500.
+            'max_concurrent_events' => $data['max_concurrent_events'] ?? null,
             'max_team_seats'        => $data['max_team_seats'],
             'monthly_ai_credits'    => $data['monthly_ai_credits'],
             'badge'                 => $data['badge'] ?? null,

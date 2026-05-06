@@ -61,7 +61,17 @@ class PlanChangePreflightService
         $currentSub  = $this->subs->currentSubscription($profile);
         $currentPlan = $currentSub?->plan ?? SubscriptionPlan::defaultFree();
 
-        $isSamePlan  = $currentPlan && $currentPlan->id === $newPlan->id;
+        // "Same plan" means an EXISTING active subscription is already on
+        // this plan. A photographer with NO active subscription at all
+        // (fresh signup, or after grace expiry) must still be allowed to
+        // subscribe to Free — the fallback to defaultFree() up there is
+        // for entitlement-display purposes only, not "you've already
+        // bought it". Without this guard, preflight returns "same_plan"
+        // blocker on every fresh subscribe-to-Free attempt and the
+        // controller refuses the request → user can't onboard.
+        $isSamePlan  = $currentSub !== null
+                    && $currentPlan
+                    && $currentPlan->id === $newPlan->id;
         $oldPrice    = (float) ($currentPlan?->price_thb ?? 0);
         $newPrice    = (float) ($newPlan->price_thb ?? 0);
         $isUpgrade   = !$isSamePlan && $newPrice > $oldPrice;
