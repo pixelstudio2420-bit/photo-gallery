@@ -897,6 +897,21 @@ class SubscriptionService
                 'sub_id' => $sub->id, 'error' => $e->getMessage(),
             ]);
         }
+
+        // Admin alert when the sub JUST entered grace (only fires once per
+        // grace transition, not on every retry — `enteredGrace` is set
+        // inside the transaction only when status flipped). Lets admins
+        // reach out for retention before the grace window ends and the
+        // photographer drops to free.
+        if ($enteredGrace) {
+            try {
+                \App\Models\AdminNotification::subscriptionGraceEntered(
+                    $sub->fresh(['plan', 'photographer'])
+                );
+            } catch (\Throwable $e) {
+                Log::warning('subscription.grace_admin_notify_failed: ' . $e->getMessage());
+            }
+        }
     }
 
     // ────────────────────────────────────────────────────────────────────
@@ -943,6 +958,20 @@ class SubscriptionService
                 toPlanId:   $sub->plan_id,
                 metadata:   ['immediate' => $immediate],
             );
+
+            // Tell admins about the cancel — for retention follow-up + churn
+            // tracking. Deferred via afterCommit so a rolled-back transaction
+            // doesn't leave a phantom notification claiming someone cancelled
+            // when they didn't.
+            DB::afterCommit(function () use ($sub) {
+                try {
+                    \App\Models\AdminNotification::subscriptionCancelled(
+                        $sub->fresh(['plan', 'photographer'])
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('subscription.cancelled_admin_notify_failed: ' . $e->getMessage());
+                }
+            });
 
             return $sub->fresh('plan');
         });

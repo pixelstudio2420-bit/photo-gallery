@@ -85,11 +85,36 @@ class AdminNotification extends Model
     }
 
     /**
-     * Push notification for a new order.
+     * Push notification for a new order. Recognises subscription orders
+     * (order_type=subscription) and surfaces the plan name + photographer
+     * in the notification — without this, admins just saw a generic
+     * "ออเดอร์ใหม่ SUB-..." with no context about which plan.
      */
     public static function newOrder($order): self
     {
-        $num = $order->order_number ?? "#{$order->id}";
+        $num   = $order->order_number ?? "#{$order->id}";
+        $isSub = ($order->order_type ?? null) === 'subscription'
+              || str_starts_with((string) $num, 'SUB-');
+
+        if ($isSub) {
+            $invoice = method_exists($order, 'subscriptionInvoice') ? $order->subscriptionInvoice : null;
+            $sub     = $invoice?->subscription;
+            $plan    = $sub?->plan;
+            $shooter = $sub?->photographer;
+            $byName  = $shooter
+                ? trim(($shooter->first_name ?? '') . ' ' . ($shooter->last_name ?? ''))
+                : '';
+            $byName  = $byName !== '' ? $byName : ($shooter->email ?? "user#{$order->user_id}");
+
+            return static::notify(
+                'order',
+                "สมัครแผน {$plan?->name} รอชำระ",
+                sprintf('โดย %s · ยอด ฿%s', $byName, number_format($order->total, 0)),
+                $sub ? "admin/subscriptions/{$sub->id}" : "admin/orders/{$order->id}",
+                (string) $order->id
+            );
+        }
+
         return static::notify(
             'order',
             "ออเดอร์ใหม่ {$num}",
@@ -163,12 +188,86 @@ class AdminNotification extends Model
             return $existing;
         }
 
+        // Subscription orders deserve a specific label so the bell shows
+        // "แผน Pro เปิดใช้งาน" instead of a generic "ชำระเงินสำเร็จ" —
+        // admins glancing at the bell can immediately tell a subscription
+        // activated (revenue event) vs a photo-order paid (delivery event).
+        $isSub = ($order->order_type ?? null) === 'subscription'
+              || str_starts_with((string) $num, 'SUB-');
+
+        if ($isSub) {
+            $invoice = method_exists($order, 'subscriptionInvoice') ? $order->subscriptionInvoice : null;
+            $sub     = $invoice?->subscription;
+            $plan    = $sub?->plan;
+            $shooter = $sub?->photographer;
+            $byName  = $shooter
+                ? trim(($shooter->first_name ?? '') . ' ' . ($shooter->last_name ?? ''))
+                : '';
+            $byName  = $byName !== '' ? $byName : ($shooter->email ?? "user#{$order->user_id}");
+
+            return static::notify(
+                'payment',
+                "แผน {$plan?->name} เปิดใช้งาน 🎉",
+                sprintf('โดย %s · ยอด ฿%s', $byName, number_format($order->total, 0)),
+                $sub ? "admin/subscriptions/{$sub->id}" : "admin/orders/{$order->id}",
+                $refId
+            );
+        }
+
         return static::notify(
             'payment',
             "ชำระเงินสำเร็จ {$num}",
             "฿" . number_format($order->total, 0) . " ยืนยันแล้ว",
             "admin/orders/{$order->id}",
             $refId
+        );
+    }
+
+    /**
+     * Push notification when a photographer cancels their subscription
+     * (soft-cancel — the sub stays active until period_end). Useful for
+     * admin to track churn and reach out for retention if they want.
+     */
+    public static function subscriptionCancelled($sub): self
+    {
+        $plan    = $sub->plan ?? null;
+        $shooter = $sub->photographer ?? null;
+        $name    = $shooter
+            ? trim(($shooter->first_name ?? '') . ' ' . ($shooter->last_name ?? ''))
+            : '';
+        $name    = $name !== '' ? $name : ($shooter->email ?? "user#{$sub->photographer_id}");
+        $endsAt  = $sub->current_period_end?->format('d M Y') ?? '—';
+
+        return static::notify(
+            'subscription',
+            'ช่างภาพยกเลิกแผน',
+            sprintf('%s ยกเลิก %s — ใช้ได้ถึง %s', $name, $plan?->name ?? 'plan', $endsAt),
+            "admin/subscriptions/{$sub->id}",
+            (string) $sub->id
+        );
+    }
+
+    /**
+     * Push notification when a subscription enters grace period (renewal
+     * payment failed). Admin should see this to follow up before the
+     * grace window closes and the photographer drops to free.
+     */
+    public static function subscriptionGraceEntered($sub): self
+    {
+        $plan    = $sub->plan ?? null;
+        $shooter = $sub->photographer ?? null;
+        $name    = $shooter
+            ? trim(($shooter->first_name ?? '') . ' ' . ($shooter->last_name ?? ''))
+            : '';
+        $name    = $name !== '' ? $name : ($shooter->email ?? "user#{$sub->photographer_id}");
+        $graceEnds = $sub->grace_ends_at?->format('d M Y') ?? '—';
+
+        return static::notify(
+            'subscription',
+            'แผนเข้าช่วงผ่อนผัน — รอชำระ',
+            sprintf('%s แผน %s ตัดบัตรไม่ผ่าน · ผ่อนผันถึง %s', $name, $plan?->name ?? '', $graceEnds),
+            "admin/subscriptions/{$sub->id}",
+            (string) $sub->id
         );
     }
 

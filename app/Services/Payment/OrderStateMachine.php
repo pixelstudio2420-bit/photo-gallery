@@ -128,6 +128,37 @@ class OrderStateMachine
                 ]);
             }
 
+            // We use DB::table()->update() directly (instead of $order->update())
+            // for performance + lockForUpdate semantics — but that BYPASSES
+            // Eloquent's `updated` event, so AdminNotificationObserver
+            // never fires its paymentSuccess() helper. Without the manual
+            // dispatch below, admins miss every paid-transition notification:
+            // SlipOK auto-approve, manual admin approve, webhook callback,
+            // subscription activation — all silent. Defer via afterCommit
+            // so a rolled-back transaction doesn't leave a phantom
+            // notification, and re-fetch through Eloquent so the observer
+            // helpers receive a real model with relations available.
+            \Illuminate\Support\Facades\DB::afterCommit(function () use ($orderId, $toStatus, $current) {
+                try {
+                    $fresh = \App\Models\Order::find($orderId);
+                    if (!$fresh) return;
+
+                    if ($toStatus === 'paid' && $current !== 'paid') {
+                        \App\Models\AdminNotification::paymentSuccess($fresh);
+                    }
+                    // Other transitions worth surfacing — refunds, cancels —
+                    // already have their own notification helpers fired by
+                    // the services that initiate them (RefundService, etc.),
+                    // so we don't double-fire here.
+                } catch (\Throwable $e) {
+                    Log::warning('OrderStateMachine: post-commit admin notify failed', [
+                        'order_id' => $orderId,
+                        'to'       => $toStatus,
+                        'err'      => $e->getMessage(),
+                    ]);
+                }
+            });
+
             return true;
         });
     }
