@@ -1695,8 +1695,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('subscriptions')->name('subscriptions.')->group(function () {
             Route::get('/',               [\App\Http\Controllers\Admin\SubscriptionController::class, 'index'])->name('index');
             Route::get('/plans',          [\App\Http\Controllers\Admin\SubscriptionController::class, 'plans'])->name('plans');
+            // Plan create + delete — added so admin can manage the catalog
+            // without touching DB. Order matters: /plans/create must come
+            // BEFORE /plans/{plan} so Laravel doesn't try to resolve
+            // "create" as a plan id.
+            Route::get('/plans/create',     [\App\Http\Controllers\Admin\SubscriptionController::class, 'createPlan'])->name('plans.create');
+            Route::post('/plans',           [\App\Http\Controllers\Admin\SubscriptionController::class, 'storePlan'])->name('plans.store');
             Route::get('/plans/{plan}/edit', [\App\Http\Controllers\Admin\SubscriptionController::class, 'editPlan'])->name('plans.edit');
             Route::put('/plans/{plan}',   [\App\Http\Controllers\Admin\SubscriptionController::class, 'updatePlan'])->name('plans.update');
+            Route::delete('/plans/{plan}', [\App\Http\Controllers\Admin\SubscriptionController::class, 'destroyPlan'])->name('plans.destroy');
             Route::get('/invoices',       [\App\Http\Controllers\Admin\SubscriptionController::class, 'invoices'])->name('invoices');
             Route::post('/plans/{plan}/toggle', [\App\Http\Controllers\Admin\SubscriptionController::class, 'togglePlan'])->name('plans.toggle');
             Route::get('/{subscription}', [\App\Http\Controllers\Admin\SubscriptionController::class, 'show'])->name('show');

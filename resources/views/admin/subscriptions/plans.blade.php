@@ -2,14 +2,20 @@
 @section('title', 'Subscription Plans')
 
 @section('content')
-<div class="flex items-center justify-between mb-4">
+<div class="flex items-center justify-between mb-4 flex-wrap gap-2">
     <h4 class="font-bold tracking-tight flex items-center gap-2">
         <i class="bi bi-boxes text-indigo-500"></i> Subscription Plans
         <span class="text-xs font-normal text-gray-400 ml-2">/ แผนที่เสนอขายให้ช่างภาพ</span>
     </h4>
-    <a href="{{ route('admin.subscriptions.index') }}" class="px-3 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-sm">
-        <i class="bi bi-arrow-left mr-1"></i>กลับ
-    </a>
+    <div class="flex items-center gap-2">
+        <a href="{{ route('admin.subscriptions.plans.create') }}"
+           class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold inline-flex items-center gap-1.5">
+            <i class="bi bi-plus-lg"></i> สร้างแผนใหม่
+        </a>
+        <a href="{{ route('admin.subscriptions.index') }}" class="px-3 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-sm">
+            <i class="bi bi-arrow-left mr-1"></i>กลับ
+        </a>
+    </div>
 </div>
 
 @if(session('success'))
@@ -100,16 +106,41 @@
                             @endunless
                         </td>
                         <td class="px-4 py-3 text-right whitespace-nowrap">
+                            @php
+                                // Compute "safe to delete" = no active subscribers + not the default free plan.
+                                // We check this in the view to disable the button visually rather than
+                                // letting the user click and get a flash error — same source of truth as
+                                // the controller's destroyPlan() guard. Counting in a loop is fine for a
+                                // catalog of <20 plans; if we ever scale past that, hoist this into the
+                                // controller and pass an array instead.
+                                $usageCount = \App\Models\PhotographerSubscription::where('plan_id', $p->id)->count();
+                                $canDelete  = $usageCount === 0 && !$p->is_default_free;
+                            @endphp
                             <a href="{{ route('admin.subscriptions.plans.edit', $p) }}"
                                class="text-xs text-indigo-600 font-medium hover:underline mr-3">
                                 <i class="bi bi-pencil"></i> แก้ไข
                             </a>
                             <form method="POST" action="{{ route('admin.subscriptions.plans.toggle', $p) }}" class="inline">
                                 @csrf
-                                <button class="text-xs {{ $p->is_active ? 'text-rose-600' : 'text-emerald-600' }} font-medium hover:underline">
+                                <button class="text-xs {{ $p->is_active ? 'text-rose-600' : 'text-emerald-600' }} font-medium hover:underline mr-3">
                                     {{ $p->is_active ? 'ปิด' : 'เปิด' }}
                                 </button>
                             </form>
+                            @if($canDelete)
+                                <form method="POST" action="{{ route('admin.subscriptions.plans.destroy', $p) }}" class="inline"
+                                      onsubmit="return confirm('ยืนยันการลบแผน {{ addslashes($p->name) }} ({{ $p->code }})? การลบไม่สามารถกู้คืนได้');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button class="text-xs text-rose-700 font-medium hover:underline" title="ลบแผนถาวร">
+                                        <i class="bi bi-trash"></i> ลบ
+                                    </button>
+                                </form>
+                            @else
+                                <span class="text-xs text-gray-400 cursor-not-allowed"
+                                      title="@if($p->is_default_free)Free plan เริ่มต้นห้ามลบ@else มี {{ $usageCount }} subscription อ้างอิงอยู่ — ปิดสถานะแทน @endif">
+                                    <i class="bi bi-lock"></i> ลบ
+                                </span>
+                            @endif
                         </td>
                     </tr>
                 @endforeach

@@ -103,6 +103,161 @@ class SubscriptionController extends Controller
     }
 
     /**
+     * Plan creator — show the empty form.
+     *
+     * Re-uses the same plan-edit view by passing a synthetic blank
+     * SubscriptionPlan instance and a `creating` flag. That way price
+     * fields, feature checkboxes, colour palette and live preview all
+     * work identically; the only difference is the form action and the
+     * fact that `code` is editable (it's the unique slug — once set
+     * it's locked because every Subscription row references it).
+     */
+    public function createPlan(): View
+    {
+        $plan = new SubscriptionPlan([
+            'name'                  => '',
+            'tagline'               => '',
+            'description'           => '',
+            'price_thb'             => 0,
+            'price_annual_thb'      => null,
+            'storage_bytes'         => 0,
+            'commission_pct'        => 0,
+            'max_concurrent_events' => null,
+            'max_team_seats'        => 1,
+            'monthly_ai_credits'    => 0,
+            'badge'                 => '',
+            'color_hex'             => '#6366f1',
+            'is_public'             => true,
+            'is_active'             => true,
+            'ai_features'           => [],
+            'features_json'         => [],
+            'sort_order'            => (int) (SubscriptionPlan::max('sort_order') ?? 0) + 10,
+        ]);
+
+        return view('admin.subscriptions.plan-create', [
+            'plan'        => $plan,
+            'allFeatures' => \App\Http\Controllers\Admin\FeatureFlagController::FEATURES,
+        ]);
+    }
+
+    /**
+     * Plan creator — write a brand-new plan to the catalog.
+     *
+     * The `code` is required + unique because every PhotographerSubscription
+     * row points to a plan by id (FK), but our display logic also looks
+     * plans up by `code` (e.g. ::byCode('pro')). Once a plan ships,
+     * downstream views and routes hard-code the slug — renaming would
+     * silently break the customer-facing surface — so we treat code as
+     * immutable after creation. Validation enforces lowercase alphanumeric
+     * + dash to avoid accidental whitespace/Thai characters that would
+     * fail the URL pattern in the public picker.
+     */
+    public function storePlan(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'code'                  => 'required|string|max:32|regex:/^[a-z0-9_-]+$/|unique:subscription_plans,code',
+            'name'                  => 'required|string|max:120',
+            'tagline'               => 'nullable|string|max:200',
+            'description'           => 'nullable|string|max:600',
+            'price_thb'             => 'required|numeric|min:0',
+            'price_annual_thb'      => 'nullable|numeric|min:0',
+            'storage_gb'            => 'required|numeric|min:0',
+            'commission_pct'        => 'required|numeric|min:0|max:100',
+            'max_concurrent_events' => 'nullable|integer|min:0',
+            'max_team_seats'        => 'required|integer|min:1',
+            'monthly_ai_credits'    => 'required|integer|min:0',
+            'badge'                 => 'nullable|string|max:30',
+            'color_hex'             => 'nullable|regex:/^#[0-9A-Fa-f]{6}$/',
+            'is_public'             => 'nullable|boolean',
+            'is_active'             => 'nullable|boolean',
+            'ai_features'           => 'nullable|array',
+            'ai_features.*'         => 'string|max:50',
+            'features_json'         => 'nullable|string',
+        ], [
+            'code.regex'  => 'รหัสแผนต้องเป็นตัวพิมพ์เล็ก ตัวเลข ขีด หรือ underscore เท่านั้น',
+            'code.unique' => 'รหัสแผนนี้มีอยู่แล้วในระบบ — กรุณาใช้รหัสอื่น',
+        ]);
+
+        $bytes = (int) round($data['storage_gb'] * 1024 * 1024 * 1024);
+
+        // Bullet list arrives as multi-line textarea content; split + trim
+        // (same pattern as updatePlan)
+        $bullets = [];
+        if (!empty($data['features_json'])) {
+            foreach (preg_split('/\r?\n/', $data['features_json']) as $line) {
+                $t = trim($line);
+                if ($t !== '') $bullets[] = $t;
+            }
+        }
+
+        $plan = SubscriptionPlan::create([
+            'code'                  => $data['code'],
+            'name'                  => $data['name'],
+            'tagline'               => $data['tagline'] ?? null,
+            'description'           => $data['description'] ?? null,
+            'price_thb'             => $data['price_thb'],
+            'price_annual_thb'      => $data['price_annual_thb'] ?? null,
+            'billing_cycle'         => 'monthly',
+            'storage_bytes'         => $bytes,
+            'commission_pct'        => $data['commission_pct'],
+            'max_concurrent_events' => $data['max_concurrent_events'],
+            'max_team_seats'        => $data['max_team_seats'],
+            'monthly_ai_credits'    => $data['monthly_ai_credits'],
+            'badge'                 => $data['badge'] ?? null,
+            'color_hex'             => $data['color_hex'] ?? '#6366f1',
+            'is_public'             => (bool) ($data['is_public'] ?? false),
+            'is_active'             => (bool) ($data['is_active'] ?? true),
+            'is_default_free'       => false,
+            'ai_features'           => array_values($data['ai_features'] ?? []),
+            'features_json'         => $bullets,
+            'sort_order'            => (int) (SubscriptionPlan::max('sort_order') ?? 0) + 10,
+        ]);
+
+        return redirect()
+            ->route('admin.subscriptions.plans')
+            ->with('success', "สร้างแผน {$plan->name} (รหัส: {$plan->code}) เรียบร้อย — กดเปิด is_public เพื่อให้ลูกค้าเห็น");
+    }
+
+    /**
+     * Plan delete — refuses if any photographer is currently subscribed.
+     *
+     * Because every PhotographerSubscription row carries plan_id as a
+     * NOT NULL foreign key, deleting an in-use plan would either:
+     *   • cascade-delete real subscription history (data loss), or
+     *   • fail with an FK violation that rolls back to a 500.
+     * Both are unacceptable, so we count active references first and
+     * surface a friendly explanation. The default Free plan is also
+     * protected — every photographer needs a fallback when their paid
+     * plan ends. Operators can still hide a plan via toggle (sets
+     * is_active=false) when they want to retire it without breaking
+     * existing subscribers.
+     */
+    public function destroyPlan(SubscriptionPlan $plan): RedirectResponse
+    {
+        if ($plan->is_default_free) {
+            return back()->with('error', 'ไม่สามารถลบแผน Free เริ่มต้นได้ — ระบบใช้เป็น fallback เมื่อแผนเสียเงินหมดอายุ');
+        }
+
+        $usageCount = PhotographerSubscription::where('plan_id', $plan->id)->count();
+        if ($usageCount > 0) {
+            return back()->with('error', sprintf(
+                'ไม่สามารถลบแผน %s ได้ — มี subscription %d รายการอ้างอิงอยู่ ' .
+                '(หากต้องการเลิกขายแผนนี้ ให้ปิดสถานะ is_active แทน)',
+                $plan->name,
+                $usageCount,
+            ));
+        }
+
+        $name = $plan->name;
+        $code = $plan->code;
+        $plan->delete();
+
+        return redirect()
+            ->route('admin.subscriptions.plans')
+            ->with('success', "ลบแผน {$name} ({$code}) เรียบร้อย");
+    }
+
+    /**
      * Plan editor — full control over what each tier ships with.
      * Lets the admin tweak prices, storage cap, AI features, team seats,
      * concurrent events, AI credit budget, commission % — all the dials
@@ -165,7 +320,12 @@ class SubscriptionController extends Controller
             'max_team_seats'        => $data['max_team_seats'],
             'monthly_ai_credits'    => $data['monthly_ai_credits'],
             'badge'                 => $data['badge'] ?? null,
-            'color_hex'             => $data['color_hex'] ?? null,
+            // color_hex is NOT NULL in the table — fall back to the row's
+            // existing colour or a sane default. Without this, an admin
+            // saving the form without retouching the colour picker (which
+            // can happen if the browser drops the input on submit) would
+            // hit a 23502 NOT NULL violation and a 500.
+            'color_hex'             => $data['color_hex'] ?? $plan->color_hex ?? '#6366f1',
             'is_public'             => (bool) ($data['is_public'] ?? false),
             'ai_features'           => array_values($data['ai_features'] ?? []),
             'features_json'         => $bullets,
