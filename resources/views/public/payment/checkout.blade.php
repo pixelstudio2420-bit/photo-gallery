@@ -62,11 +62,47 @@
 
           <div class="p-5">
             @if($paymentMethods->isEmpty())
-              <div class="text-center py-10 px-4">
-                <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-rose-100 dark:bg-rose-500/20 text-rose-500 dark:text-rose-400 mb-3">
-                  <i class="bi bi-exclamation-circle text-2xl"></i>
+              {{-- Empty checkout — happens on a fresh install where no
+                   gateway is configured yet. Show a helpful, actionable
+                   message that tells admins exactly where to go to fix
+                   it; for non-admin customers we surface a friendlier
+                   apology + a manual contact path so they don't churn. --}}
+              <div class="text-center py-8 px-4">
+                <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-300 mb-4">
+                  <i class="bi bi-tools text-2xl"></i>
                 </div>
-                <p class="text-sm text-slate-500 dark:text-slate-400">ยังไม่มีช่องทางชำระเงินที่เปิดใช้งาน<br>กรุณาติดต่อผู้ดูแลระบบ</p>
+                <h3 class="font-bold text-slate-900 dark:text-white text-base mb-2">ระบบรับชำระเงินยังไม่พร้อม</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed max-w-md mx-auto">
+                  ขณะนี้ผู้ดูแลระบบกำลังตั้งค่าช่องทางชำระเงิน — ออเดอร์ของคุณ <strong class="text-slate-700 dark:text-slate-200 font-mono">#{{ $order->order_number ?? $order->id }}</strong> ถูกบันทึกไว้แล้ว
+                </p>
+                @auth('admin')
+                  <div class="mt-5 max-w-md mx-auto p-4 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30 text-left">
+                    <p class="text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider mb-1.5">
+                      <i class="bi bi-shield-lock-fill"></i> Admin diagnostic
+                    </p>
+                    <p class="text-xs text-indigo-700 dark:text-indigo-200 mb-3">
+                      ไม่มี payment_method ที่ทั้งเปิด is_active + ตั้ง credentials ครบ — เปิด readiness check เพื่อดูว่าขาดอะไร
+                    </p>
+                    <a href="{{ route('admin.payment-readiness.index') }}"
+                       class="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition">
+                      <i class="bi bi-clipboard2-pulse"></i>
+                      ไปที่ Payment Readiness →
+                    </a>
+                    <a href="{{ route('admin.payments.methods') }}"
+                       class="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-50 ml-2">
+                      จัดการ payment methods
+                    </a>
+                  </div>
+                @else
+                  <div class="mt-4 text-xs text-slate-400">
+                    หากต้องการชำระเงินทันที กรุณาติดต่อทีมงานผ่าน
+                    @if(\Illuminate\Support\Facades\Route::has('contact'))
+                      <a href="{{ route('contact') }}" class="text-indigo-600 dark:text-indigo-400 underline">หน้าติดต่อเรา</a>
+                    @else
+                      อีเมลหรือ LINE
+                    @endif
+                  </div>
+                @endauth
               </div>
             @else
               <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
