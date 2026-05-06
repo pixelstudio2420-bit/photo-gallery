@@ -1250,14 +1250,24 @@ html.dark .decide-foot{color:#64748b;}
                 </div>
               </div>
 
-              <form method="POST" :action="plan.action_url" class="flex items-stretch gap-2">
+              {{-- @submit (not @click) sets submitting=true so the button isn't
+                   disabled BEFORE the browser decides to submit the form.
+                   Disabling on @click triggers a Chrome/Safari race where
+                   the button becomes disabled in the same tick the click is
+                   being processed → the browser cancels the submit and the
+                   user is stuck looking at "กำลังดำเนินการ" forever with
+                   no POST ever firing. Switching to @submit fixes this:
+                   the browser commits to submitting first, THEN our handler
+                   runs and updates the spinner. --}}
+              <form method="POST" :action="plan.action_url" class="flex items-stretch gap-2"
+                    @submit="submitting = true">
                 @csrf
                 <input type="hidden" name="annual" :value="annual ? '1' : '0'">
                 <button type="button" @click="close()" :disabled="submitting"
                         class="px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition disabled:opacity-50">
                   ยกเลิก
                 </button>
-                <button type="submit" :disabled="submitting" @click="submitting = true"
+                <button type="submit"
                         :class="submitting ? 'opacity-70 cursor-wait' : 'hover:brightness-110'"
                         class="flex-1 px-4 py-3 rounded-xl text-sm font-bold text-white inline-flex items-center justify-center gap-2 transition"
                         style="background:linear-gradient(135deg,#4f46e5,#7c3aed,#ec4899);box-shadow:0 8px 20px -4px rgba(124,58,237,.5);">
