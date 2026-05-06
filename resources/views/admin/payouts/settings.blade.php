@@ -105,6 +105,12 @@
             ใส่ <code class="bg-gray-100 px-1 rounded text-[11px]">0</code> = ปิดเงื่อนไขขั้นต่ำ จ่ายตามรอบเวลาอย่างเดียว
             (ค่าเริ่มต้น ฿500 — ใช้ป้องกันการโอนทีละน้อย)
           </p>
+          <p class="text-[11px] text-amber-700 mt-1">
+            <i class="bi bi-link-45deg"></i>
+            ค่านี้ใช้ร่วมกับหน้า
+            <a href="{{ route('admin.payments.withdrawals.settings') }}" class="font-semibold underline">แจ้งถอน (manual)</a>
+            — บันทึกที่ใดที่หนึ่งจะ sync ทั้งสองหน้าโดยอัตโนมัติ จึงตรงกับที่ช่างภาพเห็นบน dashboard
+          </p>
         </div>
 
         {{-- Schedule --}}

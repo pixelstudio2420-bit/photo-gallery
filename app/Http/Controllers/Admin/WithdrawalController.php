@@ -189,13 +189,26 @@ class WithdrawalController extends Controller
             'methods.required'    => 'เลือกวิธีรับเงินอย่างน้อย 1 วิธี',
         ]);
 
+        $min = (string) $request->integer('min_amount');
+
         AppSetting::set('withdrawal_request_enabled', $request->boolean('enabled') ? '1' : '0');
-        AppSetting::set('withdrawal_min_amount',      (string) $request->integer('min_amount'));
+        AppSetting::set('withdrawal_min_amount',      $min);
         AppSetting::set('withdrawal_max_amount',      (string) $request->integer('max_amount'));
         AppSetting::set('withdrawal_fee_thb',         (string) $request->integer('fee_thb'));
         AppSetting::set('withdrawal_processing_days', (string) $request->integer('processing_days'));
         AppSetting::set('withdrawal_max_pending_per_photographer', (string) $request->integer('max_pending'));
         AppSetting::set('withdrawal_methods_enabled', json_encode(array_values($request->input('methods')), JSON_UNESCAPED_SLASHES));
+        // Mirror the manual-withdrawal floor onto the auto-payout threshold
+        // so admins never see a mismatch between this page and
+        // /admin/payouts/settings. Historically these were two distinct
+        // keys (`withdrawal_min_amount` for the self-withdrawal widget,
+        // `payout_min_amount` for the auto-payout cron) — admins set one
+        // and were confused when the photographer dashboard kept showing
+        // the other. Two-way mirror keeps them in lockstep regardless of
+        // which page the admin opens. Auto-payout's "0 = disable threshold"
+        // semantics are preserved — when withdrawal min is 1+ (enforced
+        // by validation above) it's always a valid auto-payout floor too.
+        AppSetting::set('payout_min_amount', $min);
 
         return back()->with('success', 'บันทึกการตั้งค่าแล้ว — มีผลทันทีกับคำขอถอนใหม่');
     }

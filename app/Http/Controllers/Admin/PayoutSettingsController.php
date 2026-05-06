@@ -85,15 +85,30 @@ class PayoutSettingsController extends Controller
             'omise_webhook_secret' => 'nullable|string|max:200',
         ]);
 
+        $min = (string) $validated['payout_min_amount'];
+
         AppSetting::setMany([
             'payout_enabled'       => $request->input('payout_enabled', '0'),
-            'payout_min_amount'    => (string) $validated['payout_min_amount'],
+            'payout_min_amount'    => $min,
             'payout_schedule'      => $validated['payout_schedule'],
             'payout_day_of_month'  => (string) ($validated['payout_day_of_month'] ?? 15),
             'payout_trigger_logic' => $validated['payout_trigger_logic'],
             'payout_delay_hours'   => (string) $validated['payout_delay_hours'],
             'payout_provider'      => $validated['payout_provider'],
             'omise_webhook_secret' => (string) ($validated['omise_webhook_secret'] ?? ''),
+            // Mirror onto the manual-self-withdrawal floor so the
+            // photographer dashboard widget ("ขั้นต่ำ ฿X · ฟรีค่าธรรมเนียม
+            // · ใช้เวลา N วันทำการ") reflects the same number admins just
+            // set here. The two keys are historically distinct
+            // (`payout_min_amount` for the auto-payout cron,
+            // `withdrawal_min_amount` for the self-request widget) — but
+            // admins set one knob and expect both UIs to track. We keep
+            // them in lockstep on every save from EITHER admin page
+            // (this one and /admin/payments/withdrawals/settings). Special
+            // case: payout allows 0 = "disable threshold, fire on schedule
+            // alone". For the manual widget we keep the floor at min(1,
+            // configured) so we never allow ฿0 self-requests.
+            'withdrawal_min_amount' => (int) $min < 1 ? '1' : $min,
         ]);
 
         return back()->with('success', 'บันทึกการตั้งค่าการจ่ายเงินเรียบร้อย');

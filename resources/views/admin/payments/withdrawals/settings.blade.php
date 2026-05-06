@@ -47,7 +47,14 @@
                 <input type="number" name="min_amount" value="{{ old('min_amount', $settings['min_amount']) }}"
                        min="1" max="1000000" required
                        class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm tabular-nums">
-                <p class="text-[10px] text-slate-500 mt-1">ช่างภาพต้องมียอดอย่างน้อยเท่านี้จึงจะกดได้</p>
+                <p class="text-[10px] text-slate-500 mt-1">
+                    ช่างภาพต้องมียอดอย่างน้อยเท่านี้จึงจะกดได้
+                </p>
+                <p class="text-[10px] text-amber-700 dark:text-amber-400 mt-1">
+                    <i class="bi bi-link-45deg"></i>
+                    ค่านี้ใช้ร่วมกับ <a href="{{ route('admin.payments.payouts.automation') }}" class="font-semibold underline">การจ่ายอัตโนมัติ</a>
+                    — บันทึกที่ใดที่หนึ่งจะ sync ทั้งสองหน้าโดยอัตโนมัติ
+                </p>
             </div>
             <div>
                 <label class="block text-xs font-bold mb-1">ยอดสูงสุดต่อครั้ง (บาท)</label>

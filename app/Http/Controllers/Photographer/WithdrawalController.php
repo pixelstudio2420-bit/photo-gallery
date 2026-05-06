@@ -44,7 +44,26 @@ class WithdrawalController extends Controller
     public static function snapshot(int $photographerId): array
     {
         $enabled = (string) AppSetting::get('withdrawal_request_enabled', '1') === '1';
-        $min     = (int) AppSetting::get('withdrawal_min_amount', 500);
+        // Reconciled minimum across both admin pages.
+        //
+        // Two distinct keys exist for historical reasons:
+        //   • withdrawal_min_amount  — set at /admin/payments/withdrawals/settings
+        //   • payout_min_amount      — set at /admin/payouts/settings
+        //
+        // From an admin's UX perspective these are the SAME knob ("how
+        // small can a withdrawal be?"). They were drifting apart whenever
+        // an admin tweaked one page without realising the other existed,
+        // and the photographer dashboard widget would show the stale
+        // half — exactly the "แสดงยอดขั้นต่ำไม่ตรงกับที่แอดมินตั้งไว้"
+        // bug. Two-way mirror on save (see the two admin controllers)
+        // prevents new drift; this max() reconciles any pre-existing
+        // drift by surfacing the higher floor (manual requests are NEVER
+        // looser than the auto-payout threshold, which is the safer
+        // direction — a photographer denied a manual withdrawal can wait
+        // for auto-payout, but the reverse stranding never makes sense).
+        $minWithdrawal = (int) AppSetting::get('withdrawal_min_amount', 500);
+        $minPayout     = (int) AppSetting::get('payout_min_amount', 500);
+        $min     = max($minWithdrawal, $minPayout, 1);
         $max     = (int) AppSetting::get('withdrawal_max_amount', 500000);
         $fee     = (int) AppSetting::get('withdrawal_fee_thb', 0);
         $days    = (int) AppSetting::get('withdrawal_processing_days', 3);
