@@ -514,11 +514,6 @@ class DashboardController extends Controller
         $aiCap = (int) ($plan?->monthly_ai_credits ?? 0);
         $aiPct = $aiCap > 0 ? min(100, round(($aiUsed / $aiCap) * 100, 1)) : 0;
 
-        // Live LINE gate — boolean, no usage counter we trust right now.
-        $canLineLive = $profile->user_id
-            ? \App\Support\PlanGate::canUseLine((int) $profile->user_id)
-            : false;
-
         $rows = [];
         foreach ($labels as $code => $meta) {
             // featureLabels() returns either [label, icon, group] or [label, group].
@@ -560,16 +555,22 @@ class DashboardController extends Controller
                 } elseif ($available) {
                     $liveOk = true;
                 }
-            } elseif ($code === 'line_notify' || $code === 'line_delivery'
-                   || $code === 'line_notify_admin' || $code === 'line_notify_customer') {
-                // LINE feature — defer to PlanGate's live answer
-                $liveOk = $canLineLive;
-                if ($inPlan && $globallyOn && !$canLineLive) {
-                    $blockedReason = 'plan_inactive';
-                }
             } else {
-                // Other features (priority_upload, presets, custom_branding,
-                // api_access, etc.) — boolean availability only.
+                // LINE features (line_notify / line_delivery / line_notify_admin /
+                // line_notify_customer / line_broadcast / line_lifecycle / line_login)
+                // AND other boolean features (priority_upload, presets, custom_branding,
+                // api_access, etc.) — same model: in_plan AND globally_on = available.
+                //
+                // We deliberately DON'T consult PlanGate::canUseLine() here.
+                // canUseLine() only checks the umbrella `line_notify` feature
+                // flag, so when an admin had ticked the granular line_delivery /
+                // line_notify_admin / line_notify_customer boxes in the plan
+                // editor WITHOUT also ticking the umbrella line_notify, the
+                // dashboard surfaced "แผนหมดอายุ — ต่ออายุก่อน" on every granular
+                // LINE row even though the photographer's Pro plan was perfectly
+                // active. The umbrella check belongs in service-layer gating
+                // (LineNotifyService etc.) where one yes/no answer is needed —
+                // not here, where each row already has its own in_plan answer.
                 $liveOk = $available;
             }
 

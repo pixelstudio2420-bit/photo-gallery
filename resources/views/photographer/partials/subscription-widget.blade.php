@@ -194,9 +194,11 @@
     @endphp
 
     <div class="plan-card mb-4"
+         data-rendered-plan-code="{{ $plan?->code ?? 'free' }}"
          x-data="subscriptionLiveWidget({
              endpoint: @js(route('photographer.api.subscription-summary')),
-             intervalMs: 30000
+             intervalMs: 30000,
+             renderedPlanCode: @js($plan?->code ?? 'free')
          })"
          x-init="start()"
          x-on:visibilitychange.window="document.hidden ? pause() : resume()">
@@ -520,6 +522,13 @@
       return {
         endpoint: opts.endpoint,
         intervalMs: opts.intervalMs || 30000,
+        // Plan code at the moment the page was rendered. When polling
+        // sees a different plan code (photographer upgraded / downgraded
+        // / their plan expired) we force a full page reload so the static
+        // blade-rendered rows (feature-by-feature table, group counts,
+        // upgrade prompts) re-render against the new plan instead of
+        // showing stale entitlements that disagree with reality.
+        renderedPlanCode: opts.renderedPlanCode || null,
         loading: false,
         error: false,
         lastUpdatedAt: new Date(),
@@ -609,6 +618,25 @@
             const el = this.$root.querySelector('[data-live="' + key + '"]');
             if (el) el.style[prop] = value;
           };
+          // Detect plan change since page load — reload so the static
+          // feature-status table (rendered server-side, NOT data-live)
+          // refreshes against the new plan. Without this, after a paid
+          // upgrade or a downgrade the per-feature rows keep showing
+          // entitlements from the OLD plan until the user manually
+          // refreshes — which is exactly the "ทำไมไม่อัพเดทรึรีเซ็ต"
+          // complaint the dashboard widget needs to fix. We only reload
+          // when the codes actually differ (not on first poll where
+          // they match) to avoid an infinite reload loop.
+          if (d.plan && d.plan.code
+              && this.renderedPlanCode
+              && d.plan.code !== this.renderedPlanCode) {
+            // One-shot guard so we never reload-bomb if the API hiccups.
+            if (!window.__subPlanReloadFired) {
+              window.__subPlanReloadFired = true;
+              window.location.reload();
+              return;
+            }
+          }
           if (d.plan) {
             setText('plan_name', d.plan.name);
           }
