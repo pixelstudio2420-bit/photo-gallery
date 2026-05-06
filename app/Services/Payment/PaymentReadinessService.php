@@ -467,10 +467,34 @@ class PaymentReadinessService
             'manual'        => 'Manual / cash',
         ];
 
+        // payment_methods.is_active is a SECOND gate that PaymentService::
+        // getActiveGateways() applies on top of isGatewayEnabled(). Without
+        // surfacing it here a gateway can show "✓ พร้อม" in this report
+        // while still being filtered out of the actual checkout view —
+        // an admin then thinks everything's set up but customers can't
+        // see PromptPay/Omise. Now we treat both gates as required, and
+        // describeGatewayBlocker() reports which of the two is OFF.
+        $methodActiveMap = PaymentMethod::query()
+            ->pluck('is_active', 'method_type')
+            ->map(fn ($v) => (bool) $v)
+            ->toArray();
+
         foreach ($known as $type => $label) {
             try {
-                $ready = PaymentService::isGatewayEnabled($type);
-                $reason = $ready ? 'พร้อมรับเงิน' : $this->describeGatewayBlocker($type);
+                $credsOk      = PaymentService::isGatewayEnabled($type);
+                $methodActive = (bool) ($methodActiveMap[$type] ?? false);
+                $ready        = $credsOk && $methodActive;
+                if ($ready) {
+                    $reason = 'พร้อมรับเงิน';
+                } elseif (!$credsOk) {
+                    $reason = $this->describeGatewayBlocker($type);
+                } else {
+                    // Credentials are good but the method row is not
+                    // active in payment_methods — most common cause of
+                    // "I set credentials but customers can't see this
+                    // gateway at checkout"
+                    $reason = 'credentials พร้อมแล้ว · แต่ row ใน payment_methods ยัง is_active=false (ไปเปิดที่ /admin/payments/methods)';
+                }
             } catch (\Throwable $e) {
                 $ready = false;
                 $reason = 'error: ' . $e->getMessage();
