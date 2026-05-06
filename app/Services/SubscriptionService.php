@@ -524,6 +524,30 @@ class SubscriptionService
                 if ($newPlanId && $newPlanId !== $sub->plan_id) {
                     $updates['plan_id'] = $newPlanId;
                 }
+
+                // Clear any scheduled downgrade — user just upgraded /
+                // changed plans, so a previously-scheduled "drop to Free
+                // at period end" no longer applies. Without this, a user
+                // who scheduled a downgrade then changed their mind and
+                // upgraded would still get downgraded at period end. Same
+                // semantics as Stripe's "schedule cancellation": replacing
+                // the current sub with a paid change voids the cancellation.
+                $meta = $sub->meta ?? [];
+                if (!empty($meta['pending_plan_code'])) {
+                    unset($meta['pending_plan_code']);
+                    $updates['meta'] = $meta;
+                }
+
+                // Clear grace + retry artifacts on plan change too. If the
+                // sub was in grace (last renewal failed) and the user
+                // resolved it by changing plans / paying the prorated diff,
+                // the grace state is no longer relevant. Without this fix,
+                // the sub would stay flagged as "in grace" until the next
+                // successful renewal cycle.
+                $updates['renewal_attempts'] = 0;
+                $updates['next_retry_at']    = null;
+                $updates['grace_ends_at']    = null;
+
                 $sub->update($updates);
             } else {
                 // First activation OR renewal: extend the period.
@@ -1347,7 +1371,7 @@ class SubscriptionService
      * Refresh the denormalised columns on photographer_profiles so the
      * middleware / dashboard / quota queries don't have to JOIN.
      *
-     * Writes:
+     * Writes (entitlement / metadata only):
      *   - current_subscription_id
      *   - subscription_plan_code
      *   - subscription_status
@@ -1357,6 +1381,19 @@ class SubscriptionService
      *   - ai_credits_used / ai_credits_period_start / ai_credits_period_end
      *     (reset to 0 whenever the billing period rolls over so
      *     monthly_ai_credits actually means "per period")
+     *
+     * NEVER touches (these belong to the photographer's actual data):
+     *   - storage_used_bytes — measured from real R2/disk consumption
+     *   - event_events       — every event the photographer ever uploaded
+     *   - event_photos       — every photo they ever sold
+     *   - photographer_payouts / orders / reviews / etc.
+     *
+     * That's the contract: an upgrade / downgrade / plan-change resets
+     * ENTITLEMENTS (what the new plan grants) but NEVER touches CONTENT
+     * the photographer has built up on the platform. Same model as
+     * Dropbox / Notion / Google Workspace: change tier, keep your data.
+     * Files above the new quota stay readable; only NEW uploads get
+     * gated until they free up space or upgrade again.
      */
     public function syncProfileCache(PhotographerProfile $profile, PhotographerSubscription $sub): void
     {
@@ -1425,6 +1462,55 @@ class SubscriptionService
         }
 
         $profile->forceFill($patch)->save();
+
+        // ── Same-request cache flush ─────────────────────────────────
+        // PlanGate caches the active plan in a 60-second array store
+        // (process-local). When syncProfileCache fires inside the same
+        // request that triggered the upgrade (e.g. admin's "approve slip"
+        // POST → activateFromPaidInvoice → syncProfileCache), without
+        // this flush, anything later in the same request that calls
+        // PlanGate::currentPlan() still sees the OLD plan from cache.
+        // Forgetting both keys forces the next call to re-read from DB,
+        // so feature-flag checks (canUseAi, canUseLine) see the new
+        // plan immediately. The cache TTL is short enough that this
+        // doesn't matter across separate requests, but within one
+        // request it's the difference between "locked AI" and "fresh
+        // 5K credits" being shown to the user instantly.
+        try {
+            \Illuminate\Support\Facades\Cache::store('array')
+                ->forget('plan_gate_plan_' . (int) $profile->user_id);
+            \Illuminate\Support\Facades\Cache::store('array')
+                ->forget('plan_gate_sub_' . (int) $profile->user_id);
+        } catch (\Throwable) {
+            // Cache flush is best-effort. Stale-for-up-to-60s in the
+            // worst case is acceptable; we don't fail the activation.
+        }
+
+        // ── Over-quota visibility ────────────────────────────────────
+        // After a plan change, surface (in logs only — never as an
+        // error blocking the user) whether the photographer's current
+        // disk usage now exceeds the new quota. The most common cause
+        // is a downgrade: 95 GB used on Studio (2TB) → drop to Pro
+        // (100 GB) → still under quota. But Studio → Free (5 GB) with
+        // any real usage = obvious over-quota. The photographer keeps
+        // every file (this method NEVER deletes content), but new
+        // uploads will be gated by the upload guard until they free
+        // space or upgrade. Logging this gives admin an early heads-up
+        // so they can reach out for retention or storage-extension
+        // upsell, instead of finding out only when the user complains.
+        $usedBytes  = (int) ($profile->storage_used_bytes ?? 0);
+        $quotaBytes = (int) ($plan->storage_bytes ?? 0);
+        if ($quotaBytes > 0 && $usedBytes > $quotaBytes) {
+            \Illuminate\Support\Facades\Log::info('subscription.over_quota_after_plan_change', [
+                'user_id'         => $profile->user_id,
+                'sub_id'          => $sub->id,
+                'plan_code'       => $plan->code,
+                'used_gb'         => round($usedBytes / 1073741824, 2),
+                'quota_gb'        => round($quotaBytes / 1073741824, 2),
+                'over_by_gb'      => round(($usedBytes - $quotaBytes) / 1073741824, 2),
+                'note'            => 'Files preserved. New uploads gated until under quota.',
+            ]);
+        }
     }
 
     /**
