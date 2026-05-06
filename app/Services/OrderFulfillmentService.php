@@ -354,10 +354,20 @@ class OrderFulfillmentService
     private function logPaymentEvent(int $orderId, string $event, string $note): void
     {
         try {
+            // The payment_logs table carries both legacy columns (log_type +
+            // message — NOT NULL) and the newer order_id/event_type/note
+            // columns added later. We write both so the row passes the NOT
+            // NULL constraint AND new admin tools that read event_type/note
+            // see the same data. Without this, every fulfillment event was
+            // silently failing to log (caught by the catch block) and the
+            // admin payment timeline missed every successful subscription
+            // activation, refund, etc.
             DB::table('payment_logs')->insert([
                 'order_id'   => $orderId,
                 'event_type' => $event,
                 'note'       => $note,
+                'log_type'   => $event,    // legacy NOT NULL column
+                'message'    => $note,     // legacy NOT NULL column
                 'created_at' => now(),
             ]);
         } catch (\Throwable $e) {
