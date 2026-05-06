@@ -982,6 +982,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/methods/{id}/toggle', [\App\Http\Controllers\Admin\PaymentController::class, 'toggleMethod'])->name('methods.toggle');
             Route::post('/methods/{id}/sort', [\App\Http\Controllers\Admin\PaymentController::class, 'updateMethodSort'])->name('methods.sort');
             Route::get('/slips', [\App\Http\Controllers\Admin\PaymentController::class, 'slips'])->name('slips');
+            // Slip image proxy — admin-auth-gated streaming endpoint that
+            // works regardless of R2 bucket public/private setting. The
+            // admin slips view loads <img src=...> from this URL. Defined
+            // BEFORE /slips/{id}/approve etc. so the path resolution is
+            // unambiguous when the URL contains "/image".
+            Route::get('/slips/{id}/image', [\App\Http\Controllers\Admin\PaymentController::class, 'slipImage'])
+                ->name('slips.image')
+                ->whereNumber('id');
             // Bulk actions must come before parameterized routes to avoid route conflicts
             Route::post('/slips/bulk-approve', [\App\Http\Controllers\Admin\PaymentController::class, 'bulkApprove'])->name('slips.bulk-approve');
             Route::post('/slips/bulk-reject', [\App\Http\Controllers\Admin\PaymentController::class, 'bulkReject'])->name('slips.bulk-reject');

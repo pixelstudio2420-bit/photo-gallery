@@ -113,6 +113,113 @@ class PaymentController extends Controller
     }
 
     /*--------------------------------------------------------------------------
+    | Slip image proxy (admin-only)
+    |--------------------------------------------------------------------------
+    | Streams a slip image from whatever storage driver owns it (R2 / S3 /
+    | local). Solves two real problems with the previous "build a public
+    | URL via r2_public_url" approach:
+    |
+    |   1. Sensitive financial data — slip images contain bank account
+    |      numbers, sender names, transfer amounts. They MUST NOT be
+    |      reachable via a public URL anyone can guess.
+    |
+    |   2. Bucket configuration drift — `r2_public_url` only renders if
+    |      the R2 bucket has public access enabled OR a custom domain is
+    |      pointed at it. On installs where neither is set, every slip
+    |      came up as a broken image. Streaming through this auth-gated
+    |      endpoint works regardless of the bucket's public/private state.
+    |
+    | The endpoint requires the admin guard via the route's middleware,
+    | so anonymous traffic gets bounced before this method runs.
+    */
+    public function slipImage(int $slipId)
+    {
+        $slip = PaymentSlip::findOrFail($slipId);
+        $key  = $slip->slip_image ?? $slip->slip_path ?? null;
+        if (!$key) {
+            abort(404, 'No slip image on file');
+        }
+
+        // Pass-through for full URLs (legacy slips that stored a CDN url
+        // directly in slip_path — predates the storage-key-only pattern).
+        if (preg_match('#^(https?:)?//#i', $key)) {
+            return redirect()->away($key);
+        }
+
+        $manager = app(\App\Services\StorageManager::class);
+
+        // Probe disks in order until we find the one that owns this object.
+        // Storage::disk(...)->get() works for both public and private
+        // R2/S3 buckets because the SDK uses our server-side credentials
+        // (which always have read access). We start with StorageManager's
+        // primary + curated drivers (R2/public/drive) for the common case,
+        // then fall back to every disk configured in filesystems.php so
+        // legacy slips on `local` (storage/app/private) or any custom
+        // disk an operator added still render. Without the fallback,
+        // a slip uploaded while MEDIA_DISK=local sat on disk 'local'
+        // but StorageManager only checks ['drive','public'] — so the
+        // file existed on disk yet the proxy 404'd.
+        $primary = $manager->primaryDriver();
+        $curated = $manager->availableDrivers();
+        $allConfigured = array_keys(config('filesystems.disks', []));
+        $disks = array_values(array_unique(array_merge([$primary], $curated, $allConfigured)));
+        foreach ($disks as $disk) {
+            // 'drive' (Google Drive) needs OAuth bearer auth, not flat
+            // credentials — skip it here, we never write slips there.
+            if ($disk === \App\Services\StorageManager::DRIVER_DRIVE) continue;
+
+            try {
+                $storageDisk = \Illuminate\Support\Facades\Storage::disk($disk);
+                if (!$storageDisk->exists($key)) continue;
+
+                $bytes = $storageDisk->get($key);
+                if ($bytes === null || $bytes === false) continue;
+
+                // mimeType() can fail on R2 private buckets (HEAD denied
+                // even when GET works). Fall back to extension sniffing.
+                try {
+                    $mime = $storageDisk->mimeType($key) ?: $this->mimeFromKey($key);
+                } catch (\Throwable) {
+                    $mime = $this->mimeFromKey($key);
+                }
+
+                // Slip images shouldn't be cached by intermediaries — they
+                // can be viewed by admins only and rotated when re-uploaded.
+                return response($bytes, 200, [
+                    'Content-Type'        => $mime,
+                    'Content-Length'      => (string) strlen($bytes),
+                    'Cache-Control'       => 'private, no-store, max-age=0',
+                    'X-Content-Type-Options' => 'nosniff',
+                ]);
+            } catch (\Throwable $e) {
+                Log::debug('slipImage: driver probe failed', [
+                    'slip_id' => $slipId, 'disk' => $disk, 'err' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        abort(404, 'Slip image not found on any configured storage driver');
+    }
+
+    /**
+     * Best-effort MIME from the file extension. Used as a fallback when
+     * Storage::mimeType() can't open a remote file (R2 returns 403 for
+     * HEAD on private objects in some configurations).
+     */
+    private function mimeFromKey(string $key): string
+    {
+        $ext = strtolower(pathinfo($key, PATHINFO_EXTENSION));
+        return match ($ext) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png'         => 'image/png',
+            'webp'        => 'image/webp',
+            'heic', 'heif' => 'image/heic',
+            'pdf'         => 'application/pdf',
+            default       => 'application/octet-stream',
+        };
+    }
+
+    /*--------------------------------------------------------------------------
     | Slips List
     |--------------------------------------------------------------------------*/
     public function slips(Request $request)

@@ -707,13 +707,19 @@
               $fraudFlags = is_array($decoded) ? $decoded : [];
           }
           $slipImage = $slip->slip_image ?? $slip->slip_path ?? null;
-          // `$slip` is a stdClass from a raw DB join, not a PaymentSlip model —
-          // so the slip_url accessor isn't available. Resolve via StorageManager
-          // directly; it figures out whether the file lives on R2, S3, or the
-          // legacy `public` disk without us having to know up-front.
-          $slipUrl = $slipImage
-              ? app(\App\Services\StorageManager::class)->resolveUrl($slipImage)
-              : '';
+          // Use the admin-only proxy endpoint instead of building a public
+          // URL via r2_public_url. The proxy works regardless of whether the
+          // R2 bucket is public or private (admin's server-side credentials
+          // can read private objects), and slip images contain bank-account
+          // numbers + transfer amounts so they shouldn't have a guessable
+          // public URL anyway. Pass-through for legacy rows that stored a
+          // full http(s) URL in slip_path (predates the storage-key pattern).
+          $slipUrl = '';
+          if ($slipImage) {
+              $slipUrl = preg_match('#^(https?:)?//#i', $slipImage)
+                  ? $slipImage
+                  : route('admin.payments.slips.image', ['id' => $slip->id]);
+          }
 
           /* ── SlipOK pipeline state (derived per slip) ──────────────────
              Tells admin AT A GLANCE where this slip is in the verification
