@@ -111,19 +111,36 @@ class WithdrawalController extends Controller
             return back()->with('error', 'ทำได้เฉพาะรายการที่รอตรวจสอบหรืออนุมัติแล้ว');
         }
 
-        $req->update([
-            'status'                => WithdrawalRequest::STATUS_REJECTED,
-            'rejection_reason'      => $request->input('rejection_reason'),
-            'admin_note'            => $request->input('admin_note') ?: $req->admin_note,
-            'reviewed_by_admin_id'  => Auth::id(),
-            'reviewed_at'           => now(),
-        ]);
+        DB::transaction(function () use ($req, $request) {
+            // Release row-level lock on the photographer's payouts so they
+            // (and the auto-payout cron) can re-grab them. Mirrors the
+            // photographer-side cancel() flow — same cleanup, different
+            // actor. Without this, rejecting a request would strand
+            // earnings forever attached to a draft Disbursement no one
+            // will ever settle.
+            if ($req->disbursement_id) {
+                PhotographerPayout::where('disbursement_id', $req->disbursement_id)
+                    ->update(['disbursement_id' => null]);
+                PhotographerDisbursement::where('id', $req->disbursement_id)
+                    ->where('status', PhotographerDisbursement::STATUS_PENDING)
+                    ->delete();
+            }
 
-        $this->notifyPhotographer($req,
+            $req->update([
+                'status'                => WithdrawalRequest::STATUS_REJECTED,
+                'rejection_reason'      => $request->input('rejection_reason'),
+                'admin_note'            => $request->input('admin_note') ?: $req->admin_note,
+                'reviewed_by_admin_id'  => Auth::id(),
+                'reviewed_at'           => now(),
+                'disbursement_id'       => null,
+            ]);
+        });
+
+        $this->notifyPhotographer($req->fresh(),
             "❌ คำขอถอนเงิน ฿" . number_format((float) $req->amount_thb, 2) . " ถูกปฏิเสธ\nเหตุผล: " . $req->rejection_reason
         );
 
-        return back()->with('success', 'ปฏิเสธคำขอแล้ว');
+        return back()->with('success', 'ปฏิเสธคำขอแล้ว — ยอดเงินกลับสู่ยอดที่ถอนได้ของช่างภาพ');
     }
 
     /**
@@ -169,15 +186,72 @@ class WithdrawalController extends Controller
 
         try {
             $disbursement = DB::transaction(function () use ($req, $request) {
-                // Pick FIFO-oldest pending payouts to cover the request amount.
-                // lockForUpdate keeps concurrent admin actions on the same
-                // photographer from picking the same rows. If two admins
-                // markPaid two different requests for the same photographer
-                // simultaneously, the second one waits at this lock then sees
-                // fewer pending rows — exactly what we want.
+                $rawResponse = [
+                    'source'                => 'admin_manual_mark_paid',
+                    'admin_id'              => Auth::id(),
+                    'withdrawal_request_id' => $req->id,
+                    'slip_url'              => $request->input('payment_slip_url'),
+                ];
+                $providerTxnId = $request->input('payment_reference') ?: ('manual-' . $req->id);
+
+                // ── New flow: WR has a draft disbursement from store() ──
+                // The picked payouts are already attached to it. We just
+                // flip the draft to 'succeeded' and the attached payouts
+                // to 'paid'. This is the common case for any WR created
+                // after the row-level-lock refactor shipped.
+                if ($req->disbursement_id) {
+                    $draft = PhotographerDisbursement::where('id', $req->disbursement_id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($draft && $draft->status === PhotographerDisbursement::STATUS_PENDING) {
+                        $attachedCount = PhotographerPayout::where('disbursement_id', $draft->id)->count();
+                        if ($attachedCount === 0) {
+                            // Defensive: draft exists but its payouts got
+                            // detached by some concurrent flow (unlikely
+                            // but possible if a refund/reversal touched
+                            // them). Don't ship a phantom disbursement.
+                            throw new \RuntimeException(
+                                'ไม่สามารถยืนยันการโอน — รายได้ที่จองไว้ถูกปลดล็อกระหว่างทาง กรุณาตรวจสอบยอดและลองใหม่'
+                            );
+                        }
+
+                        $draft->update([
+                            'status'          => PhotographerDisbursement::STATUS_SUCCEEDED,
+                            'provider_txn_id' => $providerTxnId,
+                            'attempted_at'    => now(),
+                            'settled_at'      => now(),
+                            'attempts'        => 1,
+                            'raw_response'    => $rawResponse,
+                        ]);
+
+                        PhotographerPayout::where('disbursement_id', $draft->id)
+                            ->update([
+                                'status'  => 'paid',
+                                'paid_at' => now(),
+                            ]);
+
+                        $req->update([
+                            'status'               => WithdrawalRequest::STATUS_PAID,
+                            'payment_slip_url'     => $request->input('payment_slip_url'),
+                            'payment_reference'    => $request->input('payment_reference'),
+                            'admin_note'           => $request->input('admin_note') ?: $req->admin_note,
+                            'reviewed_by_admin_id' => $req->reviewed_by_admin_id ?: Auth::id(),
+                            'reviewed_at'          => $req->reviewed_at ?: now(),
+                            'paid_at'              => now(),
+                        ]);
+
+                        return $draft;
+                    }
+                }
+
+                // ── Legacy fallback: pre-refactor WR with no draft ──
+                // Pick FIFO at markPaid time (the original behavior). Only
+                // hit by WithdrawalRequest rows created BEFORE the
+                // store-time lock shipped. New WRs always have a draft
+                // attached, so this branch becomes increasingly rare.
                 $remaining = (float) $req->amount_thb;
                 $picked    = collect();
-
                 $pending = PhotographerPayout::where('photographer_id', $req->photographer_id)
                     ->where('status', 'pending')
                     ->whereNull('disbursement_id')
@@ -185,89 +259,54 @@ class WithdrawalController extends Controller
                     ->orderBy('id')
                     ->lockForUpdate()
                     ->get();
-
                 foreach ($pending as $row) {
                     if ($remaining <= 0) break;
                     $picked->push($row);
                     $remaining -= (float) $row->payout_amount;
                 }
-
                 $coveredAmount = (float) $picked->sum('payout_amount');
-
-                // Defensive: if the photographer's pending pool somehow
-                // shrank below the request amount between request creation
-                // and markPaid (admin sat on the request for days while a
-                // refund/credit clawed back a payout), we still mark the
-                // request paid — admin already moved real money — but log
-                // loudly so accounting can investigate.
+                if ($picked->isEmpty()) {
+                    throw new \RuntimeException(
+                        'ไม่พบรายได้ที่ค้างไว้ของช่างภาพ — ไม่สามารถสร้าง disbursement ได้'
+                    );
+                }
                 if ($coveredAmount + 0.01 < (float) $req->amount_thb) {
-                    Log::warning('withdrawal.mark_paid_undercovered', [
+                    Log::warning('withdrawal.mark_paid_undercovered_legacy', [
                         'withdrawal_request_id' => $req->id,
-                        'photographer_id'       => $req->photographer_id,
                         'request_amount'        => (float) $req->amount_thb,
                         'covered_amount'        => $coveredAmount,
-                        'shortfall'             => round((float) $req->amount_thb - $coveredAmount, 2),
                     ]);
                 }
-
-                // Create a unified-ledger disbursement at status='succeeded'
-                // immediately — admin already moved real money, the
-                // disbursement IS settled the moment they click "paid". Going
-                // through the markSucceeded() lifecycle helper here would
-                // pull notification/email/LINE side-effects INTO the
-                // transaction, and any one of them with a nested SQL hiccup
-                // poisons the whole tx (PostgreSQL aborts the connection on
-                // any failed query inside a tx, even when PHP catches the
-                // exception). We do the ledger writes here, then fire the
-                // notifications outside the transaction below.
-                //
-                // Idempotency key encodes the WithdrawalRequest ID so re-
-                // submits of the same admin POST can never create duplicate
-                // disbursements (would over-deduct the photographer's
-                // earnings if they did).
                 $disbursement = PhotographerDisbursement::create([
                     'photographer_id' => $req->photographer_id,
-                    'amount_thb'      => $coveredAmount > 0 ? $coveredAmount : (float) $req->amount_thb,
+                    'amount_thb'      => $coveredAmount,
                     'payout_count'    => $picked->count(),
                     'provider'        => 'manual_admin',
-                    'idempotency_key' => 'wr-' . $req->id,
-                    'provider_txn_id' => $request->input('payment_reference') ?: ('manual-' . $req->id),
+                    'idempotency_key' => 'wr-legacy-' . $req->id,
+                    'provider_txn_id' => $providerTxnId,
                     'status'          => PhotographerDisbursement::STATUS_SUCCEEDED,
                     'trigger_type'    => PhotographerDisbursement::TRIGGER_MANUAL,
                     'attempted_at'    => now(),
                     'settled_at'      => now(),
                     'attempts'        => 1,
-                    'raw_response'    => [
-                        'source'                => 'admin_manual_mark_paid',
-                        'admin_id'              => Auth::id(),
-                        'withdrawal_request_id' => $req->id,
-                        'slip_url'              => $request->input('payment_slip_url'),
-                    ],
+                    'raw_response'    => $rawResponse,
                 ]);
-
-                // Flip the picked payouts to 'paid' AND attach them to the
-                // disbursement in one update. This is the authoritative
-                // ledger write that closes the double-spend window.
-                if ($picked->isNotEmpty()) {
-                    PhotographerPayout::whereIn('id', $picked->pluck('id'))
-                        ->update([
-                            'disbursement_id' => $disbursement->id,
-                            'status'          => 'paid',
-                            'paid_at'         => now(),
-                        ]);
-                }
-
+                PhotographerPayout::whereIn('id', $picked->pluck('id'))
+                    ->update([
+                        'disbursement_id' => $disbursement->id,
+                        'status'          => 'paid',
+                        'paid_at'         => now(),
+                    ]);
                 $req->update([
-                    'status'                => WithdrawalRequest::STATUS_PAID,
-                    'payment_slip_url'      => $request->input('payment_slip_url'),
-                    'payment_reference'     => $request->input('payment_reference'),
-                    'admin_note'            => $request->input('admin_note') ?: $req->admin_note,
-                    'reviewed_by_admin_id'  => $req->reviewed_by_admin_id ?: Auth::id(),
-                    'reviewed_at'           => $req->reviewed_at ?: now(),
-                    'paid_at'               => now(),
-                    'disbursement_id'       => $disbursement->id,
+                    'status'               => WithdrawalRequest::STATUS_PAID,
+                    'payment_slip_url'     => $request->input('payment_slip_url'),
+                    'payment_reference'    => $request->input('payment_reference'),
+                    'admin_note'           => $request->input('admin_note') ?: $req->admin_note,
+                    'reviewed_by_admin_id' => $req->reviewed_by_admin_id ?: Auth::id(),
+                    'reviewed_at'          => $req->reviewed_at ?: now(),
+                    'paid_at'              => now(),
+                    'disbursement_id'      => $disbursement->id,
                 ]);
-
                 return $disbursement;
             });
         } catch (\Throwable $e) {

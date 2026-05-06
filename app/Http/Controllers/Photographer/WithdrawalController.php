@@ -74,19 +74,41 @@ class WithdrawalController extends Controller
         if (!is_array($methods)) $methods = ['bank_transfer', 'promptpay'];
 
         // ── Available balance ─────────────────────────────────────────
-        // Earnings = sum of UNPAID payouts. We subtract any AMOUNT
-        // currently locked inside a pending/approved withdrawal so the
-        // photographer can't double-spend the same balance into two
-        // simultaneous requests.
+        // Two locks combine to keep the same balance from being spent
+        // twice across concurrent paths:
+        //
+        //   (a) Row-level lock — when a photographer creates a withdrawal
+        //       request, store() attaches the FIFO-picked PhotographerPayout
+        //       rows to a draft Disbursement. Those rows then have
+        //       disbursement_id != null, so this query (which filters
+        //       whereNull) excludes them. This ALSO blocks the auto-payout
+        //       cron from grabbing the same payouts (PayoutEngine has the
+        //       identical whereNull filter at line 70-71).
+        //
+        //   (b) WithdrawalRequest scope subtraction — defensive fallback
+        //       for legacy pre-fix rows that exist without disbursement_id.
+        //       New requests don't double-count because the row-level lock
+        //       already excluded them in clause (a); this clause only
+        //       catches the legacy unlocked case where a WR was created
+        //       before this refactor shipped.
+        //
+        // The "max(0, …)" guard catches the rare race where (a) and (b)
+        // briefly disagree and arithmetic would go negative.
         $unpaidPayouts = (float) PhotographerPayout::where('photographer_id', $photographerId)
             ->where('status', 'pending')
+            ->whereNull('disbursement_id')
             ->sum('payout_amount');
 
-        $lockedInActiveRequests = (float) WithdrawalRequest::where('photographer_id', $photographerId)
+        // Legacy fallback — only counts WRs without a draft disbursement
+        // attached (those are the pre-refactor rows). Post-refactor WRs
+        // always have disbursement_id set, so they'd be double-counted
+        // against the row-level lock above without this whereNull.
+        $lockedLegacy = (float) WithdrawalRequest::where('photographer_id', $photographerId)
             ->active()
+            ->whereNull('disbursement_id')
             ->sum('amount_thb');
 
-        $availableBalance = max(0, $unpaidPayouts - $lockedInActiveRequests);
+        $availableBalance = max(0, $unpaidPayouts - $lockedLegacy);
 
         // ── Pending count (anti-spam) ─────────────────────────────────
         $pendingCount = WithdrawalRequest::where('photographer_id', $photographerId)
@@ -186,18 +208,118 @@ class WithdrawalController extends Controller
             ];
         }
 
-        $req = DB::transaction(function () use ($userId, $amount, $snap, $validated, $details) {
-            return WithdrawalRequest::create([
-                'photographer_id'   => $userId,
-                'amount_thb'        => $amount,
-                'fee_thb'           => $snap['fee'],
-                'net_thb'           => max(0, $amount - $snap['fee']),
-                'method'            => $validated['method'],
-                'method_details'    => $details,
-                'status'            => WithdrawalRequest::STATUS_PENDING,
-                'photographer_note' => $validated['note'] ?? null,
+        try {
+            [$req, $snapAdjusted] = DB::transaction(function () use ($userId, $amount, $snap, $validated, $details) {
+                // Row-level lock — pick FIFO-oldest pending payouts that
+                // cover the requested amount. lockForUpdate prevents two
+                // concurrent withdrawal-request submissions from picking the
+                // same rows. Since each PhotographerPayout row maps 1:1 to a
+                // sale and rows can't be split (unique key on photographer_id
+                // + order_id), we always pick whole rows — the smallest
+                // covering subset.
+                $pending = PhotographerPayout::where('photographer_id', $userId)
+                    ->where('status', 'pending')
+                    ->whereNull('disbursement_id')
+                    ->orderBy('created_at')
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+
+                $remaining = (float) $amount;
+                $picked    = collect();
+                foreach ($pending as $row) {
+                    if ($remaining <= 0) break;
+                    $picked->push($row);
+                    $remaining -= (float) $row->payout_amount;
+                }
+
+                $coveredAmount = (float) $picked->sum('payout_amount');
+
+                if ($coveredAmount + 0.01 < (float) $amount) {
+                    // Pending pool can't cover the request. Should be caught
+                    // by the available_balance gate above, but defense in
+                    // depth: refuse here too rather than silently lock too
+                    // few rows.
+                    throw new \RuntimeException(
+                        'ยอดที่ขอ ฿' . number_format($amount, 2) .
+                        ' มากกว่ายอดรายได้ที่ใช้ได้ (฿' . number_format($coveredAmount, 2) . ')'
+                    );
+                }
+
+                // Snap UP to the exact FIFO-aligned amount. Photographer
+                // typed ฿500 with FIFO [฿300, ฿300, ฿400] → covered = ฿600
+                // (smallest superset covering the request). The bank
+                // transfer will be ฿600, photographer gets MORE money than
+                // they typed — accounting reconciles cleanly because
+                // disbursement.amount_thb = sum of attached payouts always
+                // matches reality (no overshoot drift).
+                $finalAmount = $coveredAmount;
+
+                // Create the WR first so the draft Disbursement can use a
+                // unique idempotency key derived from WR.id (prevents
+                // duplicate drafts even on rapid double-submit).
+                $wr = WithdrawalRequest::create([
+                    'photographer_id'   => $userId,
+                    'amount_thb'        => $finalAmount,
+                    'fee_thb'           => $snap['fee'],
+                    'net_thb'           => max(0, $finalAmount - $snap['fee']),
+                    'method'            => $validated['method'],
+                    'method_details'    => $details,
+                    'status'            => WithdrawalRequest::STATUS_PENDING,
+                    'photographer_note' => $validated['note'] ?? null,
+                ]);
+
+                // Draft Disbursement — status='pending' means "money has
+                // not been transferred yet, but the photographer's payouts
+                // are reserved for this withdrawal". Auto-payout cron skips
+                // (PayoutEngine filters whereNull('disbursement_id')) so
+                // this manual flow can't race against it.
+                $draft = PhotographerDisbursement::create([
+                    'photographer_id' => $userId,
+                    'amount_thb'      => $finalAmount,
+                    'payout_count'    => $picked->count(),
+                    'provider'        => 'manual_admin',
+                    'idempotency_key' => 'wr-' . $wr->id,
+                    'status'          => PhotographerDisbursement::STATUS_PENDING,
+                    'trigger_type'    => PhotographerDisbursement::TRIGGER_MANUAL,
+                    'attempts'        => 0,
+                ]);
+
+                // Lock the picked payouts to the draft. This is the
+                // authoritative row-level reservation. Status stays
+                // 'pending' until admin marks paid; auto-payout filter
+                // skips by disbursement_id IS NOT NULL.
+                PhotographerPayout::whereIn('id', $picked->pluck('id'))
+                    ->update(['disbursement_id' => $draft->id]);
+
+                $wr->update(['disbursement_id' => $draft->id]);
+
+                return [$wr, [
+                    'requested' => (float) $amount,
+                    'final'     => $finalAmount,
+                    'adjusted'  => abs($finalAmount - (float) $amount) > 0.01,
+                ]];
+            });
+        } catch (\Throwable $e) {
+            Log::error('withdrawal.store_failed', [
+                'user_id' => $userId, 'amount' => $amount, 'error' => $e->getMessage(),
             ]);
-        });
+            return back()->with('error', $e->getMessage());
+        }
+
+        // Tell the photographer if we snapped UP. They typed ฿500, system
+        // adjusted to ฿600 because their pending sales align in those
+        // increments — they get MORE money, not less.
+        if ($snapAdjusted['adjusted']) {
+            session()->flash(
+                'info',
+                sprintf(
+                    'ปรับยอดถอนเป็น ฿%s (จาก ฿%s ที่กรอก) เพื่อให้ตรงกับยอดขายในระบบ — คุณจะได้รับยอดที่ปรับเต็มจำนวน',
+                    number_format($snapAdjusted['final'], 2),
+                    number_format($snapAdjusted['requested'], 2),
+                )
+            );
+        }
 
         // Notify admins (best-effort — never block the success path)
         try {
@@ -231,7 +353,29 @@ class WithdrawalController extends Controller
             return back()->with('error', 'ยกเลิกไม่ได้ — สถานะปัจจุบัน "' . $req->statusLabel() . '"');
         }
 
-        $req->update(['status' => WithdrawalRequest::STATUS_CANCELLED]);
-        return back()->with('success', 'ยกเลิกคำขอถอนเงินแล้ว');
+        DB::transaction(function () use ($req) {
+            // Release the row-level lock — set the picked payouts back to
+            // a free state (disbursement_id = null) so the photographer
+            // (and the auto-payout cron) can re-grab them. Without this,
+            // cancelling a request would strand earnings forever in the
+            // "attached to a draft Disbursement that no one will ever
+            // settle" state.
+            if ($req->disbursement_id) {
+                PhotographerPayout::where('disbursement_id', $req->disbursement_id)
+                    ->update(['disbursement_id' => null]);
+                // Clean up the draft Disbursement row — it's only safe to
+                // delete because we restrict to status='pending' (drafts
+                // never reach succeeded without going through markPaid).
+                PhotographerDisbursement::where('id', $req->disbursement_id)
+                    ->where('status', PhotographerDisbursement::STATUS_PENDING)
+                    ->delete();
+            }
+            $req->update([
+                'status'          => WithdrawalRequest::STATUS_CANCELLED,
+                'disbursement_id' => null,
+            ]);
+        });
+
+        return back()->with('success', 'ยกเลิกคำขอถอนเงินแล้ว — ยอดเงินกลับสู่ยอดที่ถอนได้');
     }
 }

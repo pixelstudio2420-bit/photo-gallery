@@ -184,56 +184,25 @@ class EarningsController extends Controller
         return $thisMonth;
     }
 
+    /**
+     * Legacy /photographer/earnings/withdraw endpoint.
+     *
+     * Replaced by WithdrawalController::store() (POST /photographer/withdrawals)
+     * which uses the row-level disbursement lock + WithdrawalRequest audit row
+     * + admin queue. Old code here flipped PhotographerPayout.status to
+     * 'requested' — which CRASHES at the DB layer because the schema's
+     * status CHECK constraint only allows ['pending','processing','paid',
+     * 'reversed'] and 'requested' is not in that set. Every hit silently
+     * returned "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง" instead of doing
+     * anything useful.
+     *
+     * Forward to the new flow rather than 410-ing — any old bookmark or
+     * stale UI fragment that still POSTs here gets routed correctly
+     * instead of seeing a confusing error.
+     */
     public function withdraw(Request $request)
     {
-        $request->validate([
-            'amount' => 'required|numeric|min:1',
-        ]);
-
-        $userId = Auth::id();
-        $requestedAmount = (float) $request->input('amount');
-
-        // Calculate pending earnings: completed payouts that haven't been paid out yet
-        $pendingEarnings = PhotographerPayout::where('photographer_id', $userId)
-            ->where('status', 'pending')
-            ->sum('payout_amount');
-
-        if ($requestedAmount > $pendingEarnings) {
-            return back()->with('error', 'ยอดเงินที่ขอถอนมากกว่ายอดรายได้ที่มี');
-        }
-
-        // Mark pending payouts as "requested" up to the requested amount
-        $payouts = PhotographerPayout::where('photographer_id', $userId)
-            ->where('status', 'pending')
-            ->orderBy('created_at', 'asc')
-            ->get();
-
-        $remaining = $requestedAmount;
-        DB::beginTransaction();
-        try {
-            foreach ($payouts as $payout) {
-                if ($remaining <= 0) break;
-
-                $payout->update([
-                    'status' => 'requested',
-                    'note'   => 'ขอถอนเงินจำนวน ' . number_format($requestedAmount, 2) . ' บาท',
-                ]);
-                $remaining -= (float) $payout->payout_amount;
-            }
-            DB::commit();
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
-        }
-
-        try {
-            $line = app(\App\Services\LineNotifyService::class);
-            $photographer = Auth::user()->photographerProfile;
-            $line->notifyNewWithdrawal(['photographer_name' => $photographer->display_name, 'amount' => $request->amount]);
-        } catch (\Throwable $e) {
-            \Log::error('Notification error: ' . $e->getMessage());
-        }
-
-        return back()->with('success', 'ส่งคำขอถอนเงินสำเร็จ');
+        return redirect()->route('photographer.earnings')
+            ->with('info', 'ระบบแจ้งถอนเงินย้ายมาที่หน้านี้แล้ว — ใช้ปุ่ม "แจ้งถอนเงิน" ในการ์ดด้านบนเพื่อสร้างคำขอใหม่');
     }
 }
