@@ -232,9 +232,16 @@
 </section>
 
 {{-- ════════════════════════════════════════════════════════════════════
-     OUR COMMITMENT — risk-reversal badges (refund / privacy / verified)
-     Placed early so trust signals hit before the user scrolls past
-     the marketplace listing. 4 promises in flat icon-grid.
+     OUR COMMITMENT — risk-reversal badges
+     ────────────────────────────────────────────────────────────────────
+     Each card describes a feature that's actually wired up in the
+     codebase. Previous version contained two false marketing claims:
+       • "ป้องกัน screenshot อัตโนมัติ" — no browser API can do this
+       • "AI ตรวจสลิป ปลอมไม่ได้" — SlipOK is a bank-API integration,
+         not AI; "ปลอมไม่ได้" is too strong for any system.
+     Both replaced with claims that point at real services so the
+     user can audit them by visiting the linked admin pages or by
+     reading the matching service files.
      ════════════════════════════════════════════════════════════════════ --}}
 <section class="mb-12 md:mb-14 fade-up">
   <div class="rounded-3xl bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-500/10 dark:via-teal-500/10 dark:to-cyan-500/10 border border-emerald-200/60 dark:border-emerald-400/20 p-5 sm:p-7 md:p-8">
@@ -245,47 +252,99 @@
       <h2 class="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">สัญญาความปลอดภัยของเรา</h2>
     </div>
 
+    <p class="text-center text-xs text-slate-500 dark:text-slate-400 -mt-3 mb-5 max-w-2xl mx-auto">
+      ทุกข้อด้านล่างคือสิ่งที่ระบบ <strong>ทำงานจริง</strong> ในโค้ด — ไม่ใช่ slogan การตลาด
+    </p>
+
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+
+      {{-- Card 1: SlipOK auto-verify
+           Real: Payment\PaymentVerificationService + SlipOkVerifier.
+           Fraud flags actually detected: slipok_amount_mismatch,
+           duplicate_hash_same_user, slip_predates_order. Configured
+           via /admin/payments/methods (slipok_enabled toggle). --}}
       <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/70 dark:border-white/10 flex items-start gap-3">
-        <div class="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0">
-          <i class="bi bi-cash-coin"></i>
+        <div class="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 flex items-center justify-center shrink-0">
+          <i class="bi bi-receipt-cutoff"></i>
         </div>
         <div class="min-w-0">
-          <p class="font-bold text-slate-800 dark:text-white text-sm">คืนเงิน 100%</p>
-          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">จ่ายแล้วช่างไม่มา → คืนเข้าบัญชีใน 24 ชม.</p>
+          <p class="font-bold text-slate-800 dark:text-white text-sm">ตรวจสลิปกับธนาคารจริง</p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+            เชื่อม SlipOK ตรวจกับ API ธนาคาร + จับสลิปซ้ำ ยอดไม่ตรง และเวลาก่อนสร้างออเดอร์
+          </p>
         </div>
       </div>
 
+      {{-- Card 2: Server-side watermark + signed URL
+           Real: WatermarkService applies overlay during
+           ProcessUploadedPhotoJob. R2 download URLs are signed via
+           Storage::temporaryUrl() with admin-configurable TTL. The
+           preview shown before purchase has a watermark baked into the
+           pixels so a screenshot is just a watermarked screenshot —
+           we deliberately don't claim "screenshot prevention" because
+           that's impossible in a browser. --}}
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/70 dark:border-white/10 flex items-start gap-3">
+        <div class="w-9 h-9 rounded-xl bg-violet-100 dark:bg-violet-500/15 text-violet-600 dark:text-violet-300 flex items-center justify-center shrink-0">
+          <i class="bi bi-droplet-half"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="font-bold text-slate-800 dark:text-white text-sm">ลายน้ำ + ลิงก์มีอายุ</p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+            รูปก่อนซื้อใส่ลายน้ำทุกใบ · ลิงก์ดาวน์โหลดเป็น signed URL หมดอายุภายในไม่กี่นาที
+          </p>
+        </div>
+      </div>
+
+      {{-- Card 3: Photographer admin review + ITMX bank-name match
+           Real: photographer_profiles.status pending → approved (admin
+           review at /admin/photographers). Plus PhotographerProfile::
+           promptpay_verified_at + promptpay_verified_name — captured
+           on the FIRST successful disbursement when ITMX (Thailand's
+           interbank system, via Omise) confirms the registered
+           account holder name matches what the photographer typed at
+           setup-bank. Mismatches block all subsequent payouts. --}}
       <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/70 dark:border-white/10 flex items-start gap-3">
         <div class="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300 flex items-center justify-center shrink-0">
           <i class="bi bi-patch-check-fill"></i>
         </div>
         <div class="min-w-0">
-          <p class="font-bold text-slate-800 dark:text-white text-sm">ตรวจสอบช่างภาพทุกคน</p>
-          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">บัตรประชาชน + ผลงานจริงก่อนรับเข้าระบบ</p>
+          <p class="font-bold text-slate-800 dark:text-white text-sm">ช่างภาพผ่านการตรวจ</p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+            แอดมินอนุมัติผลงานก่อนเปิดขาย · ธนาคารยืนยันชื่อบัญชี PromptPay ก่อนรับเงินได้
+          </p>
         </div>
       </div>
 
+      {{-- Card 4: Refund + audit trail
+           Real: OrderObserver flips status='refunded' → reverses
+           PhotographerPayout (commit 316a33c earlier this branch
+           fixed the silent-failure bug here). payment_logs,
+           withdrawal_requests, photographer_disbursements,
+           contact_message_activities all preserve the full lifecycle
+           — no row is ever deleted, only status-flipped, so admins
+           and customers can audit any transaction years later. --}}
       <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/70 dark:border-white/10 flex items-start gap-3">
-        <div class="w-9 h-9 rounded-xl bg-violet-100 dark:bg-violet-500/15 text-violet-600 dark:text-violet-300 flex items-center justify-center shrink-0">
-          <i class="bi bi-lock-fill"></i>
+        <div class="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0">
+          <i class="bi bi-journal-check"></i>
         </div>
         <div class="min-w-0">
-          <p class="font-bold text-slate-800 dark:text-white text-sm">รูปไม่หลุด</p>
-          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">Watermark + ป้องกันการ screenshot อัตโนมัติ</p>
-        </div>
-      </div>
-
-      <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/70 dark:border-white/10 flex items-start gap-3">
-        <div class="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 flex items-center justify-center shrink-0">
-          <i class="bi bi-receipt"></i>
-        </div>
-        <div class="min-w-0">
-          <p class="font-bold text-slate-800 dark:text-white text-sm">ตรวจสลิปอัตโนมัติ</p>
-          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">AI ตรวจสลิปอัจฉริยะ ปลอมไม่ได้</p>
+          <p class="font-bold text-slate-800 dark:text-white text-sm">คืนเงิน · ตรวจสอบย้อนได้</p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+            แอดมินคืนเงินได้ · ระบบ clawback รายได้ช่างอัตโนมัติ · ทุกออเดอร์มี audit trail ค้นย้อนได้
+          </p>
         </div>
       </div>
     </div>
+
+    {{-- Disclaimer footer — sets honest expectations.
+         No system in the world can promise "100% safe always". The
+         line below acknowledges that explicitly so the photographer's
+         (and the user's) trust is earned through transparency rather
+         than overpromising. --}}
+    <p class="text-center text-[10px] text-slate-400 dark:text-slate-500 mt-4 max-w-3xl mx-auto leading-relaxed">
+      <i class="bi bi-info-circle"></i>
+      เราไม่ใช้คำว่า "ปลอมไม่ได้" หรือ "ป้องกันแคปจอ" เพราะมันเป็นไปไม่ได้จริง · ระบบเราเน้นที่การตรวจจับ + บันทึกหลักฐาน + ทำให้แก้ปัญหาได้เร็วเมื่อเกิดเหตุ
+    </p>
   </div>
 </section>
 
