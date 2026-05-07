@@ -299,19 +299,34 @@
     </div>
     <div class="flex items-center gap-2">
       <button type="button" @click="clearSelection()"
-              :disabled="selected.length === 0"
-              :class="selected.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20'"
+              :disabled="selected.length === 0 || bulkBusy"
+              :class="(selected.length === 0 || bulkBusy) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20'"
               class="px-3 py-1.5 rounded-lg text-sm font-medium bg-white/10 backdrop-blur transition">
         ล้าง
       </button>
       <button type="button" @click="bulkDelete()"
-              :disabled="selected.length === 0"
-              :class="selected.length === 0 ? 'opacity-50 cursor-not-allowed bg-rose-500/50' : 'bg-rose-500 hover:bg-rose-600 shadow-lg shadow-rose-500/30'"
+              :disabled="selected.length === 0 || bulkBusy"
+              :class="(selected.length === 0 || bulkBusy) ? 'opacity-50 cursor-not-allowed bg-rose-500/50' : 'bg-rose-500 hover:bg-rose-600 shadow-lg shadow-rose-500/30'"
               class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold transition">
-        <i class="bi bi-trash-fill"></i> ลบที่เลือก
+        {{-- Spinner shows while the bulk-delete API call is in flight.
+             The button stays in the DOM (no swap) so its width doesn't
+             jump and the bar layout stays stable. --}}
+        <template x-if="bulkBusy">
+          <span class="inline-flex items-center gap-1.5">
+            <i class="bi bi-arrow-clockwise animate-spin"></i>
+            <span>กำลังลบ <span x-text="bulkProgress.processed"></span>/<span x-text="bulkProgress.total"></span>...</span>
+          </span>
+        </template>
+        <template x-if="!bulkBusy">
+          <span class="inline-flex items-center gap-1.5">
+            <i class="bi bi-trash-fill"></i> ลบที่เลือก
+          </span>
+        </template>
       </button>
       <button type="button" @click="toggleSelectMode()" title="ปิดโหมดเลือก"
-              class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-sm bg-white/10 hover:bg-white/20 backdrop-blur transition">
+              :disabled="bulkBusy"
+              :class="bulkBusy ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white/20'"
+              class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-sm bg-white/10 backdrop-blur transition">
         <i class="bi bi-x-lg"></i>
       </button>
     </div>
@@ -603,6 +618,65 @@
   .photo-card.selected { outline: 3px solid #4f46e5; outline-offset: -3px; }
   /* Thin scrollbar inside the preview modal if image is tall */
   [x-cloak] { display: none !important; }
+
+  /* ── Bulk-delete optical states ─────────────────────────────
+     .photo-card--deleting fires the moment bulkDelete starts —
+     dims the card + locks pointer events + overlays a spinner so
+     the photographer sees WHICH cards are being processed (not
+     just a global modal). The pulse breathes 0.85→0.55 opacity at
+     1.6s so it reads as "working on it" not "broken".
+
+     .photo-card--gone fires when the server confirms — collapses
+     height + width + opacity over 280ms before the card detaches
+     from the DOM. The 280ms is the same beat as the opacity-fade
+     on the .photo-card--deleting overlay, so the spinner doesn't
+     visibly snap off mid-animation.
+  ─────────────────────────────────────────────────────────── */
+  .photo-card--deleting {
+    pointer-events: none;
+    position: relative;
+    animation: photo-card-pulse 1.6s ease-in-out infinite;
+  }
+  .photo-card--deleting::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(2px);
+    z-index: 10;
+    border-radius: inherit;
+  }
+  .photo-card--deleting::before {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 32px; height: 32px;
+    margin: -16px 0 0 -16px;
+    border: 3px solid rgba(255, 255, 255, 0.25);
+    border-top-color: #fff;
+    border-radius: 50%;
+    z-index: 11;
+    animation: photo-card-spin 0.8s linear infinite;
+  }
+  .photo-card--gone {
+    transition: transform 280ms ease-in,
+                opacity   280ms ease-in,
+                margin    280ms ease-in,
+                max-width 280ms ease-in,
+                max-height 280ms ease-in;
+    transform: scale(0.85);
+    opacity: 0;
+    max-width: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    overflow: hidden;
+  }
+  @keyframes photo-card-pulse {
+    0%, 100% { opacity: 0.85; }
+    50%      { opacity: 0.55; }
+  }
+  @keyframes photo-card-spin {
+    to { transform: rotate(360deg); }
+  }
 </style>
 @endpush
 
@@ -625,6 +699,16 @@ function photoManager(initial) {
     processing: initial.processing,
     _autoRefreshTimer: null,
     csrf:      document.querySelector('meta[name="csrf-token"]')?.content || '',
+
+    // Bulk-delete in-flight state. bulkBusy disables the action bar so a
+    // photographer can't double-submit while we're waiting on R2; the
+    // bulkProgress counter mirrors the optical fade-out of cards as they
+    // disappear, giving a real-time sense of throughput even though the
+    // server returns one final response at the end (R2 deletes serially
+    // on the photo's `deleting` hook so 50 photos = ~10s — long enough
+    // that "no feedback" was the user's reported pain point).
+    bulkBusy: false,
+    bulkProgress: { processed: 0, total: 0 },
 
     init() {
       // Auto-refresh the page every 15s while any photo is still
@@ -779,8 +863,9 @@ function photoManager(initial) {
     },
 
     bulkDelete() {
-      if (!this.selected.length) return;
+      if (!this.selected.length || this.bulkBusy) return;
       const ids = [...this.selected];
+
       Swal.fire({
         title: `ลบ ${ids.length} รูป?`,
         text:  'การลบถาวร ไม่สามารถกู้คืนได้',
@@ -791,6 +876,56 @@ function photoManager(initial) {
         cancelButtonText:  'ยกเลิก',
       }).then(result => {
         if (!result.isConfirmed) return;
+
+        // Enter busy state — disables the action bar buttons and swaps
+        // the "ลบที่เลือก" label for "กำลังลบ X/Y..." with a spinner.
+        this.bulkBusy = true;
+        this.bulkProgress = { processed: 0, total: ids.length };
+
+        // Mark each selected card as "deleting" so it dims + shows a
+        // spinner overlay. Optical feedback that work IS happening
+        // even before the server response comes back. The server still
+        // does the actual deletes; this is purely UX.
+        ids.forEach(id => {
+          const el = document.querySelector(`.photo-card[data-id="${id}"]`);
+          if (el) el.classList.add('photo-card--deleting');
+        });
+
+        // SweetAlert2 modal locks the rest of the page so a second
+        // bulk-delete can't fire mid-flight. Spinner + "กำลังลบ X รูป..."
+        // headline gives the photographer a clear "wait, we're working".
+        // allowOutsideClick=false so a misplaced backdrop tap doesn't
+        // dismiss the busy state and confuse the photographer.
+        Swal.fire({
+          title: `กำลังลบ ${ids.length} รูป...`,
+          html:  'กรุณารอสักครู่ — ระบบกำลังลบไฟล์ออกจาก storage<br>'
+               + '<span class="text-xs text-slate-400">การลบรูปทุกตัวจะเอาทั้ง original + thumbnail + watermark ออก</span>',
+          allowOutsideClick: false,
+          allowEscapeKey:    false,
+          showConfirmButton: false,
+          didOpen: () => Swal.showLoading(),
+        });
+
+        // Tick the bulkProgress counter so the action-bar button shows
+        // a believable "X/Y" climb. We can't ask the server for real
+        // per-photo progress without rewriting bulkDelete to stream,
+        // so we approximate at ~150 ms per photo (matches the empirical
+        // R2-delete throughput we see in the inline-photo-process job
+        // at the same blade — see ProcessUploadedPhotoJob comments).
+        // The counter clamps at total-1 until the real fetch resolves;
+        // never claims "done" before the server says so.
+        const tickEvery = Math.max(80, Math.min(250, 6000 / ids.length));
+        const tickTimer = setInterval(() => {
+          if (this.bulkProgress.processed < this.bulkProgress.total - 1) {
+            this.bulkProgress.processed++;
+          }
+        }, tickEvery);
+
+        const finishUI = () => {
+          clearInterval(tickTimer);
+          this.bulkBusy = false;
+        };
+
         fetch(`/photographer/events/${this.eventId}/photos/bulk-delete`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': this.csrf, 'X-Requested-With': 'XMLHttpRequest' },
@@ -799,15 +934,51 @@ function photoManager(initial) {
         .then(r => r.json())
         .then(data => {
           if (!data.success && !data.deleted) throw new Error(data.message || 'ลบไม่สำเร็จ');
-          ids.forEach(id => {
+
+          // Animate cards out (fade + collapse) before removing from DOM
+          // so the photographer SEES the deletion happen instead of cards
+          // just blinking out. Animation matches the .photo-card--deleting
+          // class transition timing (300ms).
+          ids.forEach((id, idx) => {
             const el = document.querySelector(`.photo-card[data-id="${id}"]`);
-            if (el) el.remove();
+            if (!el) return;
+            el.classList.add('photo-card--gone');
+            // Stagger the actual DOM remove so they don't all collapse
+            // at exactly the same frame — feels more like "one by one"
+            // and avoids a layout-thrash flash.
+            setTimeout(() => el.remove(), 280 + Math.min(idx * 8, 400));
           });
+
+          this.bulkProgress.processed = this.bulkProgress.total;
+          finishUI();
+
+          // Close the busy modal then show the success toast.
+          Swal.close();
+          Swal.fire({
+            toast: true, position: 'top-end',
+            icon: data.failed > 0 ? 'warning' : 'success',
+            title: data.message,
+            showConfirmButton: false,
+            timer: 3000,
+          });
+
           this.selected = [];
           this.toggleSelectMode();
-          Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: data.message, showConfirmButton: false, timer: 2200 });
         })
-        .catch(err => Swal.fire({ icon: 'error', title: 'ลบไม่สำเร็จ', text: err.message }));
+        .catch(err => {
+          finishUI();
+          // Roll back the optical "deleting" state on failure so the
+          // photographer can see which cards are still there.
+          ids.forEach(id => {
+            const el = document.querySelector(`.photo-card[data-id="${id}"]`);
+            if (el) el.classList.remove('photo-card--deleting');
+          });
+          Swal.fire({
+            icon: 'error',
+            title: 'ลบไม่สำเร็จ',
+            text: err.message,
+          });
+        });
       });
     },
   };
