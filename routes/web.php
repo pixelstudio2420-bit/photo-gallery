@@ -1925,6 +1925,12 @@ Route::prefix('photographer')->name('photographer.')->group(function () {
         // Events
         Route::resource('events', \App\Http\Controllers\Photographer\EventController::class);
         Route::get('events/{event}/qrcode', [\App\Http\Controllers\Photographer\EventController::class, 'qrcode'])->name('events.qrcode');
+        // Sales-close lifecycle: non-destructive close + reopen, kept
+        // separate from the destructive resource ::destroy. The close
+        // route accepts an optional sales_ends_at to schedule a future
+        // close (cron flips at the moment); reopen rolls back.
+        Route::post('events/{event}/close',  [\App\Http\Controllers\Photographer\EventController::class, 'close'])->name('events.close')->middleware('rate.limit:20,60');
+        Route::post('events/{event}/reopen', [\App\Http\Controllers\Photographer\EventController::class, 'reopen'])->name('events.reopen')->middleware('rate.limit:20,60');
 
         // Cascading location picker — fed by the create/edit forms when
         // the photographer changes the province (or district) <select>.

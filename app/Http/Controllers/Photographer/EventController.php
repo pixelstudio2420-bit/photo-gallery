@@ -576,6 +576,21 @@ class EventController extends Controller
             abort(403, 'ไม่มีสิทธิ์ลบอีเวนต์นี้');
         }
 
+        // Money-loss guard — block hard-delete when paid orders exist.
+        // orders.event_id has no FK constraint, so deleting the event
+        // would leave the order rows pointing at a missing id and the
+        // customer who already paid wouldn't be able to download their
+        // photos (they'd be purged from R2 by the deleting hook). The
+        // photographer should "close sales" instead — keeps all data
+        // intact, customer downloads still work, just no NEW orders.
+        $paidOrderCount = $event->paidOrderCount();
+        if ($paidOrderCount > 0) {
+            return back()->with('error',
+                "ลบอีเวนต์ไม่ได้ — มีออเดอร์ที่ลูกค้าชำระเงินแล้ว {$paidOrderCount} รายการ\n"
+                . "ใช้ปุ่ม \"ปิดการขาย\" แทน — ลูกค้ายังดาวน์โหลดรูปได้ และอีเวนต์จะหลุดจากโควต้า"
+            );
+        }
+
         $profile = Auth::user()->photographerProfile;
 
         // Pre-compute the displayable byte total BEFORE the delete so we
@@ -631,6 +646,130 @@ class EventController extends Controller
 
         return redirect()->route('photographer.events.index')
             ->with('success', 'ลบอีเวนต์สำเร็จ');
+    }
+
+    /**
+     * Close sales on an event — non-destructive transition that pauses
+     * NEW orders while keeping all data + existing customer access
+     * intact. Frees the event from the photographer's
+     * max_concurrent_events cap so they can open new events without
+     * hard-deleting this one. Idempotent.
+     *
+     *   POST /photographer/events/{event}/close
+     *
+     * Body parameters (all optional):
+     *   sales_ends_at — if set, treats this as a SCHEDULED close at the
+     *                   given timestamp instead of an immediate close.
+     *                   Cron auto-flips at the moment.
+     *   notify        — '1' to push LINE/in-app notification to recent
+     *                   buyers ("ปิดการขายแล้ว แต่คุณดาวน์โหลดได้ตลอด")
+     */
+    public function close(Request $request, Event $event)
+    {
+        if ((int) $event->photographer_id !== (int) Auth::id()) {
+            abort(403, 'ไม่มีสิทธิ์จัดการอีเวนต์นี้');
+        }
+
+        $request->validate([
+            'sales_ends_at' => 'nullable|date|after:now',
+            'notify'        => 'nullable|in:0,1',
+        ]);
+
+        $scheduled = $request->filled('sales_ends_at');
+
+        if ($scheduled) {
+            // Scheduled close: leave status as-is, set sales_ends_at and
+            // let the AutoCloseEventsCommand cron tick flip it later. UI
+            // shows "ปิดการขายอัตโนมัติเมื่อ DD/MM HH:mm".
+            $event->update([
+                'sales_ends_at' => $request->date('sales_ends_at'),
+            ]);
+
+            return redirect()->route('photographer.events.index')
+                ->with('success',
+                    'ตั้งเวลาปิดการขายอีเวนต์ "' . $event->name . '" เรียบร้อย — '
+                    . 'ระบบจะปิดให้อัตโนมัติเมื่อ '
+                    . $event->sales_ends_at->format('d/m/Y H:i')
+                );
+        }
+
+        // Immediate close.
+        if (in_array($event->status, ['active', 'published'], true)) {
+            $event->update([
+                'status'    => 'closed',
+                'closed_at' => now(),
+            ]);
+
+            // Notify customers (best-effort — never block the close action).
+            if ($request->boolean('notify', true)) {
+                try {
+                    app(\App\Services\EventLifecycleNotifier::class)
+                        ->notifySaleClosed($event);
+                } catch (\Throwable $e) {
+                    Log::warning('event.close_notify_failed', [
+                        'event_id' => $event->id,
+                        'error'    => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            return redirect()->route('photographer.events.index')
+                ->with('success',
+                    'ปิดการขายอีเวนต์ "' . $event->name . '" แล้ว — '
+                    . 'ลูกค้าที่ซื้อไว้ยังดาวน์โหลดได้ปกติ'
+                );
+        }
+
+        // Already closed/draft/archived/hidden — idempotent no-op so a
+        // double-click or a re-fired form submit never errors.
+        return back()->with('info',
+            'อีเวนต์อยู่ในสถานะ "' . ($event->statusLabel()[0] ?? $event->status) . '" อยู่แล้ว'
+        );
+    }
+
+    /**
+     * Re-open a closed event for sale. Resets status to 'active' and
+     * clears sales_ends_at + closed_at. Honors the plan's
+     * max_concurrent_events cap — refuses if the photographer is at the
+     * limit and would push them over by re-opening.
+     *
+     *   POST /photographer/events/{event}/reopen
+     */
+    public function reopen(Request $request, Event $event)
+    {
+        if ((int) $event->photographer_id !== (int) Auth::id()) {
+            abort(403, 'ไม่มีสิทธิ์จัดการอีเวนต์นี้');
+        }
+
+        if (!in_array($event->status, ['closed', 'archived', 'hidden'], true)) {
+            return back()->with('info',
+                'อีเวนต์นี้ยังเปิดขายอยู่ — ไม่ต้องเปิดใหม่'
+            );
+        }
+
+        // Concurrent-cap check — re-opening counts as opening, so the
+        // photographer's plan must have headroom. Without this guard, a
+        // Free-plan user (cap=1) with one active event could re-open a
+        // closed one and end up at 2 active events, busting their cap
+        // by the back door.
+        $profile = Auth::user()->photographerProfile;
+        $subs    = app(\App\Services\SubscriptionService::class);
+        if ($profile && !$subs->canCreateMoreEvents($profile)) {
+            $cap = $subs->maxConcurrentEvents($profile);
+            return back()->with('error',
+                "เปิดอีเวนต์อีกครั้งไม่ได้ — ถึงขีดจำกัดของแผนแล้ว ({$cap} อีเวนต์)\n"
+                . 'ปิดอีเวนต์อื่นก่อน หรืออัปเกรดแผน'
+            );
+        }
+
+        $event->update([
+            'status'        => 'active',
+            'sales_ends_at' => null,
+            'closed_at'     => null,
+        ]);
+
+        return redirect()->route('photographer.events.index')
+            ->with('success', 'เปิดการขายอีเวนต์ "' . $event->name . '" อีกครั้งแล้ว');
     }
 
     public function qrcode(Event $event)

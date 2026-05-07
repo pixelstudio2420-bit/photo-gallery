@@ -20,6 +20,10 @@ class Event extends Model
         'face_search_enabled',
         // Time window
         'start_time','end_time',
+        // Sales close lifecycle — separate from event physical end_time.
+        // sales_ends_at = scheduled close (cron auto-flips to 'closed').
+        // closed_at    = actual moment the status flipped (manual or cron).
+        'sales_ends_at','closed_at',
         // Venue / organizer / categorization
         'venue_name','organizer','event_type','expected_attendees',
         // Marketing JSON arrays
@@ -95,6 +99,9 @@ class Event extends Model
         'originals_purged_at'   => 'datetime',
         'is_portfolio'          => 'boolean',
         'face_search_enabled'   => 'boolean',
+        // Sales close lifecycle (added 2026-05-19)
+        'sales_ends_at'         => 'datetime',
+        'closed_at'             => 'datetime',
         // Enriched fields (2026-05-01)
         'expected_attendees'    => 'integer',
         'highlights'            => 'array',
@@ -127,6 +134,75 @@ class Event extends Model
         $date = $this->shoot_date->toDateString();
         $time = substr((string) $this->end_time, 0, 8);
         return "{$date}T{$time}+07:00";
+    }
+
+    /* ─────────────────────── Sales close lifecycle ───────────────────────
+     *
+     * Three boolean states the rest of the app needs to ask about:
+     *
+     *   isSelling()     — accepting new orders. status ∈ {active, published}
+     *                     and not past sales_ends_at. Counts toward the
+     *                     plan's max_concurrent_events cap.
+     *   isClosed()      — sale is over but data preserved. status='closed'.
+     *                     Customers who bought before close can still
+     *                     download. Doesn't count toward the cap.
+     *   isDeletable()   — safe to hard-delete. NO paid orders reference
+     *                     this event (orders.event_id has no FK constraint
+     *                     so Eloquent does the check at app level).
+     *
+     * Photographer flow:
+     *   create → draft → published/active (selling) → closed (sale ended,
+     *   data preserved) → [optionally] archived/hidden → [delete only if
+     *   no paid orders].
+     * ───────────────────────────────────────────────────────────────────── */
+
+    public function isSelling(): bool
+    {
+        return in_array($this->status, ['active', 'published'], true)
+            && (!$this->sales_ends_at || $this->sales_ends_at->isFuture());
+    }
+
+    public function isClosed(): bool
+    {
+        return $this->status === 'closed';
+    }
+
+    /**
+     * Count of orders that paid for this event. Used as the destruction
+     * guard at delete time. Defensive: orders.event_id has no FK
+     * constraint, so we filter at the query level instead of relying on
+     * a relationship that pgsql isn't enforcing.
+     */
+    public function paidOrderCount(): int
+    {
+        return (int) \Illuminate\Support\Facades\DB::table('orders')
+            ->where('event_id', $this->id)
+            ->whereIn('status', ['paid', 'completed', 'delivered'])
+            ->count();
+    }
+
+    public function isDeletable(): bool
+    {
+        return $this->paidOrderCount() === 0;
+    }
+
+    /**
+     * Friendly Thai label for the status pill — used by the photographer
+     * dashboard list + admin event review screens. Returns a tuple
+     * [text, css-class] so callers can render consistently.
+     *
+     * @return array{0:string, 1:string}
+     */
+    public function statusLabel(): array
+    {
+        return match ($this->status) {
+            'draft'     => ['ฉบับร่าง',   'gray'],
+            'active', 'published' => ['กำลังขาย', 'emerald'],
+            'closed'    => ['ปิดการขายแล้ว', 'amber'],
+            'archived'  => ['เก็บถาวร',  'slate'],
+            'hidden'    => ['ซ่อน',      'rose'],
+            default     => [(string) $this->status, 'gray'],
+        };
     }
 
     /**

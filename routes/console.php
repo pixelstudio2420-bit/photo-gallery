@@ -28,6 +28,17 @@ Schedule::command('uploads:sweep-stale')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Auto-close events whose sales_ends_at has passed (manual close
+// + scheduled close use the same path → status='closed', notify
+// buyers + photographer + admin bell). Also pings photographers
+// 24h before the scheduled close so they can extend or cancel.
+// Hourly tick is the natural cadence — sales_ends_at is a wall-
+// clock target, not a precise sub-hour deadline. Idempotent.
+Schedule::command('events:auto-close')
+    ->hourly()
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // LINE health check — calls /v2/bot/info hourly to verify the channel
 // access token still works. On failure, alerts admins via LINE
 // multicast (if partially functional) AND email (out-of-band).

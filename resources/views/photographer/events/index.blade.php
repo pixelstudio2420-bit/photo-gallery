@@ -346,13 +346,48 @@
             <a href="{{ route('photographer.events.qrcode', $event) }}" class="ev-action is-qr" title="QR Code">
               <i class="bi bi-qr-code"></i>
             </a>
+            {{-- ─── Sales-close lifecycle controls ──────────────────
+                 Three mutually exclusive actions depending on the event's
+                 current status, so the photographer never sees a
+                 button that would be a no-op or error:
+
+                   selling   → "ปิดการขาย" (orange)  [non-destructive]
+                   closed    → "เปิดการขายอีกครั้ง" (green)
+                   any state → "ลบ" (red, blocked at controller if paid orders)
+
+                 The delete-with-paid-orders guard at the controller
+                 returns a friendly error message; this UI doesn't
+                 try to pre-disable the button because we can't
+                 cheaply join COUNT(orders) into the index query.
+            --}}
+            @if($event->isSelling())
+              <form action="{{ route('photographer.events.close', $event) }}"
+                    method="POST"
+                    class="ml-auto"
+                    onsubmit="return confirm('ปิดการขายอีเวนต์ ‘{{ $event->name }}’ ?\n\n• ลูกค้าใหม่จะซื้อรูปไม่ได้\n• ลูกค้าที่ซื้อไว้ยังดาวน์โหลดได้ตลอด\n• อีเวนต์จะหลุดจากโควต้า สร้างใหม่ได้');">
+                @csrf
+                <button type="submit" class="ev-action is-close" title="ปิดการขาย" style="color:#d97706;">
+                  <i class="bi bi-pause-circle"></i>
+                </button>
+              </form>
+            @elseif($event->isClosed())
+              <form action="{{ route('photographer.events.reopen', $event) }}"
+                    method="POST"
+                    class="ml-auto"
+                    onsubmit="return confirm('เปิดการขายอีเวนต์ ‘{{ $event->name }}’ อีกครั้ง?');">
+                @csrf
+                <button type="submit" class="ev-action is-reopen" title="เปิดการขายอีกครั้ง" style="color:#059669;">
+                  <i class="bi bi-play-circle"></i>
+                </button>
+              </form>
+            @endif
             <form action="{{ route('photographer.events.destroy', $event) }}"
                   method="POST"
-                  class="ml-auto"
-                  onsubmit="return confirm('คุณแน่ใจหรือไม่ว่าต้องการลบอีเวนต์ ‘{{ $event->name }}’ ?\n\nการลบจะเอารูปทั้งหมดที่อัปโหลดไว้ออกจากระบบ — ไม่สามารถกู้คืนได้');">
+                  class="{{ $event->isSelling() || $event->isClosed() ? '' : 'ml-auto' }}"
+                  onsubmit="return confirm('ลบอีเวนต์ ‘{{ $event->name }}’ ถาวร?\n\nรูปทั้งหมดจะถูกลบออกจากระบบ — กู้คืนไม่ได้\n\nหากมีลูกค้าซื้อรูปในอีเวนต์นี้แล้ว ระบบจะปฏิเสธการลบ — ใช้ \"ปิดการขาย\" แทน');">
               @csrf
               @method('DELETE')
-              <button type="submit" class="ev-action is-delete" title="ลบ">
+              <button type="submit" class="ev-action is-delete" title="ลบถาวร">
                 <i class="bi bi-trash"></i>
               </button>
             </form>
