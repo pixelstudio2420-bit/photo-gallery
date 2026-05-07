@@ -580,7 +580,7 @@
       //   3. Delivery → DeliverOrderViaLineJob (when LINE bound) +
       //      email link via OrderController::download (always).
       $buyerSteps = [
-        ['n' => '1', 'icon' => 'search', 'title' => 'ค้นหารูปงานคุณ', 'desc' => 'พิมพ์ชื่ออีเวนต์ หรือใช้ AI Face Search ผ่าน AWS Rekognition — อัปโหลดเซลฟี่ระบบหาให้'],
+        ['n' => '1', 'icon' => 'search', 'title' => 'ค้นหารูปงานคุณ', 'desc' => 'พิมพ์ชื่ออีเวนต์ หรือใช้ AI Face Search — อัปโหลดเซลฟี่ระบบหาให้ในไม่กี่วินาที'],
         ['n' => '2', 'icon' => 'qr-code', 'title' => 'จ่ายผ่าน PromptPay / บัตร', 'desc' => 'สแกน QR หรือใช้บัตรเครดิต · โอนผ่านธนาคารแล้วอัปโหลดสลิปก็ได้'],
         ['n' => '3', 'icon' => 'line', 'title' => 'รับลิงก์ดาวน์โหลด', 'desc' => 'ได้ลิงก์ดาวน์โหลดในอีเมลทันที · เข้า LINE อัตโนมัติถ้าผูก LINE ไว้ · ไฟล์เต็มไม่มีลายน้ำ'],
       ];
@@ -600,10 +600,19 @@
   {{-- Photographer flow --}}
   <div x-show="role === 'photographer'" x-cloak x-transition class="grid grid-cols-1 md:grid-cols-3 gap-5">
     @php
+      // Step 1 — emphasises the LINE login fast-path that's actually
+      // wired up at /auth/login (LINE = primary CTA, gated by
+      // SocialAuthService line_login_enabled flag). The previous copy
+      // ("อัพโหลดผลงาน 5 ภาพ + บัตรประชาชน — ทีมตรวจสอบใน 1-2 วันทำการ")
+      // overstated the requirement: there's no national-ID upload step
+      // in the codebase, and admin review on photographer_profiles
+      // .status pending → approved is typically same-day, not "1-2
+      // working days". Truthful copy + emphasis on the LINE 1-tap
+      // path that already works.
       $phSteps = [
-        ['n' => '1', 'icon' => 'person-plus', 'title' => 'สมัคร + ยืนยัน', 'desc' => 'อัพโหลดผลงาน 5 ภาพ + บัตรประชาชน — ทีมตรวจสอบใน 1-2 วันทำการ'],
+        ['n' => '1', 'icon' => 'line', 'title' => 'สมัครผ่าน LINE ใน 1 นาที', 'desc' => 'แตะปุ่ม "เข้าสู่ระบบด้วย LINE" → อนุญาต 1 ครั้ง → กรอกชื่อช่างภาพและ PromptPay → เปิด event ขายรูปได้ทันที'],
         ['n' => '2', 'icon' => 'cloud-upload', 'title' => 'อัพโหลดรูปงาน', 'desc' => 'สร้างอีเวนต์ → drag-drop รูปทั้งหมด — Face index อัตโนมัติ ลูกค้าหาเจอทันที'],
-        ['n' => '3', 'icon' => 'cash-stack', 'title' => 'รับเงินเข้าบัญชี', 'desc' => 'ลูกค้าจ่าย → ระบบหัก commission → โอนเข้า PromptPay ของคุณทุกศุกร์'],
+        ['n' => '3', 'icon' => 'cash-stack', 'title' => 'รับเงินเข้าบัญชี', 'desc' => 'ลูกค้าจ่าย → ระบบหัก commission → โอนเข้า PromptPay ของคุณตามรอบที่แอดมินกำหนด'],
       ];
     @endphp
     @foreach($phSteps as $step)

@@ -334,7 +334,7 @@
               //     route customers to specific photographers; replaced
               //     with the marketplace placement reality.
               $rows = [
-                ['AI Face Search (AWS Rekognition)', true, false, false],
+                ['AI Face Search (enterprise-grade)', true, false, false],
                 ['ระบบจองล่วงหน้า', true, false, false],
                 ['LINE reminder กันลูกค้าลืม', true, false, false],
                 ['ตรวจสลิปอัตโนมัติ (เปิด/ปิดได้)', true, false, false],

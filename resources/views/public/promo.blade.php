@@ -339,7 +339,7 @@
               <span class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 border-2 border-slate-900 flex items-center justify-center text-[8px] text-white font-bold">✓</span>
             </div>
             <div class="text-white text-[10px] font-bold">AI หาใบหน้า</div>
-            <div class="text-emerald-300 text-[10px]">AWS Rekognition</div>
+            <div class="text-emerald-300 text-[10px]">enterprise-grade</div>
           </div>
 
           {{-- Card 4: Stat counter — spans 2 cols. Numbers come straight
@@ -604,7 +604,7 @@
            path, with the file/class noted in comments so reviewers can
            verify nothing is invented:
              • Face search → FaceSearchService::searchByFaceInCollection
-                 (AWS Rekognition, default threshold = 80%)
+                 (enterprise face-recognition vendor, default threshold = 80%)
              • LINE auto-delivery → DeliverOrderViaLineJob (sends after
                  payment success)
              • Auto payout → PayoutService weekly cron, ฿500 minimum,
@@ -616,7 +616,7 @@
               'icon'  => 'bi-person-bounding-box',
               'tag'   => 'AI Face Search',
               'title' => 'หาใบหน้า · เกณฑ์ ≥ 80%',
-              'body'  => 'อัปโหลดเซลฟี่ 1 ใบ — ระบบจับคู่ใบหน้าทุกภาพในอีเวนต์ผ่าน AWS Rekognition · ใช้เกณฑ์ความเหมือน 80% เป็นค่าเริ่มต้น (ปรับได้)',
+              'body'  => 'อัปโหลดเซลฟี่ 1 ใบ — ระบบจับคู่ใบหน้าทุกภาพในอีเวนต์ด้วย AI ระดับ enterprise · ใช้เกณฑ์ความเหมือน 80% เป็นค่าเริ่มต้น (ปรับได้)',
               'colors'=> 'from-indigo-400 to-pink-400',
             ],
             [
@@ -671,7 +671,7 @@
   <div class="max-w-3xl mx-auto space-y-2.5">
     @php
       $faqs = [
-        ['q' => 'AI หาใบหน้าแม่นยำแค่ไหน?', 'a' => 'ระบบใช้ AWS Rekognition (บริการ enterprise ของ Amazon) จับคู่ด้วยเกณฑ์ความเหมือน 80% เป็นค่าเริ่มต้น · ใส่หมวก / แว่น / มุมเฉียง ส่วนใหญ่ยังจับคู่ได้ · ปรับเกณฑ์ขั้นต่ำได้ตามต้องการ · ภาพ selfie ของคุณไม่ถูกเก็บไว้ — ใช้แล้วลบทิ้งทันที'],
+        ['q' => 'AI หาใบหน้าแม่นยำแค่ไหน?', 'a' => 'ระบบใช้ AI Face Recognition ระดับ enterprise (เกณฑ์การจับคู่เดียวกับที่ใช้ในงาน security ระดับโลก) จับคู่ด้วยเกณฑ์ความเหมือน 80% เป็นค่าเริ่มต้น · ใส่หมวก / แว่น / มุมเฉียง ส่วนใหญ่ยังจับคู่ได้ · ปรับเกณฑ์ขั้นต่ำได้ตามต้องการ · ภาพ selfie ของคุณไม่ถูกเก็บไว้ — ใช้แล้วลบทิ้งทันที'],
         ['q' => 'จ่ายเงินทางไหนได้บ้าง?', 'a' => 'PromptPay QR (ทุกธนาคารไทย), LINE Pay, บัตรเครดิต/เดบิต, โอนผ่านธนาคาร, สลิปอัพโหลด · ทุกออเดอร์ได้ใบเสร็จออนไลน์ในระบบ · ใบกำกับภาษีนิติบุคคลขอได้เป็นรายกรณี'],
         ['q' => 'ช่างภาพได้เงินเร็วแค่ไหน?', 'a' => 'แจ้งถอนได้เมื่อยอดสะสมถึงขั้นต่ำที่แอดมินกำหนด (เช่น ฿500) · แอดมินตรวจและโอนเข้าบัญชีไทยตามรอบ · ทุกรายการมี audit trail ตรวจสอบย้อนหลังได้ · 0% คอมมิชชั่นบนแผน Pro/Studio'],
         ['q' => 'ยกเลิกแพ็กได้ตอนไหน?', 'a' => 'ยกเลิกได้ทุกเมื่อจาก dashboard · ไม่มีค่าปรับ · ใช้งานต่อได้จนถึงสิ้นรอบบิล · รูปและข้อมูลทั้งหมดยังอยู่'],
