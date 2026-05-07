@@ -58,6 +58,6 @@
       </tbody>
     </table>
   </div>
-  <div class="mt-4">{{ $history->links() }}</div>
+  <div class="mt-4">{{ $history->withQueryString()->links('vendor.pagination.loadroop') }}</div>
 </div>
 @endsection

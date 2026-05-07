@@ -48,7 +48,7 @@
             @endforeach
         </div>
 
-        <div class="mt-8">{{ $announcements->links() }}</div>
+        <div class="mt-8">{{ $announcements->withQueryString()->links('vendor.pagination.loadroop') }}</div>
     @endif
 </div>
 @endsection

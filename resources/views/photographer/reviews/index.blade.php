@@ -149,7 +149,7 @@
 
   {{-- Pagination --}}
   @if($reviews->hasPages())
-  <div class="flex justify-center">{{ $reviews->links() }}</div>
+  <div>{{ $reviews->withQueryString()->links('vendor.pagination.loadroop') }}</div>
   @endif
 </div>
 @endsection

@@ -399,7 +399,7 @@
 
   @if($events->hasPages())
     <div class="flex justify-center mt-6">
-      {{ $events->withQueryString()->links() }}
+      {{ $events->withQueryString()->links('vendor.pagination.loadroop') }}
     </div>
   @endif
 

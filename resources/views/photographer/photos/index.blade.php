@@ -460,9 +460,13 @@
     @endforeach
   </div>
 
-  {{-- Pagination --}}
-  <div class="flex justify-center pt-2">
-    {{ $photos->links() }}
+  {{-- Pagination — uses the themed loadroop view so page numbers are
+       always clickable on mobile (the default Tailwind view collapses
+       to "Showing X–Y" + Prev/Next only on narrow screens, which is
+       what blocked the photographer from jumping to page 2 / 3 from
+       /photographer/events/{id}/photos on a mobile browser). --}}
+  <div class="pt-2">
+    {{ $photos->withQueryString()->links('vendor.pagination.loadroop') }}
   </div>
 
   @else

@@ -93,6 +93,6 @@
 </div>
 
 <div class="mt-4">
-  {{ $transactions->links() }}
+  {{ $transactions->withQueryString()->links('vendor.pagination.loadroop') }}
 </div>
 @endsection

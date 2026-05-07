@@ -425,7 +425,7 @@
   </div>
   @if($disbursements->hasPages())
     <div class="pg-card-footer">
-      {{ $disbursements->links() }}
+      {{ $disbursements->withQueryString()->links('vendor.pagination.loadroop') }}
     </div>
   @endif
 </div>
@@ -495,7 +495,7 @@
   </div>
   @if($payouts->hasPages())
     <div class="pg-card-footer">
-      {{ $payouts->links() }}
+      {{ $payouts->withQueryString()->links('vendor.pagination.loadroop') }}
     </div>
   @endif
 </div>

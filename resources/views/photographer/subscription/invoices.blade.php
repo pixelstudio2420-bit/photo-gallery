@@ -82,7 +82,7 @@
       </table>
     </div>
     <div class="pg-card-footer">
-      {{ $invoices->links() }}
+      {{ $invoices->withQueryString()->links('vendor.pagination.loadroop') }}
     </div>
   </div>
 @endif
