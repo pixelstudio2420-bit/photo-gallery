@@ -43,13 +43,15 @@ class ContactMessage extends Model
     ];
 
     public const CATEGORIES = [
-        'general'      => 'สอบถามทั่วไป',
-        'billing'      => 'การชำระเงิน',
-        'technical'    => 'ปัญหาเทคนิค',
-        'account'      => 'บัญชีผู้ใช้',
-        'refund'       => 'ขอคืนเงิน',
-        'photographer' => 'สำหรับช่างภาพ',
-        'other'        => 'อื่นๆ',
+        'general'         => 'สอบถามทั่วไป',
+        'bug_report'      => '🐞 รายงานปัญหา / บัก',
+        'feature_request' => '💡 ข้อเสนอแนะ / ฟีเจอร์ใหม่',
+        'billing'         => 'การชำระเงิน',
+        'technical'       => 'ปัญหาเทคนิค',
+        'account'         => 'บัญชีผู้ใช้',
+        'refund'          => 'ขอคืนเงิน',
+        'photographer'    => 'สำหรับช่างภาพ',
+        'other'           => 'อื่นๆ',
     ];
 
     // ─── Relations ───

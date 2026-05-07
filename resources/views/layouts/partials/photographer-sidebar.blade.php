@@ -345,6 +345,46 @@
           <span x-show="!collapsed" x-transition>แนะนำเพื่อน · รับรางวัล</span>
         </a>
       </li>
+
+      {{-- ═══ 6. ความช่วยเหลือ (Help & Feedback) ═══
+           Dedicated section so the photographer always has a clear
+           path to report bugs / suggest features / open a support
+           ticket WITHOUT hunting in the footer. Two entries:
+
+             • /contact — open a NEW ticket (the form's category
+               select includes bug_report + feature_request alongside
+               billing/refund/etc.)
+             • /support — view the photographer's own ticket history
+               with admin replies threaded inline.
+
+           Routed through the same ContactMessage + ContactReply
+           ledger the customer-side already uses, so admins see all
+           items in one queue at /admin/messages regardless of which
+           audience opened the ticket. --}}
+      <li class="pg-section-label px-6 pt-4 pb-1.5"
+        :class="{ 'px-0 text-center': collapsed }">
+        <span x-show="!collapsed" x-transition>ความช่วยเหลือ</span>
+      </li>
+
+      <li>
+        <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('contact') ? 'pg-link-active' : '' }}"
+          href="{{ route('contact') }}"
+          title="ติดต่อทีมงาน — รายงานปัญหา / เสนอฟีเจอร์ใหม่ / ถามเรื่องอื่น"
+          :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
+          <i class="bi bi-chat-square-heart text-lg w-[22px] text-center"></i>
+          <span x-show="!collapsed" x-transition>รายงานปัญหา · เสนอฟีเจอร์</span>
+        </a>
+      </li>
+
+      <li>
+        <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('support.*') ? 'pg-link-active' : '' }}"
+          href="{{ route('support.index') }}"
+          title="ดูประวัติคำขอการสนับสนุนและคำตอบจากทีมงาน"
+          :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
+          <i class="bi bi-life-preserver text-lg w-[22px] text-center"></i>
+          <span x-show="!collapsed" x-transition>ติคเก็ตของฉัน</span>
+        </a>
+      </li>
     </ul>
   </div>
 

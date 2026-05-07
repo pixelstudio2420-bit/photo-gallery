@@ -29,7 +29,12 @@ class ContactController extends Controller
             'name'     => 'required|max:200',
             'email'    => 'required|email',
             'subject'  => 'required|max:300',
-            'category' => 'nullable|in:general,billing,technical,account,refund,photographer,other',
+            // Keep this list in lock-step with ContactMessage::CATEGORIES.
+            // bug_report + feature_request added 2026-05-19 by request from
+            // the photographer who wanted a clear way to file UI/UX issues
+            // and propose new features without lumping them under
+            // "technical" or "general".
+            'category' => 'nullable|in:general,bug_report,feature_request,billing,technical,account,refund,photographer,other',
             'priority' => 'nullable|in:low,normal,high,urgent',
             'message'  => 'required|string|max:5000',
         ]);

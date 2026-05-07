@@ -361,8 +361,18 @@
                 <a class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 transition" href="{{ route('profile.referrals') }}">
                   <i class="bi bi-people-fill mr-2 text-rose-500 dark:text-rose-400"></i>แนะนำเพื่อน
                 </a>
+                {{-- Two entry points to the same ContactMessage ledger:
+                       • /contact   = file a NEW ticket (categories include
+                                      bug_report + feature_request)
+                       • /support   = the user's own ticket history + replies
+                     Two links instead of nested-menu so a frustrated user
+                     reporting a bug doesn't have to learn what "ticket"
+                     means before they can talk to us. --}}
+                <a class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 transition" href="{{ route('contact') }}">
+                  <i class="bi bi-chat-square-heart mr-2 text-amber-500 dark:text-amber-400"></i>รายงานปัญหา · เสนอฟีเจอร์
+                </a>
                 <a class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 transition" href="{{ route('support.index') }}">
-                  <i class="bi bi-life-preserver mr-2 text-pink-500 dark:text-pink-400"></i>Support Tickets
+                  <i class="bi bi-life-preserver mr-2 text-pink-500 dark:text-pink-400"></i>ติคเก็ตของฉัน
                 </a>
 
                 {{-- Mode switcher / Upgrade CTA --}}
