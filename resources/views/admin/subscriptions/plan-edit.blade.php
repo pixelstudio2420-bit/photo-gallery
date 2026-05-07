@@ -272,15 +272,41 @@
               <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">GB</span>
             </div>
           </div>
-          {{-- Concurrent events --}}
-          <div>
-            <label class="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5 block">อีเวนต์พร้อมกัน
-              <span class="text-gray-400 font-normal">(เว้นว่าง = ไม่จำกัด)</span>
+          {{-- Concurrent events ─────────────────────────────────────
+               Three meaningful values, photographer-facing implications:
+                 • 0     — ปิดการสร้างอีเวนต์ (เช่น Free แบบ portfolio-only)
+                 • 1, 2, 3, … — สร้างได้พร้อมกัน N อีเวนต์ (active/published)
+                 • เว้นว่าง — ไม่จำกัด (Pro/Business/Studio)
+               Gate enforced by SubscriptionService::canCreateMoreEvents()
+               at /photographer/events/create — ช่างภาพจะเห็นปุ่ม "สร้าง
+               อีเวนต์" disabled พร้อม message "ถึงขีดจำกัดแล้ว — ต้องปิด
+               งานเก่าก่อน หรืออัปเกรดแผน" ตอนเต็ม cap. --}}
+          <div x-data="{
+              val: '{{ old('max_concurrent_events', $plan->max_concurrent_events ?? '') }}',
+              get hint() {
+                  if (this.val === '' || this.val === null) return '∞ ไม่จำกัด';
+                  const n = parseInt(this.val);
+                  if (n === 0) return '🚫 ปิดการสร้างอีเวนต์';
+                  if (n === 1) return '✓ สร้างได้พร้อมกัน 1 อีเวนต์';
+                  return '✓ สร้างได้พร้อมกันสูงสุด ' + n + ' อีเวนต์';
+              },
+              get hintColor() {
+                  if (this.val === '' || this.val === null) return 'text-emerald-600';
+                  const n = parseInt(this.val);
+                  if (n === 0) return 'text-rose-600';
+                  return 'text-indigo-600';
+              }
+          }">
+            <label class="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5 block">
+              อีเวนต์พร้อมกัน
+              <span class="text-gray-400 font-normal">(0 = ปิด · เว้นว่าง = ไม่จำกัด)</span>
             </label>
             <input type="number" min="0" name="max_concurrent_events"
-                   value="{{ old('max_concurrent_events', $plan->max_concurrent_events) }}"
+                   x-model="val"
                    x-on:input="dirty=true"
+                   placeholder="เว้นว่าง = ไม่จำกัด"
                    class="w-full rounded-lg border-gray-200 dark:border-white/10 dark:bg-slate-900 text-[15px] px-3.5 py-2.5 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition">
+            <p class="text-[11px] mt-1 font-medium" :class="hintColor" x-text="hint"></p>
           </div>
           {{-- Team seats --}}
           <div>

@@ -229,14 +229,35 @@
             </div>
           </div>
 
-          {{-- Concurrent events --}}
-          <div>
+          {{-- Concurrent events — same UX as plan-edit. 0 / N / null
+               are the three meaningful values; the live-hint clarifies
+               which photographer-facing behavior each maps to so the
+               admin doesn't have to remember the convention. --}}
+          <div x-data="{
+              val: '{{ old('max_concurrent_events', '') }}',
+              get hint() {
+                  if (this.val === '' || this.val === null) return '∞ ไม่จำกัด';
+                  const n = parseInt(this.val);
+                  if (n === 0) return '🚫 ปิดการสร้างอีเวนต์';
+                  if (n === 1) return '✓ สร้างได้พร้อมกัน 1 อีเวนต์';
+                  return '✓ สร้างได้พร้อมกันสูงสุด ' + n + ' อีเวนต์';
+              },
+              get hintColor() {
+                  if (this.val === '' || this.val === null) return 'text-emerald-600';
+                  const n = parseInt(this.val);
+                  if (n === 0) return 'text-rose-600';
+                  return 'text-indigo-600';
+              }
+          }">
             <label class="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5 block">
-              อีเวนต์พร้อมกัน <span class="text-gray-400 font-normal">(เว้นว่าง = ∞)</span>
+              อีเวนต์พร้อมกัน
+              <span class="text-gray-400 font-normal">(0 = ปิด · เว้นว่าง = ไม่จำกัด)</span>
             </label>
             <input type="number" min="0" name="max_concurrent_events"
-                   value="{{ old('max_concurrent_events') }}"
+                   x-model="val"
+                   placeholder="เว้นว่าง = ไม่จำกัด"
                    class="w-full rounded-lg border-gray-200 dark:border-white/10 dark:bg-slate-900 text-[15px] px-3.5 py-2.5 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition">
+            <p class="text-[11px] mt-1 font-medium" :class="hintColor" x-text="hint"></p>
           </div>
 
           {{-- Team seats --}}
