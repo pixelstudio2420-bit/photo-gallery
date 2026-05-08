@@ -215,6 +215,39 @@ class PhotographerProfile extends Model
     public function isPro(): bool     { return $this->tier === self::TIER_PRO; }
 
     /**
+     * Photographer has an ACTIVE PAID subscription right now (not Free,
+     * not expired, not in cancelled state).
+     *
+     * This drives the public-facing "PRO" badge on the photographer
+     * directory + photographer profile page + featured-photographer
+     * cards on the homepage. Originally those badges were tied to
+     * `tier === TIER_PRO` (the activity-based ladder: creator → seller →
+     * pro), but the photographer specifically asked for the badge to
+     * reflect commercial commitment instead — i.e. only photographers
+     * who actually paid for a Pro/Business/Studio plan get the marker.
+     *
+     * Reads `subscription_plan_code` + `subscription_status` columns
+     * which are denormalised onto the profile by
+     * SubscriptionService::syncProfileCache() — same data as
+     * SubscriptionService::currentPlan() but cheap (no JOIN per row,
+     * matters when rendering 50 photographer cards on /photographers).
+     *
+     * Returns false when:
+     *   • No subscription_plan_code (never bought a plan)
+     *   • subscription_plan_code === 'free' (default, untouched)
+     *   • subscription_status NOT in [active, grace] (cancelled / expired
+     *     pre-payment / pending pre-activation)
+     */
+    public function hasPaidSubscription(): bool
+    {
+        $plan = (string) ($this->subscription_plan_code ?? '');
+        if ($plan === '' || $plan === 'free') return false;
+
+        $status = (string) ($this->subscription_status ?? '');
+        return in_array($status, ['active', 'grace'], true);
+    }
+
+    /**
      * Profile-completeness percentage (0-100). Each item contributes
      * independently — partial fills earn partial credit, no more
      * "all-or-nothing" pairs.

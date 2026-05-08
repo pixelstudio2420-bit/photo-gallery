@@ -12,7 +12,13 @@
     $reviewCount      = $reviews->count();
     $totalReviewCount = \App\Models\Review::where('photographer_id', $profile->user_id)
         ->where('is_visible', 1)->count();
-    $isPro    = $profile->tier === \App\Models\PhotographerProfile::TIER_PRO;
+    // "PRO" badge is now SUBSCRIPTION-bound (hasPaidSubscription) instead
+    // of TIER-bound (tier === TIER_PRO). The photographer asked for the
+    // public marker to reflect commercial commitment ("they pay for the
+    // Pro/Business/Studio plan") rather than the activity ladder
+    // (creator → seller → pro). The seller badge stays tier-bound — it
+    // represents admin-verified status independent of subscription.
+    $isPro    = $profile->hasPaidSubscription();
     $isSeller = $profile->tier === \App\Models\PhotographerProfile::TIER_SELLER;
 
     /** Hero background image — first event cover wins, then portfolio

@@ -505,11 +505,18 @@
       <a href="{{ route('photographers.show', $pg->user_id) }}"
          class="group block bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-white/10 h-full text-center photographer-card transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-indigo-200 dark:hover:border-indigo-400/40 relative overflow-hidden"
          aria-label="ดูโปรไฟล์ของ {{ $pg->display_name ?? $pg->first_name }}">
-        {{-- Tier badge (top-right corner) --}}
-        @if(($pg->tier ?? null) === \App\Models\PhotographerProfile::TIER_PRO)
+        {{-- "Pro" badge — only shown when the photographer has an
+             ACTIVE PAID subscription. Previously bound to `tier`
+             (creator/seller/pro activity ladder), now bound to
+             hasPaidSubscription() so the badge means "this person
+             pays for the Pro/Business/Studio plan" rather than
+             "this person hit the activity threshold". The seller
+             badge below stays bound to tier — it represents
+             admin-verified status, which is independent of plan. --}}
+        @if($pg->hasPaidSubscription())
           <span class="absolute top-2 right-2 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[0.6rem] font-bold text-white shadow-sm z-10"
                 style="background:linear-gradient(135deg,#f59e0b,#d97706);"
-                title="Pro Verified">
+                title="Pro Subscriber">
             <i class="bi bi-patch-check-fill"></i>Pro
           </span>
         @elseif(($pg->tier ?? null) === \App\Models\PhotographerProfile::TIER_SELLER)

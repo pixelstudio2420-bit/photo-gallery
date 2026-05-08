@@ -219,12 +219,22 @@
                     </a>
                 </div>
 
-                @if($proTierEnabled && !$profile->isPro())
+                {{-- "PRO" badge upgrade path — now subscription-bound.
+                     Previously this card said "ติดต่อแอดมินเพื่อขอเลื่อนระดับ"
+                     which described the old activity-ladder TIER_PRO
+                     (admin-approved). The public-facing PRO badge now
+                     requires an active paid subscription
+                     (PhotographerProfile::hasPaidSubscription()), so we
+                     point the photographer at the subscription page
+                     instead. The internal TIER_PRO is a separate
+                     concept that still has its own admin-promote path
+                     (no longer surfaced on this onboarding screen). --}}
+                @if(!$profile->hasPaidSubscription())
                 <div class="mt-6 text-xs text-gray-500 dark:text-gray-400 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-500/20 rounded-lg p-3 text-left">
                     <i class="bi bi-star-fill text-amber-500 mr-1"></i>
-                    <strong>อยากอัปเกรดเป็น Pro?</strong>
-                    ทำงานสม่ำเสมอแล้วติดต่อแอดมินเพื่อขอพิจารณาเลื่อนระดับ Pro —
-                    ได้รับ badge ยืนยันและไม่มีลิมิตการขายรายเดือน
+                    <strong>อยากได้ badge "Pro"?</strong>
+                    สมัครแผน Pro / Business / Studio เพื่อรับ badge ยืนยันแสดงในหน้าโปรไฟล์ + listing สาธารณะ พร้อมสิทธิประโยชน์ในแผน
+                    <a href="{{ route('photographer.subscription.plans') }}" class="font-semibold text-amber-700 dark:text-amber-300 underline">ดูแผนทั้งหมด</a>
                 </div>
                 @endif
             </div>

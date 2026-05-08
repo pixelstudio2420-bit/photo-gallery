@@ -190,7 +190,13 @@
                                 {{ mb_strtoupper(mb_substr($row->display_name ?? $row->first_name ?? 'P', 0, 1, 'UTF-8'), 'UTF-8') }}
                             </div>
                         @endif
-                        @if($row->tier === 'pro')
+                        {{-- "PRO" badge tied to ACTIVE PAID SUBSCRIPTION,
+                             not to the activity-based tier ladder.
+                             Previously $row->tier === 'pro' was the gate;
+                             now it's hasPaidSubscription() so the badge
+                             reflects "paid for Pro/Business/Studio plan"
+                             rather than "hit activity threshold". --}}
+                        @if($row->hasPaidSubscription())
                             <span class="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold text-white bg-amber-500/90">
                                 ⭐ PRO
                             </span>
