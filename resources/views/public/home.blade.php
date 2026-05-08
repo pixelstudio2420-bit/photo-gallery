@@ -508,12 +508,21 @@
         {{-- "Pro" badge — only shown when the photographer has an
              ACTIVE PAID subscription. Previously bound to `tier`
              (creator/seller/pro activity ladder), now bound to
-             hasPaidSubscription() so the badge means "this person
-             pays for the Pro/Business/Studio plan" rather than
-             "this person hit the activity threshold". The seller
-             badge below stays bound to tier — it represents
-             admin-verified status, which is independent of plan. --}}
-        @if($pg->hasPaidSubscription())
+             subscription_plan_code + subscription_status. We can't
+             call PhotographerProfile::hasPaidSubscription() here —
+             $pg is a stdClass from the DB::table() query in
+             HomeController (chosen for performance over Eloquent), so
+             the model method isn't available. We inline the same
+             logic against pp.* columns, which include the two fields
+             below. The seller badge stays tier-bound — admin-
+             verified status, independent of plan. --}}
+        @php
+          $pgPlan   = (string) ($pg->subscription_plan_code ?? '');
+          $pgStatus = (string) ($pg->subscription_status ?? '');
+          $pgIsPaid = $pgPlan !== '' && $pgPlan !== 'free'
+                   && in_array($pgStatus, ['active', 'grace'], true);
+        @endphp
+        @if($pgIsPaid)
           <span class="absolute top-2 right-2 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[0.6rem] font-bold text-white shadow-sm z-10"
                 style="background:linear-gradient(135deg,#f59e0b,#d97706);"
                 title="Pro Subscriber">

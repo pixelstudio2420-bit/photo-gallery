@@ -192,11 +192,20 @@
                         @endif
                         {{-- "PRO" badge tied to ACTIVE PAID SUBSCRIPTION,
                              not to the activity-based tier ladder.
-                             Previously $row->tier === 'pro' was the gate;
-                             now it's hasPaidSubscription() so the badge
-                             reflects "paid for Pro/Business/Studio plan"
-                             rather than "hit activity threshold". --}}
-                        @if($row->hasPaidSubscription())
+                             $row is a stdClass from the DB::table()
+                             query in Public\PhotographerController, so
+                             we can't call the model's
+                             hasPaidSubscription() helper — inline the
+                             same condition against the pp.* columns
+                             (subscription_plan_code +
+                             subscription_status are part of pp.*). --}}
+                        @php
+                            $rowPlan   = (string) ($row->subscription_plan_code ?? '');
+                            $rowStatus = (string) ($row->subscription_status ?? '');
+                            $rowIsPaid = $rowPlan !== '' && $rowPlan !== 'free'
+                                      && in_array($rowStatus, ['active', 'grace'], true);
+                        @endphp
+                        @if($rowIsPaid)
                             <span class="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold text-white bg-amber-500/90">
                                 ⭐ PRO
                             </span>
