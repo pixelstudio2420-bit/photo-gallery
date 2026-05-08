@@ -12,14 +12,21 @@
     $reviewCount      = $reviews->count();
     $totalReviewCount = \App\Models\Review::where('photographer_id', $profile->user_id)
         ->where('is_visible', 1)->count();
-    // "PRO" badge is now SUBSCRIPTION-bound (hasPaidSubscription) instead
-    // of TIER-bound (tier === TIER_PRO). The photographer asked for the
-    // public marker to reflect commercial commitment ("they pay for the
-    // Pro/Business/Studio plan") rather than the activity ladder
-    // (creator → seller → pro). The seller badge stays tier-bound — it
-    // represents admin-verified status independent of subscription.
-    $isPro    = $profile->hasPaidSubscription();
-    $isSeller = $profile->tier === \App\Models\PhotographerProfile::TIER_SELLER;
+    // "PRO" badge is now SUBSCRIPTION-bound instead of TIER-bound
+    // (creator/seller/pro activity ladder). Inlined the same logic the
+    // PhotographerProfile::hasPaidSubscription() helper uses, even
+    // though $profile IS an Eloquent model here — for production
+    // resilience: if the model class or the opcache desync ever drops
+    // the helper, the inline path keeps the page rendering instead of
+    // 500-ing on a missing method. The other badge sites
+    // (home / photographers/index) already inline because they receive
+    // stdClass from DB::table queries, so we now have ONE consistent
+    // pattern across all four PRO-badge surfaces.
+    $planCode   = (string) ($profile->subscription_plan_code ?? '');
+    $planStatus = (string) ($profile->subscription_status ?? '');
+    $isPro      = $planCode !== '' && $planCode !== 'free'
+               && in_array($planStatus, ['active', 'grace'], true);
+    $isSeller   = $profile->tier === \App\Models\PhotographerProfile::TIER_SELLER;
 
     /** Hero background image — first event cover wins, then portfolio
      *  sample, then null (forces gradient fallback). The hero overlays

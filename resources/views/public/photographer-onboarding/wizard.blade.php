@@ -220,16 +220,18 @@
                 </div>
 
                 {{-- "PRO" badge upgrade path — now subscription-bound.
-                     Previously this card said "ติดต่อแอดมินเพื่อขอเลื่อนระดับ"
-                     which described the old activity-ladder TIER_PRO
-                     (admin-approved). The public-facing PRO badge now
-                     requires an active paid subscription
-                     (PhotographerProfile::hasPaidSubscription()), so we
-                     point the photographer at the subscription page
-                     instead. The internal TIER_PRO is a separate
-                     concept that still has its own admin-promote path
-                     (no longer surfaced on this onboarding screen). --}}
-                @if(!$profile->hasPaidSubscription())
+                     Inlined the helper logic (same pattern as
+                     home / photographers/index / photographers/show)
+                     for production resilience; if the helper is ever
+                     missing from the model class on production due to
+                     opcache desync the page still renders. --}}
+                @php
+                    $wzPlan   = (string) ($profile->subscription_plan_code ?? '');
+                    $wzStatus = (string) ($profile->subscription_status ?? '');
+                    $wzPaid   = $wzPlan !== '' && $wzPlan !== 'free'
+                             && in_array($wzStatus, ['active', 'grace'], true);
+                @endphp
+                @if(!$wzPaid)
                 <div class="mt-6 text-xs text-gray-500 dark:text-gray-400 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-500/20 rounded-lg p-3 text-left">
                     <i class="bi bi-star-fill text-amber-500 mr-1"></i>
                     <strong>อยากได้ badge "Pro"?</strong>
