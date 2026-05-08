@@ -80,10 +80,19 @@
               <i class="bi bi-tag-fill mr-1"></i>ราคา
             </a>
           </li>
-          {{-- "ติดต่อเรา" intentionally NOT in the top navbar — moved to
-               the footer to keep the desktop menu focused on browse-to-buy
-               actions (events, photographers, blog, products). The footer's
-               "ลิงก์สำคัญ" column carries the contact link instead. --}}
+          {{-- "ติดต่อเรา" — promoted INTO the top navbar by request.
+               Was previously footer-only to keep the desktop menu focused
+               on browse-to-buy actions, but the project owner asked for
+               it in the primary nav so users reporting bugs / asking
+               questions don't have to scroll to the footer. The link
+               points at the public /contact form (categories include
+               🐞 รายงานปัญหา + 💡 ข้อเสนอแนะ added recently). --}}
+          <li>
+            <a class="px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('contact') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
+              href="{{ route('contact') }}">
+              <i class="bi bi-chat-square-heart mr-1"></i>ติดต่อเรา
+            </a>
+          </li>
           {{-- B2B sales entry — hidden once the user is logged in as a
                photographer (they already converted) to avoid the "sell to
                existing customer" anti-pattern. --}}
@@ -468,9 +477,16 @@
               <i class="bi bi-tag-fill mr-1"></i>ราคา
             </a>
           </li>
-          {{-- "ติดต่อเรา" removed from mobile menu — same rationale as
-               the desktop nav: contact lives in the footer now to keep
-               the menu focused on browse/buy. --}}
+          {{-- "ติดต่อเรา" — promoted into the mobile menu to mirror the
+               desktop nav (project owner's call). The link goes to the
+               same /contact form that handles bug reports + feature
+               requests + general support tickets. --}}
+          <li>
+            <a class="block px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('contact') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
+              href="{{ route('contact') }}">
+              <i class="bi bi-chat-square-heart mr-1"></i>ติดต่อเรา
+            </a>
+          </li>
         </ul>
 
         {{-- Mobile Language Switcher (only shown when multi-lang is enabled AND there's more than 1 language) --}}
