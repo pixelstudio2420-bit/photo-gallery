@@ -25,18 +25,34 @@ class EventController extends Controller
     public function index(Request $request)
     {
         // ── Stats (aggregate query + 60s cache) ──
+        // The previous query used MySQL-specific SUM(boolean_condition) —
+        // PostgreSQL throws "function sum(boolean) does not exist" because
+        // boolean → integer is not implicit there. The error was being
+        // silently swallowed by the try/catch below so all four stat
+        // cards rendered as 0/0/0/0 on /admin/events while the actual
+        // dashboard at /admin (which uses portable COUNT FILTER) showed
+        // the real numbers — the photographer reported the mismatch.
+        //
+        // Fix: COUNT(*) FILTER (WHERE …) is the SQL-standard syntax and
+        // works on both engines. Also added the new 'closed' status (from
+        // the close-sale lifecycle migration 2026_05_19_000013) to the
+        // result set so admins can see it as a separate column once the
+        // index view adds the card.
         $stats = Cache::remember('admin.events.stats', 60, function () {
-            $defaults = ['total' => 0, 'active' => 0, 'draft' => 0, 'archived' => 0];
+            $defaults = ['total' => 0, 'active' => 0, 'draft' => 0, 'closed' => 0, 'archived' => 0];
             try {
                 $r = DB::selectOne(
                     "SELECT COUNT(*) AS total,
-                            SUM(status IN ('active','published')) AS active,
-                            SUM(status='draft')    AS draft,
-                            SUM(status='archived') AS archived
+                            COUNT(*) FILTER (WHERE status IN ('active','published')) AS active,
+                            COUNT(*) FILTER (WHERE status = 'draft')    AS draft,
+                            COUNT(*) FILTER (WHERE status = 'closed')   AS closed,
+                            COUNT(*) FILTER (WHERE status = 'archived') AS archived
                      FROM event_events"
                 );
                 if ($r) foreach ($defaults as $k => $_) $defaults[$k] = (int) ($r->{$k} ?? 0);
-            } catch (\Throwable $e) {}
+            } catch (\Throwable $e) {
+                \Log::warning('admin.events.stats_failed', ['error' => $e->getMessage()]);
+            }
             return $defaults;
         });
         $stats['total_revenue'] = Cache::remember('admin.events.total_revenue', 60, function () {

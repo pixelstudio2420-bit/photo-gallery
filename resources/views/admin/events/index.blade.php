@@ -15,8 +15,13 @@
   </a>
 </div>
 
-{{-- Stats Cards --}}
-<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+{{-- Stats Cards
+     6 cards now (was 5) — added "ปิดการขายแล้ว" since the close-sale
+     lifecycle migration 2026_05_19_000013 introduced status='closed'
+     as a non-cap-counting state distinct from 'archived'. Without
+     a card for it, admins reviewing event volume would see 'total'
+     drift from active+draft+archived without explanation. --}}
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
   <div class="bg-white rounded-xl shadow-sm border border-gray-100 dark:bg-slate-800 dark:border-white/[0.06]">
     <div class="py-3 px-4 flex items-center gap-3">
       <div class="flex items-center justify-center w-11 h-11 rounded-xl bg-indigo-500/10">
@@ -47,6 +52,17 @@
       <div>
         <div class="font-bold text-xl">{{ $stats['draft'] }}</div>
         <small class="text-gray-500">ฉบับร่าง</small>
+      </div>
+    </div>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm border border-gray-100 dark:bg-slate-800 dark:border-white/[0.06]">
+    <div class="py-3 px-4 flex items-center gap-3">
+      <div class="flex items-center justify-center w-11 h-11 rounded-xl bg-rose-500/10">
+        <i class="bi bi-pause-circle text-rose-500 text-lg"></i>
+      </div>
+      <div>
+        <div class="font-bold text-xl">{{ $stats['closed'] ?? 0 }}</div>
+        <small class="text-gray-500">ปิดการขาย</small>
       </div>
     </div>
   </div>
