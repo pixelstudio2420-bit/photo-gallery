@@ -1128,6 +1128,32 @@ HTML;
             $urls[] = $this->sitemapUrl($appUrl . '/' . $page, $now, 'monthly', $prio);
         }
 
+        // Marketing landing pages — admin-managed at /admin/marketing/landing.
+        // Includes the 10 SEO-targeted category pages seeded in migration
+        // 2026_05_19_000017 (wedding, graduation, running, concert, sports,
+        // corporate, party, festival, ai-face-search, sell-photos) plus
+        // any custom landing pages the admin creates afterward. Priority
+        // 0.7-0.8 — these are high-quality content pages targeting Thai
+        // search intent for specific photo categories. Updated weekly so
+        // crawlers re-check for fresh content.
+        try {
+            $lpRows = \DB::table('marketing_landing_pages')
+                ->where('status', 'published')
+                ->whereNotNull('published_at')
+                ->select('slug', 'updated_at')
+                ->get();
+            foreach ($lpRows as $lp) {
+                $urls[] = $this->sitemapUrl(
+                    $appUrl . '/lp/' . $lp->slug,
+                    $lp->updated_at ?? $now,
+                    'weekly',
+                    '0.7',
+                );
+            }
+        } catch (\Throwable) {
+            // Marketing module may not be installed — skip silently.
+        }
+
         // Programmatic SEO landings — niche × province grid.
         // Reads the same config the controller serves from, so the
         // sitemap can never drift from the actual rendered pages.
