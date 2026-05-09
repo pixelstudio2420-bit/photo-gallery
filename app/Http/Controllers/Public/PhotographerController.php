@@ -55,15 +55,35 @@ class PhotographerController extends Controller
         }
 
         // Specialty filter — single tag against the JSON array column.
-        // Postgres-only: ? operator tests if the text exists as any
-        // top-level array element. Falls back to a LIKE match on the
-        // serialized form for drivers that don't speak JSONB.
+        //
+        // The previous version used the JSONB ? (key-exists) operator
+        // — but PHP's PDO driver intercepts the `?` character as a
+        // positional parameter placeholder, so PostgreSQL received
+        // "pp.specialties::jsonb $2 $3" (both ? replaced by bind
+        // positions) and threw a syntax error → 500 on every
+        // /photographers?specialty=X request. The try/catch around it
+        // was useless because whereRaw doesn't execute SQL — the
+        // error fires later at paginate() time.
+        //
+        // Switched to the @> (contains) operator which has no single-
+        // character ? in its tokens, so PDO leaves it alone. Bind a
+        // JSON-encoded array `["wedding"]` and cast to jsonb on the
+        // right side. Same semantic as the original (does the array
+        // contain this tag?).
+        //
+        // SQLite fallback for the test environment uses a LIKE on the
+        // serialized JSON — slower but portable and only runs in tests.
         if ($request->filled('specialty')) {
-            $tag = $request->specialty;
-            try {
-                $query->whereRaw("pp.specialties::jsonb ? ?", [$tag]);
-            } catch (\Throwable) {
-                $query->where('pp.specialties', 'ilike', '%"' . $tag . '"%');
+            $tag = (string) $request->specialty;
+            $driver = DB::connection()->getDriverName();
+            if ($driver === 'pgsql') {
+                $query->whereRaw('pp.specialties::jsonb @> ?::jsonb', [json_encode([$tag])]);
+            } else {
+                // MySQL JSON_CONTAINS works the same way; SQLite has no
+                // JSON ops in older versions so we fall back to LIKE on
+                // the serialized form. Safe — specialty values are
+                // controlled (PhotographerProfile::specialtyOptions()).
+                $query->where('pp.specialties', 'like', '%"' . str_replace('%', '\\%', $tag) . '"%');
             }
         }
 
