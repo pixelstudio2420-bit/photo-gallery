@@ -80,6 +80,16 @@
               <i class="bi bi-tag-fill mr-1"></i>ราคา
             </a>
           </li>
+          {{-- "วิธีซื้อรูป" — customer onboarding guide. Points at the
+               admin-editable landing page seeded by migration
+               2026_05_19_000015 (slug=how-to-buy). Admin can edit
+               copy at /admin/marketing/landing without deploys. --}}
+          <li>
+            <a class="px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->is('lp/how-to-buy') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
+              href="/lp/how-to-buy">
+              <i class="bi bi-question-circle mr-1"></i>วิธีซื้อรูป
+            </a>
+          </li>
           {{-- "ติดต่อเรา" — promoted INTO the top navbar by request.
                Was previously footer-only to keep the desktop menu focused
                on browse-to-buy actions, but the project owner asked for
@@ -475,6 +485,12 @@
             <a class="block px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('pricing') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
               href="{{ route('pricing') }}">
               <i class="bi bi-tag-fill mr-1"></i>ราคา
+            </a>
+          </li>
+          <li>
+            <a class="block px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->is('lp/how-to-buy') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
+              href="/lp/how-to-buy">
+              <i class="bi bi-question-circle mr-1"></i>วิธีซื้อรูป
             </a>
           </li>
           {{-- "ติดต่อเรา" — promoted into the mobile menu to mirror the

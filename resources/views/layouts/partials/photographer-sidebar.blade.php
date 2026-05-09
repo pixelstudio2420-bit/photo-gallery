@@ -366,6 +366,23 @@
         <span x-show="!collapsed" x-transition>ความช่วยเหลือ</span>
       </li>
 
+      {{-- Photographer-only how-to landing page. Different from the
+           customer "วิธีซื้อรูป" guide that lives in the public
+           navbar — this one walks photographers through their own
+           workflow (sign up → upload → get paid). Points at the
+           admin-editable landing page seeded by migration
+           2026_05_19_000015 (slug=how-to-sell). Editable at
+           /admin/marketing/landing without code deploys. --}}
+      <li>
+        <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->is('lp/how-to-sell') ? 'pg-link-active' : '' }}"
+          href="/lp/how-to-sell"
+          title="คู่มือใช้งานสำหรับช่างภาพ — สมัคร, อัปโหลด, รับเงิน"
+          :class="{ 'px-0 py-3 justify-center !border-l-0': collapsed }">
+          <i class="bi bi-book text-lg w-[22px] text-center"></i>
+          <span x-show="!collapsed" x-transition>คู่มือช่างภาพ</span>
+        </a>
+      </li>
+
       <li>
         <a class="pg-link relative flex items-center gap-3 px-6 py-2.5 text-white/72 no-underline text-sm font-medium transition-all border-l-[3px] border-transparent my-px {{ request()->routeIs('contact') ? 'pg-link-active' : '' }}"
           href="{{ route('contact') }}"
