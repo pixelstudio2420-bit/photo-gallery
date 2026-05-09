@@ -144,17 +144,38 @@ $_footerBrandName = $siteName ?: config('app.name');
         @endif
       </div>
 
-      {{-- ─── Column 2: Discover (2 cols) ─── --}}
+      {{-- ─── Column 2: Discover (data-driven from nav_menu_items) ─────
+           Same source as the navbar — admin can drag any item here via
+           /admin/navigation by setting location='footer' or 'both'.
+           "Home" + "Help" stay hardcoded as bookend safety links so
+           the footer never collapses to empty even if admin wipes the
+           nav table. --}}
       <div class="lg:col-span-2">
         <h6 class="font-semibold mb-3 text-white text-sm uppercase tracking-wider">{{ __('common.see_more') }}</h6>
         <ul class="list-none space-y-2 text-sm">
           <li><a href="{{ route('home') }}" class="text-gray-400 hover:text-white transition">{{ __('nav.home') }}</a></li>
-          <li><a href="{{ route('events.index') }}" class="text-gray-400 hover:text-white transition">{{ __('nav.events') }}</a></li>
-          <li><a href="{{ route('photographers.index') }}" class="text-gray-400 hover:text-white transition">ช่างภาพ</a></li>
-          @if(\App\Support\Features::blogEnabled())
-          <li><a href="{{ route('blog.index') }}" class="text-gray-400 hover:text-white transition">{{ __('nav.blog') }}</a></li>
-          @endif
-          <li><a href="{{ route('pricing') }}" class="text-gray-400 hover:text-white transition flex items-center gap-1">ราคา<span class="text-[9px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">NEW</span></a></li>
+          @php $_footerItems = app(\App\Services\NavigationService::class)->itemsFor('footer'); @endphp
+          @foreach($_footerItems as $_item)
+            <li>
+              <a href="{{ app(\App\Services\NavigationService::class)->resolveUrl($_item) }}"
+                 class="text-gray-400 hover:text-white transition flex items-center gap-1"
+                 @if($_item->open_in_new_tab) target="_blank" rel="noopener" @endif>
+                @if($_item->icon)<i class="bi bi-{{ $_item->icon }} text-xs"></i>@endif
+                <span>{{ $_item->label }}</span>
+                @if($_item->badge_text)
+                  <span class="text-[9px] px-1 py-0.5 rounded font-bold
+                    @if($_item->badge_color === 'amber') bg-amber-500/20 text-amber-300
+                    @elseif($_item->badge_color === 'rose') bg-rose-500/20 text-rose-300
+                    @elseif($_item->badge_color === 'emerald') bg-emerald-500/20 text-emerald-300
+                    @elseif($_item->badge_color === 'indigo') bg-indigo-500/20 text-indigo-300
+                    @else bg-slate-500/20 text-slate-300
+                    @endif">
+                    {{ $_item->badge_text }}
+                  </span>
+                @endif
+              </a>
+            </li>
+          @endforeach
           <li><a href="{{ route('help') }}" class="text-gray-400 hover:text-white transition">{{ __('nav.help') }}</a></li>
         </ul>
       </div>

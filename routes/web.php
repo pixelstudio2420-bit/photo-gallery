@@ -913,6 +913,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('events/{event}/qrcode', [\App\Http\Controllers\Admin\EventController::class, 'qrcode'])->name('events.qrcode');
         Route::post('events/{event}/toggle-status', [\App\Http\Controllers\Admin\EventController::class, 'toggleStatus'])->name('events.toggle-status');
 
+        // Navigation menu CRUD — admin-managed nav_menu_items table
+        // that drives the customer navbar + footer "ดูเพิ่มเติม" column.
+        // Drag-drop reorder via POST /admin/navigation/reorder; quick
+        // is_active toggle via POST /admin/navigation/{id}/toggle.
+        Route::resource('navigation', \App\Http\Controllers\Admin\NavigationController::class)->except(['show']);
+        Route::post('navigation/reorder',         [\App\Http\Controllers\Admin\NavigationController::class, 'reorder'])->name('navigation.reorder');
+        Route::post('navigation/{navigation}/toggle', [\App\Http\Controllers\Admin\NavigationController::class, 'toggle'])->name('navigation.toggle');
+
         // Location API (cascading province → district → subdistrict)
         Route::get('api/locations/districts', [\App\Http\Controllers\Admin\EventController::class, 'getDistricts'])->name('api.locations.districts');
         Route::get('api/locations/subdistricts', [\App\Http\Controllers\Admin\EventController::class, 'getSubdistricts'])->name('api.locations.subdistricts');

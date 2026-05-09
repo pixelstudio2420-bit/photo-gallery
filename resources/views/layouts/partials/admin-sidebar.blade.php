@@ -756,7 +756,8 @@
              || request()->routeIs('admin.settings.version')
              || request()->routeIs('admin.legal.*')
              || request()->routeIs('admin.manual')
-             || request()->routeIs('admin.changelog.*');
+             || request()->routeIs('admin.changelog.*')
+             || request()->routeIs('admin.navigation.*');
     @endphp
     <div x-data="{ open: {{ $g1Open ? 'true' : 'false' }} }">
       <button class="{{ $linkCls }} w-full {{ $g1Open ? '!text-white !bg-indigo-500/10' : '' }}"
@@ -768,6 +769,9 @@
       </button>
       <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="pb-1">
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.settings.general') ? $sublinkActive : '' }}" href="{{ route('admin.settings.general') }}">ทั่วไป</a>
+        <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.navigation.*') ? $sublinkActive : '' }}" href="{{ route('admin.navigation.index') }}">
+          <i class="bi bi-list-nested text-indigo-400 text-[0.6rem]"></i> เมนูนำทาง
+        </a>
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.settings.features') ? $sublinkActive : '' }}" href="{{ route('admin.settings.features') }}">
           <i class="bi bi-toggles2 text-violet-400 text-[0.6rem]"></i> เปิด/ปิดระบบ
           @if(!\App\Support\Features::blogEnabled())

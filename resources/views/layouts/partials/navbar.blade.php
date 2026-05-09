@@ -35,9 +35,15 @@
         <i class="bi bi-list text-2xl"></i>
       </button>
 
-      {{-- Desktop Nav --}}
+      {{-- Desktop Nav ─────────────────────────────────────────────
+           Middle menu is DATA-DRIVEN as of 2026-05-19. Items come
+           from the nav_menu_items table (admin-managed via
+           /admin/navigation). Only "Home" stays hardcoded as a
+           safety-net first item so the brand link always works
+           even if the database is empty.
+           See App\Services\NavigationService::itemsFor() for the
+           filter logic (location + audience + route-pattern). --}}
       <div class="hidden lg:flex items-center flex-1 ml-6">
-        {{-- Left Nav --}}
         <ul class="flex items-center gap-1">
           <li>
             <a class="px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('home') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
@@ -45,84 +51,36 @@
               <i class="bi bi-house-door mr-1"></i>{{ __('nav.home') }}
             </a>
           </li>
-          <li>
-            <a class="px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('events.*') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
-              href="{{ route('events.index') }}">
-              <i class="bi bi-grid-3x3-gap mr-1"></i>{{ __('nav.events') }}
-            </a>
-          </li>
-          <li>
-            {{-- Photographer search/discovery — links to the public
-                 /photographers index so customers can browse and filter
-                 by province/specialty/experience before booking. --}}
-            <a class="px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('photographers.*') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
-              href="{{ route('photographers.index') }}">
-              <i class="bi bi-camera-fill mr-1"></i>ช่างภาพ
-            </a>
-          </li>
-          @if(\App\Support\Features::blogEnabled())
-          <li>
-            <a class="px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('blog.*') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
-              href="{{ route('blog.index') }}">
-              <i class="bi bi-newspaper mr-1"></i>{{ __('nav.blog') }}
-            </a>
-          </li>
-          @endif
-          <li>
-            <a class="px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('products.*') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
-              href="{{ route('products.index') }}">
-              <i class="bi bi-box-seam mr-1"></i>{{ __('nav.products') }}
-            </a>
-          </li>
-          <li>
-            <a class="px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('pricing') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
-              href="{{ route('pricing') }}">
-              <i class="bi bi-tag-fill mr-1"></i>ราคา
-            </a>
-          </li>
-          {{-- "วิธีซื้อรูป" — customer onboarding guide. Points at the
-               admin-editable landing page seeded by migration
-               2026_05_19_000015 (slug=how-to-buy). Admin can edit
-               copy at /admin/marketing/landing without deploys. --}}
-          <li>
-            <a class="px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->is('lp/how-to-buy') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
-              href="/lp/how-to-buy">
-              <i class="bi bi-question-circle mr-1"></i>วิธีซื้อรูป
-            </a>
-          </li>
-          {{-- "ติดต่อเรา" — promoted INTO the top navbar by request.
-               Was previously footer-only to keep the desktop menu focused
-               on browse-to-buy actions, but the project owner asked for
-               it in the primary nav so users reporting bugs / asking
-               questions don't have to scroll to the footer. The link
-               points at the public /contact form (categories include
-               🐞 รายงานปัญหา + 💡 ข้อเสนอแนะ added recently). --}}
-          <li>
-            <a class="px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('contact') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
-              href="{{ route('contact') }}">
-              <i class="bi bi-chat-square-heart mr-1"></i>ติดต่อเรา
-            </a>
-          </li>
-          {{-- B2B sales entry — hidden once the user is logged in as a
-               photographer (they already converted) to avoid the "sell to
-               existing customer" anti-pattern. --}}
-          @auth
-            @if(!Auth::user()->photographerProfile)
+          @php $_navItems = app(\App\Services\NavigationService::class)->itemsFor('navbar'); @endphp
+          @foreach($_navItems as $_item)
+            @php
+              $_isActive    = app(\App\Services\NavigationService::class)->isActive($_item);
+              $_baseClass   = 'px-3 py-2 rounded-lg text-sm transition';
+              $_styleClass  = match ($_item->cta_style) {
+                  'primary' => 'font-semibold ' . ($_isActive ? 'text-white bg-blue-500/30' : 'text-white/90 hover:text-white hover:bg-white/10'),
+                  'accent'  => 'font-semibold ' . ($_isActive ? 'text-white bg-white/10' : 'text-amber-300 hover:text-amber-200'),
+                  default   => 'font-medium '   . ($_isActive ? 'text-white bg-white/10' : 'text-white/70 hover:text-white'),
+              };
+            @endphp
             <li>
-              <a class="px-3 py-2 rounded-lg text-sm font-semibold transition {{ request()->routeIs('sell-photos') ? 'text-white bg-white/10' : 'text-amber-300 hover:text-amber-200' }}"
-                href="{{ route('sell-photos') }}">
-                <i class="bi bi-camera-fill mr-1"></i>เริ่มขายรูป
+              <a class="{{ $_baseClass }} {{ $_styleClass }}"
+                 href="{{ app(\App\Services\NavigationService::class)->resolveUrl($_item) }}"
+                 @if($_item->open_in_new_tab) target="_blank" rel="noopener" @endif>
+                @if($_item->icon)<i class="bi bi-{{ $_item->icon }} mr-1"></i>@endif{{ $_item->label }}
+                @if($_item->badge_text)
+                  <span class="ml-1 text-[9px] px-1 py-0.5 rounded font-bold
+                    @if($_item->badge_color === 'amber') bg-amber-500/20 text-amber-300
+                    @elseif($_item->badge_color === 'rose') bg-rose-500/20 text-rose-300
+                    @elseif($_item->badge_color === 'emerald') bg-emerald-500/20 text-emerald-300
+                    @elseif($_item->badge_color === 'indigo') bg-indigo-500/20 text-indigo-300
+                    @else bg-slate-500/20 text-slate-300
+                    @endif">
+                    {{ $_item->badge_text }}
+                  </span>
+                @endif
               </a>
             </li>
-            @endif
-          @else
-            <li>
-              <a class="px-3 py-2 rounded-lg text-sm font-semibold transition {{ request()->routeIs('sell-photos') ? 'text-white bg-white/10' : 'text-amber-300 hover:text-amber-200' }}"
-                href="{{ route('sell-photos') }}">
-                <i class="bi bi-camera-fill mr-1"></i>เริ่มขายรูป
-              </a>
-            </li>
-          @endauth
+          @endforeach
         </ul>
 
         {{-- Right Nav --}}
@@ -442,7 +400,10 @@
       </div>
     </div>
 
-    {{-- Mobile Nav --}}
+    {{-- Mobile Nav — same data source as the desktop nav, just
+         rendered as a vertical stack. Reads from the same
+         NavigationService::itemsFor('navbar') call so changes in
+         /admin/navigation reflect on phone + desktop simultaneously. --}}
     <div class="lg:hidden" x-show="mobileOpen" x-collapse x-cloak>
       <div class="pb-4 pt-2 border-t border-white/10">
         <ul class="space-y-1">
@@ -452,57 +413,35 @@
               <i class="bi bi-house-door mr-1"></i>{{ __('nav.home') }}
             </a>
           </li>
-          <li>
-            <a class="block px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('events.*') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
-              href="{{ route('events.index') }}">
-              <i class="bi bi-grid-3x3-gap mr-1"></i>{{ __('nav.events') }}
-            </a>
-          </li>
-          <li>
-            {{-- Mobile mirror of the desktop "ช่างภาพ" link — same
-                 /photographers index, with active-state highlight when
-                 the user is viewing a photographer page. --}}
-            <a class="block px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('photographers.*') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
-              href="{{ route('photographers.index') }}">
-              <i class="bi bi-camera-fill mr-1"></i>ช่างภาพ
-            </a>
-          </li>
-          @if(\App\Support\Features::blogEnabled())
-          <li>
-            <a class="block px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('blog.*') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
-              href="{{ route('blog.index') }}">
-              <i class="bi bi-newspaper mr-1"></i>{{ __('nav.blog') }}
-            </a>
-          </li>
-          @endif
-          <li>
-            <a class="block px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('products.*') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
-              href="{{ route('products.index') }}">
-              <i class="bi bi-box-seam mr-1"></i>{{ __('nav.products') }}
-            </a>
-          </li>
-          <li>
-            <a class="block px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('pricing') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
-              href="{{ route('pricing') }}">
-              <i class="bi bi-tag-fill mr-1"></i>ราคา
-            </a>
-          </li>
-          <li>
-            <a class="block px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->is('lp/how-to-buy') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
-              href="/lp/how-to-buy">
-              <i class="bi bi-question-circle mr-1"></i>วิธีซื้อรูป
-            </a>
-          </li>
-          {{-- "ติดต่อเรา" — promoted into the mobile menu to mirror the
-               desktop nav (project owner's call). The link goes to the
-               same /contact form that handles bug reports + feature
-               requests + general support tickets. --}}
-          <li>
-            <a class="block px-3 py-2 rounded-lg text-sm font-medium transition {{ request()->routeIs('contact') ? 'text-white bg-white/10' : 'text-white/70 hover:text-white' }}"
-              href="{{ route('contact') }}">
-              <i class="bi bi-chat-square-heart mr-1"></i>ติดต่อเรา
-            </a>
-          </li>
+          @php $_navItemsMobile = app(\App\Services\NavigationService::class)->itemsFor('navbar'); @endphp
+          @foreach($_navItemsMobile as $_item)
+            @php
+              $_isActive   = app(\App\Services\NavigationService::class)->isActive($_item);
+              $_styleClass = match ($_item->cta_style) {
+                  'primary' => 'font-semibold ' . ($_isActive ? 'text-white bg-blue-500/30' : 'text-white/90 hover:text-white hover:bg-white/10'),
+                  'accent'  => 'font-semibold ' . ($_isActive ? 'text-white bg-white/10' : 'text-amber-300 hover:text-amber-200'),
+                  default   => 'font-medium '   . ($_isActive ? 'text-white bg-white/10' : 'text-white/70 hover:text-white'),
+              };
+            @endphp
+            <li>
+              <a class="block px-3 py-2 rounded-lg text-sm transition {{ $_styleClass }}"
+                 href="{{ app(\App\Services\NavigationService::class)->resolveUrl($_item) }}"
+                 @if($_item->open_in_new_tab) target="_blank" rel="noopener" @endif>
+                @if($_item->icon)<i class="bi bi-{{ $_item->icon }} mr-1"></i>@endif{{ $_item->label }}
+                @if($_item->badge_text)
+                  <span class="ml-1 text-[9px] px-1 py-0.5 rounded font-bold
+                    @if($_item->badge_color === 'amber') bg-amber-500/20 text-amber-300
+                    @elseif($_item->badge_color === 'rose') bg-rose-500/20 text-rose-300
+                    @elseif($_item->badge_color === 'emerald') bg-emerald-500/20 text-emerald-300
+                    @elseif($_item->badge_color === 'indigo') bg-indigo-500/20 text-indigo-300
+                    @else bg-slate-500/20 text-slate-300
+                    @endif">
+                    {{ $_item->badge_text }}
+                  </span>
+                @endif
+              </a>
+            </li>
+          @endforeach
         </ul>
 
         {{-- Mobile Language Switcher (only shown when multi-lang is enabled AND there's more than 1 language) --}}
