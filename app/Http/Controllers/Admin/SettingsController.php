@@ -407,6 +407,13 @@ class SettingsController extends Controller
             'retention_days_pro'               => AppSetting::get('retention_days_pro', '90'),
             'retention_warning_enabled'        => AppSetting::get('retention_warning_enabled', '1'),
             'retention_warning_days_ahead'     => AppSetting::get('retention_warning_days_ahead', '1'),
+
+            // ── Per-tier MODE: portfolio (wipe originals, keep cover+preview+watermark)
+            //    vs full (hard delete everything). Layered with global fallback.
+            'event_retention_mode'             => AppSetting::get('event_retention_mode', 'portfolio'),
+            'retention_mode_creator'           => AppSetting::get('retention_mode_creator', 'full'),
+            'retention_mode_seller'            => AppSetting::get('retention_mode_seller', 'portfolio'),
+            'retention_mode_pro'               => AppSetting::get('retention_mode_pro', 'portfolio'),
         ];
 
         // Stats: what does the current policy actually affect?
@@ -437,6 +444,14 @@ class SettingsController extends Controller
             'retention_days_pro'               => 'required|integer|min:0|max:3650',
             'retention_warning_enabled'        => 'nullable|in:0,1',
             'retention_warning_days_ahead'     => 'required|integer|min:0|max:30',
+
+            // Per-tier modes — must be one of the two known dispatchers.
+            // Empty / missing falls back to the global mode (server-side
+            // resolved in Event::tierRetentionMode()).
+            'event_retention_mode'             => 'required|in:portfolio,full',
+            'retention_mode_creator'           => 'required|in:portfolio,full',
+            'retention_mode_seller'            => 'required|in:portfolio,full',
+            'retention_mode_pro'               => 'required|in:portfolio,full',
         ]);
 
         $items = [
@@ -453,6 +468,11 @@ class SettingsController extends Controller
             'retention_days_pro'               => $validated['retention_days_pro'],
             'retention_warning_enabled'        => $request->input('retention_warning_enabled', '0'),
             'retention_warning_days_ahead'     => $validated['retention_warning_days_ahead'],
+
+            'event_retention_mode'             => $validated['event_retention_mode'],
+            'retention_mode_creator'           => $validated['retention_mode_creator'],
+            'retention_mode_seller'            => $validated['retention_mode_seller'],
+            'retention_mode_pro'               => $validated['retention_mode_pro'],
         ];
         $keys = array_keys($items);
         $oldSnapshot = $this->snapshotSettings($keys);
@@ -568,6 +588,45 @@ class SettingsController extends Controller
         app(\App\Services\StorageQuotaService::class)->flushAdminCache();
 
         return back()->with('success', 'คำนวณพื้นที่ใช้งานของช่างภาพใหม่เรียบร้อยแล้ว');
+    }
+
+    /**
+     * Live dry-run of `events:purge-expired` — actually invokes the artisan
+     * command with `--dry-run` so admins see EXACTLY what the next cron pass
+     * would do (per-tier mode resolution, skip-on-orders, batch limit, etc.).
+     *
+     * Differs from `previewRetention()`:
+     *   - previewRetention() = cheap SQL scan, shows candidates by date
+     *   - runDryRun()        = full command, exercises every code path,
+     *                          returns the same lines the cron would print
+     */
+    public function runDryRun(Request $request)
+    {
+        try {
+            $exitCode = \Illuminate\Support\Facades\Artisan::call('events:purge-expired', [
+                '--dry-run' => true,
+            ]);
+            $output = \Illuminate\Support\Facades\Artisan::output();
+
+            ActivityLogger::admin(
+                action: 'settings.retention_dry_run',
+                target: null,
+                description: 'รัน dry-run จาก /admin/settings/retention',
+                oldValues: null,
+                newValues: ['exit_code' => $exitCode],
+            );
+
+            return response()->json([
+                'ok'        => $exitCode === 0,
+                'exit_code' => $exitCode,
+                'output'    => $output,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'ok'    => false,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

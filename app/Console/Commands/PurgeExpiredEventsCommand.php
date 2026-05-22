@@ -108,6 +108,9 @@ class PurgeExpiredEventsCommand extends Command
         $dispatched = 0;
         $skipped    = 0;
 
+        // Tally per-mode dispatched count for the final summary.
+        $modeCounts = ['portfolio' => 0, 'full' => 0];
+
         foreach ($candidates as $event) {
             if ($dispatched >= $limit) {
                 $this->line("— reached batch limit ({$limit}); remaining candidates deferred to next run");
@@ -120,8 +123,22 @@ class PurgeExpiredEventsCommand extends Command
                 continue;
             }
 
+            // Per-event mode resolution
+            // ────────────────────────
+            // CLI override wins, otherwise we ask the EVENT what its
+            // tier-specific retention mode is (Event::tierRetentionMode()
+            // reads retention_mode_{tier} AppSetting with global
+            // fallback). This is how Free photographers get 'full'
+            // while Pro/Studio photographers get 'portfolio' on the
+            // SAME cron run — different events, different policies.
+            $effectiveMode = $modeOverride ?: $event->tierRetentionMode();
+            $effectiveMode = strtolower(trim((string) $effectiveMode));
+            if (!in_array($effectiveMode, ['portfolio', 'full'], true)) {
+                $effectiveMode = 'portfolio';
+            }
+
             // Photographers can pin an event to portfolio forever
-            if ($event->is_portfolio && $mode === 'full') {
+            if ($event->is_portfolio && $effectiveMode === 'full') {
                 $this->line("  <fg=yellow>skip</> #{$event->id} \"{$event->name}\" — pinned as portfolio (is_portfolio=1)");
                 $skipped++;
                 continue;
@@ -129,25 +146,28 @@ class PurgeExpiredEventsCommand extends Command
 
             // Full-mode only: refuse to wipe events with revenue-bearing orders.
             // Portfolio mode keeps orders valid so we always archive.
-            if ($mode === 'full' && !$includeOrders && $skipOrders && $event->hasBlockingOrders()) {
-                $this->line("  <fg=yellow>skip</> #{$event->id} \"{$event->name}\" — has paid orders (use --mode=portfolio instead)");
+            if ($effectiveMode === 'full' && !$includeOrders && $skipOrders && $event->hasBlockingOrders()) {
+                $this->line("  <fg=yellow>skip</> #{$event->id} \"{$event->name}\" — has paid orders (tier wants full delete but order blocks it)");
                 $skipped++;
                 continue;
             }
 
             $overdue = $eta ? (int) now()->diffInDays($eta, false) : 0;
-            $actionLabel = $mode === 'portfolio' ? 'archive' : 'purge';
+            $actionLabel = $effectiveMode === 'portfolio' ? 'archive' : 'purge';
+            $tierLabel   = $event->tierRetentionMode() === $effectiveMode ? '' : ' (overridden)';
             $this->line(sprintf(
-                "  <fg=%s>%s</> #%d \"%s\" — due %s (%d days ago)",
-                $mode === 'portfolio' ? 'blue' : 'red',
+                "  <fg=%s>%s</> #%d \"%s\" — mode=%s%s, due %s (%d days ago)",
+                $effectiveMode === 'portfolio' ? 'blue' : 'red',
                 $actionLabel,
                 $event->id,
                 $this->truncate($event->name, 50),
+                $effectiveMode,
+                $tierLabel,
                 $eta?->format('Y-m-d') ?? '-',
                 abs($overdue)
             ));
 
-            if ($mode === 'portfolio') {
+            if ($effectiveMode === 'portfolio') {
                 if ($dryRun) {
                     PurgeEventOriginalsJob::dispatchSync($event->id, $purgeDrive, true);
                 } else {
@@ -160,21 +180,26 @@ class PurgeExpiredEventsCommand extends Command
                     PurgeEventJob::dispatch($event->id, $purgeDrive, false);
                 }
             }
+            $modeCounts[$effectiveMode]++;
             $dispatched++;
         }
 
         // Second pass: portfolio-mode events that have aged out of the
         // "portfolio keep window" can now be hard-deleted if the admin set
         // event_portfolio_keep_days > 0.
-        if ($mode === 'full' && !$specificEventId) {
+        // Runs when the GLOBAL mode is 'full' so per-tier-overridden
+        // events on Free still see this sweep too.
+        if (($mode === 'full' || $modeOverride === 'full') && !$specificEventId) {
             $this->hardDeleteAgedPortfolio($dryRun, $purgeDrive, $dispatched, $limit);
         }
 
         $this->line('');
         $this->line("━━━ Summary ━━━");
         $this->line(" Dispatched : <fg=" . ($dispatched ? 'green' : 'gray') . ">{$dispatched}</>");
+        $this->line("   ↳ portfolio: {$modeCounts['portfolio']}");
+        $this->line("   ↳ full     : {$modeCounts['full']}");
         $this->line(" Skipped    : {$skipped}");
-        $this->line(" Mode       : {$mode}" . ($dryRun ? ' (dry-run)' : ''));
+        $this->line(" Global mode: {$mode}" . ($modeOverride ? ' (CLI override)' : ' (per-tier resolved per event)') . ($dryRun ? ' [DRY RUN]' : ''));
         $this->line('');
 
         return self::SUCCESS;

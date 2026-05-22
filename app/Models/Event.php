@@ -468,6 +468,61 @@ class Event extends Model
 
     /** @var int|null Memoised tier retention. Not persisted. */
     private ?int $__tierRetentionDaysCache = null;
+    /** @var string|null Memoised tier retention mode. Not persisted. */
+    private ?string $__tierRetentionModeCache = null;
+
+    /**
+     * Resolve the retention MODE for this event based on the
+     * photographer's tier. Mirrors tierRetentionDays() — looks up
+     * retention_mode_{tier} AppSetting first, falls back to the
+     * global event_retention_mode if no tier-specific value is set.
+     *
+     * Returns either 'portfolio' (default) or 'full'.
+     *
+     *   portfolio → wipe originals only, keep cover + thumbnail +
+     *               watermarked previews so the event survives as a
+     *               portfolio entry on the photographer's profile.
+     *   full      → wipe everything: row + storage + Drive copies.
+     *
+     * Per-tier mode lets the platform run different retention
+     * policies per audience — e.g. Free tier 'full' (aggressive,
+     * recover R2 cost fast) while Pro tier 'portfolio' (preserve
+     * the photographer's portfolio because they're paying).
+     */
+    public function tierRetentionMode(): string
+    {
+        if ($this->__tierRetentionModeCache !== null) {
+            return $this->__tierRetentionModeCache;
+        }
+
+        $tier = null;
+        if ($this->photographer_id) {
+            $tier = \App\Models\PhotographerProfile::where('user_id', $this->photographer_id)
+                ->value('tier');
+        }
+
+        $key = match ((string) $tier) {
+            \App\Models\PhotographerProfile::TIER_PRO     => 'retention_mode_pro',
+            \App\Models\PhotographerProfile::TIER_SELLER  => 'retention_mode_seller',
+            \App\Models\PhotographerProfile::TIER_CREATOR => 'retention_mode_creator',
+            default => null,
+        };
+
+        $mode = $key
+            ? (string) \App\Models\AppSetting::get($key, '')
+            : '';
+
+        if (!in_array($mode, ['portfolio', 'full'], true)) {
+            // Fall back to the global mode setting if no per-tier
+            // value is configured (or it's an invalid value).
+            $mode = (string) \App\Models\AppSetting::get('event_retention_mode', 'portfolio');
+        }
+        if (!in_array($mode, ['portfolio', 'full'], true)) {
+            $mode = 'portfolio'; // Last-resort default.
+        }
+
+        return $this->__tierRetentionModeCache = $mode;
+    }
 
     /** Is this event overdue for auto-deletion? */
     public function shouldAutoDelete(): bool

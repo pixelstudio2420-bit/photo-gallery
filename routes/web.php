@@ -1284,6 +1284,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/retention', [\App\Http\Controllers\Admin\SettingsController::class, 'retention'])->name('retention');
             Route::post('/retention', [\App\Http\Controllers\Admin\SettingsController::class, 'updateRetention'])->name('retention.update');
             Route::get('/retention/preview', [\App\Http\Controllers\Admin\SettingsController::class, 'previewRetention'])->name('retention.preview');
+            Route::post('/retention/dry-run', [\App\Http\Controllers\Admin\SettingsController::class, 'runDryRun'])->name('retention.dry-run');
 
             // Per-photographer storage quota (Part A — tier-based quotas)
             Route::get('/photographer-storage', [\App\Http\Controllers\Admin\SettingsController::class, 'photographerStorage'])->name('photographer-storage');

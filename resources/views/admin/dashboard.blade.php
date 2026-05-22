@@ -1085,6 +1085,11 @@
   </div>
 
   {{-- ══════════════════════════════════════════════════════════════
+       R2 STORAGE COST ESTIMATOR — org summary + top consumers + projected savings
+       ══════════════════════════════════════════════════════════════ --}}
+  @include('admin.partials.r2-cost-widget')
+
+  {{-- ══════════════════════════════════════════════════════════════
        PENDING DIGITAL ORDERS + TOP PHOTOGRAPHER PAYOUTS
        ══════════════════════════════════════════════════════════════ --}}
   @if($pendingDigitalOrders->isNotEmpty() || $topPhotographerPayouts->isNotEmpty())

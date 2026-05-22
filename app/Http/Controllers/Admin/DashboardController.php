@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\DashboardAggregationService;
+use App\Services\R2CostEstimatorService;
 use App\Services\UserPresenceService;
 use Illuminate\Http\JsonResponse;
 
@@ -12,6 +13,7 @@ class DashboardController extends Controller
     public function __construct(
         private readonly UserPresenceService $presence,
         private readonly DashboardAggregationService $aggregation,
+        private readonly R2CostEstimatorService $r2Cost,
     ) {}
 
     public function index()
@@ -25,6 +27,21 @@ class DashboardController extends Controller
         $combinedTotalRevenue = (float) $stats['total_revenue'] + (float) $digitalStats['total_revenue'];
 
         $onlineUsers = $this->presence->getOnlineUsers();
+
+        // R2 storage cost widget data — cached 5 min inside the service so
+        // the dashboard render stays cheap even with the JOIN query.
+        // Wrapped in try/catch so a malformed AppSetting (or missing table
+        // during a partial migration window) can't break the dashboard.
+        $r2Cost = ['org' => [], 'top' => collect(), 'projected' => []];
+        try {
+            $r2Cost = [
+                'org'       => $this->r2Cost->orgSummary(),
+                'top'       => $this->r2Cost->perPhotographer(10),
+                'projected' => $this->r2Cost->projectedSavings(),
+            ];
+        } catch (\Throwable $e) {
+            \Log::warning('R2 cost widget failed to load: ' . $e->getMessage());
+        }
 
         return view('admin.dashboard', [
             'stats'                  => $stats,
@@ -46,6 +63,7 @@ class DashboardController extends Controller
             'combinedTotalRevenue'   => $combinedTotalRevenue,
             'onlineUsers'            => $onlineUsers,
             'onlineCount'            => $onlineUsers->count(),
+            'r2Cost'                 => $r2Cost,
         ]);
     }
 

@@ -90,6 +90,21 @@
           <p class="text-xs text-gray-500 mt-1">อีเวนต์ที่เก่ากว่านี้จะถูกลบ (สามารถ override รายตัวได้ในหน้าแก้ไขอีเวนต์)</p>
         </div>
 
+        {{-- Global retention mode (fallback when tier mode is empty) --}}
+        <div>
+          <label class="block text-sm font-semibold mb-1.5">โหมดการลบ (Global)</label>
+          <select name="event_retention_mode"
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-gray-100">
+            <option value="portfolio" {{ ($settings['event_retention_mode'] ?? 'portfolio') === 'portfolio' ? 'selected' : '' }}>
+              Portfolio — เก็บปก/พรีวิว/ลายน้ำ
+            </option>
+            <option value="full" {{ ($settings['event_retention_mode'] ?? '') === 'full' ? 'selected' : '' }}>
+              Full — ลบทั้งหมด (ไม่เหลือร่องรอย)
+            </option>
+          </select>
+          <p class="text-xs text-gray-500 mt-1">ใช้เป็น fallback เมื่อ tier ของช่างภาพไม่ได้กำหนดโหมด</p>
+        </div>
+
         {{-- From field --}}
         <div>
           <label class="block text-sm font-semibold mb-1.5">นับอายุจากวันที่</label>
@@ -168,13 +183,19 @@
               <span class="px-2 py-0.5 rounded text-[11px] font-semibold" style="background:rgba(99,102,241,0.15);color:#4f46e5;">CREATOR (Free)</span>
             </div>
             <label class="block text-xs font-medium mb-1.5 text-gray-600 dark:text-gray-300">เก็บข้อมูลนาน</label>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 mb-2">
               <input type="number" name="retention_days_creator" min="0" max="3650"
                      value="{{ $settings['retention_days_creator'] ?? 7 }}"
                      class="w-24 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-gray-100">
               <span class="text-sm text-gray-500">วัน</span>
             </div>
-            <p class="text-[11px] text-gray-500 mt-2">แนะนำ: 7 วัน — สั้นพอให้รู้สึกอยากอัปเกรด</p>
+            <label class="block text-xs font-medium mb-1.5 text-gray-600 dark:text-gray-300">โหมดเมื่อหมดอายุ</label>
+            <select name="retention_mode_creator"
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-gray-100">
+              <option value="full"      {{ ($settings['retention_mode_creator'] ?? 'full') === 'full' ? 'selected' : '' }}>Full — ลบทุกอย่าง</option>
+              <option value="portfolio" {{ ($settings['retention_mode_creator'] ?? '') === 'portfolio' ? 'selected' : '' }}>Portfolio — เก็บปก/พรีวิว</option>
+            </select>
+            <p class="text-[11px] text-gray-500 mt-2">แนะนำ: 7-60 วัน + Full — สั้น+ลบหมดเพื่อจูงใจอัปเกรด</p>
           </div>
 
           {{-- Seller --}}
@@ -183,13 +204,19 @@
               <span class="px-2 py-0.5 rounded text-[11px] font-semibold" style="background:rgba(16,185,129,0.15);color:#059669;">SELLER</span>
             </div>
             <label class="block text-xs font-medium mb-1.5 text-gray-600 dark:text-gray-300">เก็บข้อมูลนาน</label>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 mb-2">
               <input type="number" name="retention_days_seller" min="0" max="3650"
                      value="{{ $settings['retention_days_seller'] ?? 30 }}"
                      class="w-24 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-gray-100">
               <span class="text-sm text-gray-500">วัน</span>
             </div>
-            <p class="text-[11px] text-gray-500 mt-2">แนะนำ: 30 วัน — ครอบคลุมรอบการขายเกือบทั้งหมด</p>
+            <label class="block text-xs font-medium mb-1.5 text-gray-600 dark:text-gray-300">โหมดเมื่อหมดอายุ</label>
+            <select name="retention_mode_seller"
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-gray-100">
+              <option value="portfolio" {{ ($settings['retention_mode_seller'] ?? 'portfolio') === 'portfolio' ? 'selected' : '' }}>Portfolio — เก็บปก/พรีวิว</option>
+              <option value="full"      {{ ($settings['retention_mode_seller'] ?? '') === 'full' ? 'selected' : '' }}>Full — ลบทุกอย่าง</option>
+            </select>
+            <p class="text-[11px] text-gray-500 mt-2">แนะนำ: 180 วัน + Portfolio — รักษาผลงานแสดง</p>
           </div>
 
           {{-- Pro --}}
@@ -198,13 +225,19 @@
               <span class="px-2 py-0.5 rounded text-[11px] font-semibold" style="background:rgba(245,158,11,0.15);color:#d97706;">PRO</span>
             </div>
             <label class="block text-xs font-medium mb-1.5 text-gray-600 dark:text-gray-300">เก็บข้อมูลนาน</label>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 mb-2">
               <input type="number" name="retention_days_pro" min="0" max="3650"
                      value="{{ $settings['retention_days_pro'] ?? 90 }}"
                      class="w-24 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-gray-100">
               <span class="text-sm text-gray-500">วัน</span>
             </div>
-            <p class="text-[11px] text-gray-500 mt-2">แนะนำ: 90 วัน — สำหรับช่างภาพที่ขายยาวนาน</p>
+            <label class="block text-xs font-medium mb-1.5 text-gray-600 dark:text-gray-300">โหมดเมื่อหมดอายุ</label>
+            <select name="retention_mode_pro"
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-gray-100">
+              <option value="portfolio" {{ ($settings['retention_mode_pro'] ?? 'portfolio') === 'portfolio' ? 'selected' : '' }}>Portfolio — เก็บปก/พรีวิว</option>
+              <option value="full"      {{ ($settings['retention_mode_pro'] ?? '') === 'full' ? 'selected' : '' }}>Full — ลบทุกอย่าง</option>
+            </select>
+            <p class="text-[11px] text-gray-500 mt-2">แนะนำ: 365 วัน + Portfolio — โชว์ผลงานระยะยาว</p>
           </div>
         </div>
 
@@ -239,7 +272,11 @@
       </button>
 
       <button type="button" id="previewBtn" class="text-sm px-4 py-2 rounded-lg font-medium" style="background:rgba(245,158,11,0.1);color:#d97706;border:1px solid rgba(245,158,11,0.2);">
-        <i class="bi bi-eye mr-1"></i> Preview (Dry-Run)
+        <i class="bi bi-eye mr-1"></i> Preview (SQL scan)
+      </button>
+
+      <button type="button" id="dryRunBtn" class="text-sm px-4 py-2 rounded-lg font-medium" style="background:rgba(139,92,246,0.1);color:#7c3aed;border:1px solid rgba(139,92,246,0.2);">
+        <i class="bi bi-terminal mr-1"></i> Run dry-run (live command)
       </button>
 
       <span class="text-xs text-gray-400 ml-auto">
@@ -248,6 +285,17 @@
     </div>
   </div>
 </form>
+
+{{-- ── Live dry-run output panel ───────────────────────────────────── --}}
+<div id="dryRunResult" class="hidden card border-0 mb-4" style="border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+  <div class="p-5">
+    <div class="flex items-center justify-between mb-3">
+      <h6 class="font-semibold mb-0"><i class="bi bi-terminal mr-1" style="color:#8b5cf6;"></i> ผลลัพธ์ Dry-Run (จากคำสั่งจริง)</h6>
+      <span id="dryRunStatus" class="text-xs font-semibold px-2 py-1 rounded"></span>
+    </div>
+    <pre id="dryRunOutput" class="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-xs overflow-x-auto whitespace-pre-wrap" style="max-height:480px;overflow-y:auto;"></pre>
+  </div>
+</div>
 
 {{-- ── Dry-run preview area ────────────────────────────────────────── --}}
 <div id="previewResult" class="hidden card border-0 mb-4" style="border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
@@ -352,5 +400,53 @@ function escapeHtml(str) {
   div.textContent = str;
   return div.innerHTML;
 }
+
+// ── Live dry-run button — actually invokes `events:purge-expired --dry-run`
+//    server-side, returns the exact output the cron would print.
+document.getElementById('dryRunBtn').addEventListener('click', async () => {
+  const btn    = document.getElementById('dryRunBtn');
+  const panel  = document.getElementById('dryRunResult');
+  const out    = document.getElementById('dryRunOutput');
+  const status = document.getElementById('dryRunStatus');
+  const origText = btn.innerHTML;
+
+  btn.innerHTML = '<i class="bi bi-hourglass-split mr-1"></i> กำลังรัน…';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(@json(route('admin.settings.retention.dry-run')), {
+      method: 'POST',
+      headers: {
+        'Accept'      : 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content
+                        || document.querySelector('input[name="_token"]').value,
+        'X-Requested-With': 'XMLHttpRequest',
+      }
+    });
+    const data = await res.json();
+
+    panel.classList.remove('hidden');
+    if (data.ok) {
+      status.textContent = 'exit ' + data.exit_code + ' (ok)';
+      status.style.background = 'rgba(16,185,129,0.1)';
+      status.style.color = '#059669';
+    } else {
+      status.textContent = 'exit ' + (data.exit_code ?? 'err');
+      status.style.background = 'rgba(239,68,68,0.1)';
+      status.style.color = '#dc2626';
+    }
+    out.textContent = data.output || data.error || '(no output)';
+  } catch (err) {
+    panel.classList.remove('hidden');
+    status.textContent = 'error';
+    status.style.background = 'rgba(239,68,68,0.1)';
+    status.style.color = '#dc2626';
+    out.textContent = 'Request failed: ' + err.message;
+  } finally {
+    btn.innerHTML = origText;
+    btn.disabled = false;
+  }
+});
 </script>
 @endsection
