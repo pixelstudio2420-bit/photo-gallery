@@ -165,15 +165,20 @@ class PlanCostCalculator
     }
 
     /**
-     * Storage cost ≈ bytes × $0.015/GB/month × THB/USD.
+     * Storage cost ≈ bytes × (admin-tunable R2 rate) × THB/USD.
      * Multiply by `fractionOfMonth` (0..1) for partial-month reporting.
+     *
+     * Reads `r2_cost_per_gb_month_usd` AppSetting so admin tuning at
+     * /admin/settings/retention propagates here too. Default 0.015 matches
+     * Cloudflare R2 list price.
      */
     private function storageCostThb(int $bytes, float $fractionOfMonth): float
     {
         if ($bytes <= 0) return 0.0;
-        $gbMonths = ($bytes / 1_073_741_824) * max(0.0, min(1.0, $fractionOfMonth));
-        $usd      = $gbMonths * 0.015;   // $/GB/mo list price
-        $rate     = (float) config('usage.usd_to_thb_rate', 35.0);
+        $gbMonths  = ($bytes / 1_073_741_824) * max(0.0, min(1.0, $fractionOfMonth));
+        $costPerGb = (float) \App\Models\AppSetting::get('r2_cost_per_gb_month_usd', 0.015);
+        $usd       = $gbMonths * $costPerGb;
+        $rate      = (float) config('usage.usd_to_thb_rate', 35.0);
         return round($usd * $rate, 4);
     }
 

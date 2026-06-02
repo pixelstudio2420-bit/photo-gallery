@@ -83,12 +83,26 @@ class PurgeExpiredEventsCommand extends Command
         $this->line('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         $this->line(' Event Retention Purge  ' . ($dryRun ? '<fg=yellow>[DRY RUN]</>' : ''));
         $this->line('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        $this->line(" Mode               : <fg=cyan>{$mode}</>" . ($mode === 'portfolio' ? ' (keeps preview + cover)' : ' (FULL DELETE)'));
+        // Banner now states how the mode will be resolved. When $modeOverride
+        // is empty, the actual mode is decided PER EVENT via tier resolution —
+        // so the global value here is only a fallback, not authoritative.
+        $perTierActive = empty($modeOverride);
+        $this->line(" Mode               : <fg=cyan>{$mode}</>" . (
+            $perTierActive
+                ? " <fg=gray>(global fallback; per-tier resolved per event — see lines below)</>"
+                : " <fg=yellow>(CLI override → applies to every event)</>"
+        ));
         $this->line(" Limit this run     : {$limit}");
-        // Portfolio mode is safe with paid orders — previews stay, so the
-        // customer still has a receipt link that displays the watermarked copy.
-        $effectiveSkipOrders = $mode === 'full' ? ($includeOrders ? false : $skipOrders) : false;
-        $this->line(" Skip w/ orders     : " . ($effectiveSkipOrders ? 'yes' : 'no' . ($mode === 'portfolio' ? ' (portfolio mode — orders preserved)' : '')));
+        // Per-event mode decides skip-on-orders inside the loop. When a CLI
+        // --mode=full override is in play, this banner reflects it; otherwise
+        // it documents that the rule is event-by-event.
+        $this->line(" Skip w/ orders     : " . (
+            $perTierActive
+                ? "per-event (full→skip; portfolio→keep)"
+                : ($modeOverride === 'full'
+                    ? ($includeOrders ? 'no (--include-with-orders)' : ($skipOrders ? 'yes' : 'no'))
+                    : 'no (portfolio mode — orders preserved)')
+        ));
         $this->line(" Also purge Drive   : " . ($purgeDrive ? 'yes' : 'no'));
         if ($daysOverride !== null) {
             $this->line(" Days override      : {$daysOverride}");
@@ -185,12 +199,16 @@ class PurgeExpiredEventsCommand extends Command
         }
 
         // Second pass: portfolio-mode events that have aged out of the
-        // "portfolio keep window" can now be hard-deleted if the admin set
-        // event_portfolio_keep_days > 0.
-        // Runs when the GLOBAL mode is 'full' so per-tier-overridden
-        // events on Free still see this sweep too.
-        if (($mode === 'full' || $modeOverride === 'full') && !$specificEventId) {
-            $this->hardDeleteAgedPortfolio($dryRun, $purgeDrive, $dispatched, $limit);
+        // "portfolio keep window" get hard-deleted.
+        //
+        // The trigger is `event_portfolio_keep_days > 0`, NOT the run's
+        // mode — these rows were ARCHIVED in earlier runs (any mode), so
+        // sweeping them is always safe and is the only way they're ever
+        // recovered. Decoupling from $mode also fixes the per-tier era
+        // bug where global=portfolio + creator=full caused the sweep to
+        // never fire even though admin clearly wanted cost recovery.
+        if (!$specificEventId) {
+            $this->hardDeleteAgedPortfolio($dryRun, $purgeDrive, $dispatched, $limit, $modeCounts);
         }
 
         $this->line('');
@@ -207,9 +225,18 @@ class PurgeExpiredEventsCommand extends Command
 
     /**
      * Hard-delete portfolio rows older than `event_portfolio_keep_days` days.
-     * Only invoked when the admin runs in --mode=full.
+     *
+     * Fires on every cron pass that isn't targeting a single event (see
+     * caller). The gate inside this method is `event_portfolio_keep_days > 0`
+     * — admin opt-in to the aged-portfolio sweep. When set to 0 (default),
+     * archived rows live forever as portfolio entries.
+     *
+     * Increments `$modeCounts['full']` per hard-delete so the summary block
+     * reconciles with `$dispatched` (previously the summary undercounted).
+     *
+     * @param array{portfolio:int,full:int} &$modeCounts  by-ref tally
      */
-    private function hardDeleteAgedPortfolio(bool $dryRun, bool $purgeDrive, int &$dispatched, int $limit): void
+    private function hardDeleteAgedPortfolio(bool $dryRun, bool $purgeDrive, int &$dispatched, int $limit, array &$modeCounts): void
     {
         $keepDays = (int) AppSetting::get('event_portfolio_keep_days', 0);
         if ($keepDays <= 0) return;
@@ -233,6 +260,8 @@ class PurgeExpiredEventsCommand extends Command
             } else {
                 PurgeEventJob::dispatch($event->id, $purgeDrive, false);
             }
+            // Tally as 'full' since this pass hard-deletes the row.
+            $modeCounts['full']++;
             $dispatched++;
         }
     }

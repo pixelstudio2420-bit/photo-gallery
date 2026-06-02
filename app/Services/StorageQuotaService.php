@@ -268,9 +268,12 @@ class StorageQuotaService
                 ->limit(20)
                 ->get();
 
-            // Rough R2 cost — $0.015/GB/month for standard class.
+            // R2 cost — reads `r2_cost_per_gb_month_usd` AppSetting so admin
+            // tuning at /admin/settings/retention propagates here. Default
+            // 0.015 matches Cloudflare R2 list price as of 2026.
             $gb = $used / self::GB_TO_BYTES;
-            $estCostUsd = round($gb * 0.015, 2);
+            $costPerGb = (float) \App\Models\AppSetting::get('r2_cost_per_gb_month_usd', 0.015);
+            $estCostUsd = round($gb * $costPerGb, 2);
 
             return [
                 'photographers_total' => $total,

@@ -480,6 +480,16 @@ class SettingsController extends Controller
         // Checkboxes: normalise missing → "0"; other keys from validated.
         AppSetting::setMany($items);
 
+        // Flush the R2 cost widget's 5-min cache so the admin sees the new
+        // rates/thresholds reflected on /admin immediately — otherwise the
+        // dashboard keeps serving cached numbers for up to 5 minutes after
+        // save (mirrors how updatePhotographerStorage flushes StorageQuotaService).
+        try {
+            app(\App\Services\R2CostEstimatorService::class)->flushCache();
+        } catch (\Throwable) {
+            // Cache driver issue — non-fatal; cache will expire on TTL.
+        }
+
         $this->logSettingsChange('settings.retention_updated', $keys, $oldSnapshot);
 
         return back()->with('success', 'บันทึกการตั้งค่า retention policy สำเร็จ');
@@ -599,12 +609,35 @@ class SettingsController extends Controller
      *   - previewRetention() = cheap SQL scan, shows candidates by date
      *   - runDryRun()        = full command, exercises every code path,
      *                          returns the same lines the cron would print
+     *
+     * Safety
+     * ──────
+     *   • Passes `--force` so the command exercises its real logic even
+     *     when `event_auto_delete_enabled = 0` (admin disabled the cron
+     *     temporarily — we still want them to see what WOULD purge).
+     *   • Passes `--limit` from the batch_limit AppSetting so the dry-run
+     *     terminates in bounded time (default 50 events × ~10ms each).
+     *   • set_time_limit(120) so production installs with thousands of
+     *     events can't wedge a php-fpm worker beyond 2 minutes.
+     *   • The command's own batch_limit also caps memory.
      */
     public function runDryRun(Request $request)
     {
+        // 2-minute hard ceiling so a misconfigured production install
+        // can't hold a php-fpm worker forever. Best-effort: some hosts
+        // disable set_time_limit (safe_mode legacy) — we still wrap in
+        // try/catch so any timeout returns a clean JSON 500 instead of
+        // an HTML error page.
+        @set_time_limit(120);
+
+        $batchLimit = (int) AppSetting::get('event_auto_delete_batch_limit', 50);
+        $batchLimit = max(1, min(500, $batchLimit)); // sanity bound
+
         try {
             $exitCode = \Illuminate\Support\Facades\Artisan::call('events:purge-expired', [
                 '--dry-run' => true,
+                '--force'   => true,        // bypass enabled-flag short-circuit
+                '--limit'   => $batchLimit, // bounded runtime
             ]);
             $output = \Illuminate\Support\Facades\Artisan::output();
 
@@ -613,18 +646,24 @@ class SettingsController extends Controller
                 target: null,
                 description: 'รัน dry-run จาก /admin/settings/retention',
                 oldValues: null,
-                newValues: ['exit_code' => $exitCode],
+                newValues: [
+                    'exit_code' => $exitCode,
+                    'limit'     => $batchLimit,
+                ],
             );
 
             return response()->json([
                 'ok'        => $exitCode === 0,
                 'exit_code' => $exitCode,
                 'output'    => $output,
+                'error'     => null,
             ]);
         } catch (\Throwable $e) {
             return response()->json([
-                'ok'    => false,
-                'error' => $e->getMessage(),
+                'ok'        => false,
+                'exit_code' => null,
+                'output'    => '',
+                'error'     => $e->getMessage(),
             ], 500);
         }
     }

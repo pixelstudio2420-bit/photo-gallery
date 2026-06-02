@@ -200,7 +200,10 @@
             <tr class="transition hover:bg-slate-50 dark:hover:bg-slate-800/40">
               <td class="pl-4 pr-2 py-2">
                 <div class="flex items-center gap-2 min-w-0">
-                  <a href="{{ route('admin.photographers.show', $row['user_id']) }}"
+                  {{-- Admin photographers resource binds {photographer} to PhotographerProfile.id.
+                       Use profile_id (the model's PK) — NOT user_id which would 404 or
+                       open a different photographer's profile. --}}
+                  <a href="{{ route('admin.photographers.show', $row['profile_id'] ?? $row['user_id']) }}"
                      class="text-[12px] font-semibold text-slate-900 dark:text-white truncate max-w-[140px]"
                      title="{{ $row['display_name'] }}">
                     {{ $row['display_name'] }}

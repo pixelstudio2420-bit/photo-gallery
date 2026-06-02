@@ -46,11 +46,32 @@ use Illuminate\Support\Facades\DB;
  *
  * Safety
  * ──────
- * Idempotent — only writes keys that don't already exist. Admins
- * who explicitly turned auto-delete off will see it re-enabled here
- * (intentional — project owner asked for this).
+ * Strictly idempotent — only INSERTs keys that don't already exist. No key
+ * is ever force-updated. If an admin explicitly disabled the engine (GDPR
+ * hold, vacation, billing investigation), re-running this migration (after
+ * a rollback or migrate:fresh) will NOT silently re-enable it.
+ *
+ * Why no force-overwrite of `event_auto_delete_enabled`
+ * ─────────────────────────────────────────────────────
+ * Earlier iteration force-updated this key to '1' on every migration run,
+ * which is a real GDPR/data-loss footgun: an admin who paused auto-delete
+ * during a regulatory hold could see it silently flip back on after the
+ * next routine `migrate`. The "project owner wanted it ON" intent is
+ * satisfied by the initial insert on fresh install. Subsequent re-enabling
+ * is an ADMIN action via /admin/settings/retention, not a migration side-effect.
+ *
+ * Tracked-keys marker — precise rollback
+ * ───────────────────────────────────────
+ * up() records which keys it actually INSERTED (not the ones it found
+ * pre-existing) into the marker `__retention_seed_migration_inserted__`.
+ * down() reads the marker and deletes only those, so rollback never wipes
+ * settings that pre-dated this migration (e.g. legacy retention_days_*
+ * keys that admins may have tuned for months).
  */
 return new class extends Migration {
+    /** Marker key used to remember which keys this migration inserted. */
+    private const INSERTED_MARKER_KEY = '__retention_seed_migration_inserted__';
+
     public function up(): void
     {
         $now = now();
@@ -77,47 +98,51 @@ return new class extends Migration {
             'r2_derivative_multiplier'     => '0.04',
         ];
 
+        // Track keys actually inserted by THIS migration run so down() can
+        // roll back precisely without touching legacy values.
+        $insertedKeys = [];
+
         foreach ($defaults as $key => $value) {
-            // Only insert if not already present — preserves any
-            // explicit admin override the project may have set
-            // through the UI between migration runs.
             $exists = DB::table('app_settings')->where('key', $key)->exists();
             if ($exists) {
-                // The master switch is the one exception — project
-                // owner explicitly asked for it to be ON, so force
-                // it even if a previous admin disabled it.
-                if ($key === 'event_auto_delete_enabled') {
-                    DB::table('app_settings')
-                        ->where('key', $key)
-                        ->update(['value' => $value, 'updated_at' => $now]);
-                }
-                continue;
+                continue; // Preserve any pre-existing value; never force.
             }
             DB::table('app_settings')->insert([
                 'key'        => $key,
                 'value'      => $value,
                 'updated_at' => $now,
             ]);
+            $insertedKeys[] = $key;
+        }
+
+        // Persist marker so down() can target precisely what up() inserted.
+        // If marker already exists (e.g. defensive re-run), merge lists.
+        if (!empty($insertedKeys)) {
+            $existing = DB::table('app_settings')->where('key', self::INSERTED_MARKER_KEY)->value('value');
+            $prior = $existing ? (array) json_decode((string) $existing, true) : [];
+            $merged = array_values(array_unique(array_merge($prior, $insertedKeys)));
+            $payload = json_encode($merged, JSON_UNESCAPED_UNICODE);
+
+            DB::table('app_settings')->updateOrInsert(
+                ['key' => self::INSERTED_MARKER_KEY],
+                ['value' => $payload, 'updated_at' => $now]
+            );
         }
     }
 
     public function down(): void
     {
-        // Conservative rollback — disable the master switch but
-        // leave the per-tier values in place so admins don't lose
-        // their tuning if they re-run later.
-        DB::table('app_settings')
-            ->where('key', 'event_auto_delete_enabled')
-            ->update(['value' => '0', 'updated_at' => now()]);
+        // Read the marker — only delete keys this migration actually inserted.
+        // Pre-existing values (from earlier migrations or admin overrides)
+        // are preserved.
+        $marker = DB::table('app_settings')->where('key', self::INSERTED_MARKER_KEY)->value('value');
+        $insertedKeys = $marker ? (array) json_decode((string) $marker, true) : [];
 
-        // Drop only the NEW per-tier mode keys this migration introduced
-        // (the legacy `retention_days_*` keys predate us).
-        DB::table('app_settings')->whereIn('key', [
-            'retention_mode_creator',
-            'retention_mode_seller',
-            'retention_mode_pro',
-            'r2_cost_per_gb_month_usd',
-            'r2_derivative_multiplier',
-        ])->delete();
+        if (!empty($insertedKeys)) {
+            DB::table('app_settings')->whereIn('key', $insertedKeys)->delete();
+        }
+
+        // Drop the marker itself so a subsequent up()→down() cycle is clean.
+        DB::table('app_settings')->where('key', self::INSERTED_MARKER_KEY)->delete();
     }
 };
