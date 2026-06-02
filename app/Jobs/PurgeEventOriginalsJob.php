@@ -66,6 +66,20 @@ class PurgeEventOriginalsJob implements ShouldQueue
             return;
         }
 
+        // Defer purge if any paid customer still has an unexpired download
+        // token. Without this, a Free photographer's 5-day window could
+        // expire while a customer who paid on day 4 still has a 7-day
+        // download link — purging would 404 them.
+        //
+        // The token check is deliberately permissive: NULL expiry or
+        // remaining-downloads → treat as active. The cron will retry on
+        // the next pass; once all tokens are consumed/expired the purge
+        // proceeds normally.
+        if (!$this->dryRun && $event->hasActiveDownloadTokens()) {
+            Log::info("PurgeEventOriginalsJob: event {$event->id} has active download tokens — deferring purge until tokens expire");
+            return;
+        }
+
         $summary = [
             'event_id'        => $event->id,
             'event_name'      => $event->name,

@@ -286,6 +286,22 @@ Schedule::command('photographers:recalc-storage --sync')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Compress aged event originals — runs AFTER the purge at 02:30 so we
+// don't waste cycles compressing files that are about to be deleted.
+// No-ops silently when compress_originals_enabled=0.
+Schedule::command('photos:compress-originals --quiet-success')
+    ->dailyAt('02:45')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Inactive Free account sweep — weekly Sunday 05:30. Two-stage: warns
+// first, deletes after the grace period (default 30 days). OFF by
+// default — admin opts in via inactive_sweep_enabled=1.
+Schedule::command('accounts:sweep-inactive --quiet-success')
+    ->weeklyOn(0, '05:30')   // 0 = Sunday
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Cleanup orphan faces in AWS Rekognition collections — nightly safety net
 // for cases where the EventPhoto::deleting hook failed (AWS outage, hard DB
 // delete, etc.). Bails out silently if AWS is not configured.

@@ -342,6 +342,19 @@ class DashboardController extends Controller
             \Illuminate\Support\Facades\Log::warning('buildFeatureStatus failed: ' . $e->getMessage());
         }
 
+        // Retention status — drives the "events expiring soon" widget so the
+        // photographer can see what's about to be auto-archived (and upgrade
+        // their plan to avoid it). Cached 60s inside the service so dashboard
+        // hits stay cheap; defensive try/catch so a service problem doesn't
+        // break the whole dashboard.
+        $retention = null;
+        try {
+            $retention = app(\App\Services\PhotographerRetentionService::class)
+                ->statusFor($userId, 30, 10);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('PhotographerRetentionService failed: ' . $e->getMessage());
+        }
+
         return view('photographer.dashboard', compact(
             'profile',
             'stats',
@@ -357,7 +370,8 @@ class DashboardController extends Controller
             'quotaInfo',
             'creditsInfo',
             'subscriptionInfo',
-            'featureStatus'
+            'featureStatus',
+            'retention'
         ));
     }
 

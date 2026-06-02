@@ -440,13 +440,17 @@ class Event extends Model
             return $this->__tierRetentionDaysCache;
         }
 
-        $tier = null;
-        if ($this->photographer_id) {
-            $tier = \App\Models\PhotographerProfile::where('user_id', $this->photographer_id)
-                ->value('tier');
-        }
+        // EFFECTIVE tier — honours subscription lifecycle.
+        // A Pro photographer whose subscription EXPIRED gets Creator (Free)
+        // retention. A photographer in GRACE still gets their original tier
+        // retention — they still have a chance to renew.
+        //
+        // This is the lifecycle-aware part: without it, a churned Pro user's
+        // events would stay 365 days even though the platform stopped
+        // collecting revenue from them.
+        $tier = $this->effectiveRetentionTier();
 
-        $key = match ((string) $tier) {
+        $key = match ($tier) {
             \App\Models\PhotographerProfile::TIER_PRO    => 'retention_days_pro',
             \App\Models\PhotographerProfile::TIER_SELLER => 'retention_days_seller',
             \App\Models\PhotographerProfile::TIER_CREATOR => 'retention_days_creator',
@@ -464,6 +468,65 @@ class Event extends Model
         }
 
         return $this->__tierRetentionDaysCache = $days;
+    }
+
+    /**
+     * Resolve the effective retention TIER for this event, honouring the
+     * photographer's CURRENT subscription state.
+     *
+     * Returns one of PhotographerProfile::TIER_PRO / TIER_SELLER / TIER_CREATOR,
+     * or empty string if the photographer can't be identified.
+     *
+     * Lifecycle rules
+     * ───────────────
+     *   active sub                → use photographer.tier (paying customer)
+     *   grace                     → use photographer.tier (last chance to renew)
+     *   expired / cancelled / no sub → use TIER_CREATOR (downgrade to Free)
+     *
+     * This is the heart of "subscription expired = events get shorter retention".
+     * Memoised through a private property cleared on model refresh.
+     */
+    private ?string $__effectiveRetentionTierCache = null;
+    public function effectiveRetentionTier(): string
+    {
+        if ($this->__effectiveRetentionTierCache !== null) {
+            return $this->__effectiveRetentionTierCache;
+        }
+
+        if (!$this->photographer_id) {
+            return $this->__effectiveRetentionTierCache = '';
+        }
+
+        // Pull tier + current subscription status in ONE query (no N+1).
+        // photographer_subscriptions may have multiple rows (active+grace
+        // during renewal overlap) — we take the BEST status: active > grace
+        // > others. status is a string column with known values.
+        $row = \Illuminate\Support\Facades\DB::table('photographer_profiles as pp')
+            ->leftJoin('photographer_subscriptions as ps', function ($j) {
+                $j->on('ps.photographer_id', '=', 'pp.user_id')
+                  ->whereIn('ps.status', ['active', 'grace']);
+            })
+            ->where('pp.user_id', $this->photographer_id)
+            ->orderByRaw("CASE ps.status WHEN 'active' THEN 1 WHEN 'grace' THEN 2 ELSE 3 END")
+            ->select('pp.tier', 'ps.status as sub_status')
+            ->first();
+
+        if (!$row) {
+            return $this->__effectiveRetentionTierCache = '';
+        }
+
+        $tier = (string) ($row->tier ?? '');
+        $subStatus = (string) ($row->sub_status ?? '');
+
+        // Subscription gone/expired → downgrade to Creator (Free) regardless
+        // of what tier they're listed as. This is the "you stopped paying,
+        // your events get the Free tier 5-day retention" lever.
+        $hasLiveSub = in_array($subStatus, ['active', 'grace'], true);
+        if (!$hasLiveSub && $tier !== \App\Models\PhotographerProfile::TIER_CREATOR) {
+            $tier = \App\Models\PhotographerProfile::TIER_CREATOR;
+        }
+
+        return $this->__effectiveRetentionTierCache = $tier;
     }
 
     /** @var int|null Memoised tier retention. Not persisted. */
@@ -495,13 +558,11 @@ class Event extends Model
             return $this->__tierRetentionModeCache;
         }
 
-        $tier = null;
-        if ($this->photographer_id) {
-            $tier = \App\Models\PhotographerProfile::where('user_id', $this->photographer_id)
-                ->value('tier');
-        }
+        // Use lifecycle-aware tier resolution — a churned Pro user gets
+        // Creator (Free) mode just like they get Creator retention days.
+        $tier = $this->effectiveRetentionTier();
 
-        $key = match ((string) $tier) {
+        $key = match ($tier) {
             \App\Models\PhotographerProfile::TIER_PRO     => 'retention_mode_pro',
             \App\Models\PhotographerProfile::TIER_SELLER  => 'retention_mode_seller',
             \App\Models\PhotographerProfile::TIER_CREATOR => 'retention_mode_creator',
@@ -554,6 +615,58 @@ class Event extends Model
         return $this->orders()
             ->whereIn('status', ['paid', 'completed', 'processing'])
             ->exists();
+    }
+
+    /**
+     * Does this event have any download tokens still usable by paid customers?
+     *
+     * Critical safety check for portfolio-mode purge. If the photographer's
+     * event is purged TODAY but a customer paid yesterday and got a 7-day
+     * download token, deleting the originals would 404 their download.
+     *
+     * A token is "active" if:
+     *   • expires_at IS NULL  (no explicit expiry — treat as 30-day from issue)
+     *     OR expires_at > now()
+     *   • AND has remaining downloads (or no max_downloads cap)
+     *
+     * Used by PurgeEventOriginalsJob to defer purge of events with
+     * outstanding download obligations.
+     */
+    public function hasActiveDownloadTokens(): bool
+    {
+        try {
+            // download_tokens.photo_id stores the photo PK as a varchar
+            // (mirror of order_items.photo_id). We bypass the join by
+            // pulling this event's photo IDs and matching as strings.
+            $photoIds = \Illuminate\Support\Facades\DB::table('event_photos')
+                ->where('event_id', $this->id)
+                ->pluck('id')
+                ->map(fn ($id) => (string) $id)
+                ->all();
+
+            if (empty($photoIds)) {
+                return false;
+            }
+
+            return \Illuminate\Support\Facades\DB::table('download_tokens')
+                ->whereIn('photo_id', $photoIds)
+                ->where(function ($q) {
+                    $q->whereNull('expires_at')
+                      ->orWhere('expires_at', '>', now());
+                })
+                ->where(function ($q) {
+                    $q->whereNull('max_downloads')
+                      ->orWhereColumn('download_count', '<', 'max_downloads');
+                })
+                ->exists();
+        } catch (\Throwable $e) {
+            // If the schema differs or join fails, default to "yes" — safer
+            // to defer a purge than to break a paying customer's download.
+            \Illuminate\Support\Facades\Log::warning(
+                "Event::hasActiveDownloadTokens fallback for event #{$this->id}: " . $e->getMessage()
+            );
+            return true;
+        }
     }
 
     // ─────────────────────────────────────────────────────────────

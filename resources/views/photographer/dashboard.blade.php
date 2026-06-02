@@ -771,6 +771,7 @@ html.dark .pg-delta-down { color: #fca5a5; background: rgba(239, 68, 68, 0.20); 
  ═════════════════════════════════════════════════════════════════════ --}}
 @include('photographer.partials.subscription-widget')
 @include('photographer.partials.credits-widget')
+@include('photographer.partials.retention-status')
 
 {{-- ════════════════════════════════════════════════════════════════════
  4. KPI TILES — 4-col bento grid with accent bands
