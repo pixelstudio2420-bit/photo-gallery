@@ -132,7 +132,7 @@ class FestivalThemeService
                     // We compute the lead-adjusted start via raw SQL because
                     // SQLite + PG syntax differ; raw expression keeps it
                     // portable across local dev (sqlite) and prod (pg).
-                    ->whereRaw("(starts_at - (popup_lead_days || ' days')::interval)::date <= ?", [$now])
+                    ->whereRaw($this->popupOpenCondition(), [$now])
                     ->where('ends_at', '>=', $now)
                     ->where(function ($q) use ($user) {
                         $q->whereNull('target_province_id')
@@ -150,6 +150,32 @@ class FestivalThemeService
                 return $query->first();
             }
         );
+    }
+
+    /**
+     * Driver-portable SQL for "the popup window has opened", i.e.
+     * (starts_at - popup_lead_days days) <= ?.
+     *
+     * popup_lead_days is a PER-ROW column, so the interval can't be
+     * precomputed in PHP. Each driver expresses the date arithmetic
+     * differently:
+     *   • pgsql  : (starts_at - (popup_lead_days || ' days')::interval)::date
+     *   • mysql  : DATE(DATE_SUB(starts_at, INTERVAL popup_lead_days DAY))
+     *   • sqlite : date(starts_at, '-' || popup_lead_days || ' days')
+     *
+     * The earlier code only emitted the pgsql form despite a comment
+     * claiming portability — which threw "unrecognized token: ':'" on the
+     * SQLite test DB (the '::' cast) and 500'd every page that renders the
+     * festival-popup partial under tests. Both replacements are verified
+     * equivalent on sqlite + pg.
+     */
+    private function popupOpenCondition(): string
+    {
+        return match (DB::connection()->getDriverName()) {
+            'pgsql'            => "(starts_at - (popup_lead_days || ' days')::interval)::date <= ?",
+            'mysql', 'mariadb' => "DATE(DATE_SUB(starts_at, INTERVAL popup_lead_days DAY)) <= ?",
+            default            => "date(starts_at, ('-' || popup_lead_days || ' days')) <= ?", // sqlite
+        };
     }
 
     /**
@@ -180,7 +206,7 @@ class FestivalThemeService
         $now = now()->toDateString();
 
         return Festival::enabled()
-            ->whereRaw("(starts_at - (popup_lead_days || ' days')::interval)::date <= ?", [$now])
+            ->whereRaw($this->popupOpenCondition(), [$now])
             ->where('ends_at', '>=', $now)
             ->orderByDesc('show_priority')
             ->orderBy('starts_at')

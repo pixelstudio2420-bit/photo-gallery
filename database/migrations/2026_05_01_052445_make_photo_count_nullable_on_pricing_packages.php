@@ -28,25 +28,57 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Idempotent: check current nullability before running. Running
-        // ALTER on an already-nullable column is harmless on Postgres,
-        // but we skip it for the audit-trail/log clarity.
-        $info = DB::selectOne(
-            "SELECT is_nullable FROM information_schema.columns
-              WHERE table_name = 'pricing_packages' AND column_name = 'photo_count'"
-        );
-
-        if ($info && strtoupper((string) $info->is_nullable) === 'NO') {
-            DB::statement('ALTER TABLE pricing_packages ALTER COLUMN photo_count DROP NOT NULL');
+        if (!Schema::hasTable('pricing_packages')
+            || !Schema::hasColumn('pricing_packages', 'photo_count')) {
+            return;
         }
+
+        $driver = Schema::getConnection()->getDriverName();
+
+        if ($driver === 'pgsql') {
+            // Postgres: idempotent check via information_schema, then ALTER.
+            // information_schema.columns only exists on pgsql/mysql — guarding
+            // by driver keeps this migration portable to the SQLite test DB
+            // (where this exact query previously threw "no such table:
+            // information_schema.columns" and broke the whole suite).
+            $info = DB::selectOne(
+                "SELECT is_nullable FROM information_schema.columns
+                  WHERE table_name = 'pricing_packages' AND column_name = 'photo_count'"
+            );
+            if ($info && strtoupper((string) $info->is_nullable) === 'NO') {
+                DB::statement('ALTER TABLE pricing_packages ALTER COLUMN photo_count DROP NOT NULL');
+            }
+            return;
+        }
+
+        // MySQL / MariaDB / SQLite (incl. the in-memory test DB) — use
+        // Laravel's portable schema builder. change() is native in
+        // Laravel 11+ (no doctrine/dbal needed). Matches the original
+        // unsignedInteger definition from create_events_tables, now nullable.
+        Schema::table('pricing_packages', function (Blueprint $table) {
+            $table->unsignedInteger('photo_count')->nullable()->change();
+        });
     }
 
     public function down(): void
     {
+        if (!Schema::hasTable('pricing_packages')
+            || !Schema::hasColumn('pricing_packages', 'photo_count')) {
+            return;
+        }
+
         // Re-imposing NOT NULL would fail if any face_match rows exist
         // with NULL photo_count. So down() backfills 0 first to avoid
         // breaking the rollback.
         DB::table('pricing_packages')->whereNull('photo_count')->update(['photo_count' => 0]);
-        DB::statement('ALTER TABLE pricing_packages ALTER COLUMN photo_count SET NOT NULL');
+
+        $driver = Schema::getConnection()->getDriverName();
+        if ($driver === 'pgsql') {
+            DB::statement('ALTER TABLE pricing_packages ALTER COLUMN photo_count SET NOT NULL');
+            return;
+        }
+        Schema::table('pricing_packages', function (Blueprint $table) {
+            $table->unsignedInteger('photo_count')->nullable(false)->change();
+        });
     }
 };

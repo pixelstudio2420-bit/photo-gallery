@@ -46,8 +46,16 @@ class FaceSearchServiceTest extends TestCase
         $service = new FaceSearchService();
         $result  = $service->detectFaces('fake-image-bytes');
 
+        // detectFaces() returns a STRUCTURED response (not a bare array) so
+        // callers can distinguish "no faces found" from "an error occurred".
+        // When AWS can't run (no creds / SDK error), the stable invariant is:
+        //   faces = []  AND  error_code is non-null (an error was reported).
+        // We don't pin the exact error_code: isConfigured() may treat empty
+        // creds as still-configured and surface 'aws_error' instead of
+        // 'unconfigured' — both are valid "could not detect" signals.
         $this->assertIsArray($result);
-        $this->assertEmpty($result);
+        $this->assertSame([], $result['faces']);
+        $this->assertNotNull($result['error_code']);
     }
 
     // ─────────────────────────────────────────────────────────────

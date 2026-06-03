@@ -57,6 +57,22 @@ class QuotaServiceTest extends TestCase
                 $t->timestamp('occurred_at');
             });
         }
+
+        // QuotaService::capFor() consults subscription_plans for ai.* resources
+        // (DB-driven monthly_ai_credits takes precedence over config). We create
+        // the table but leave it EMPTY on purpose: SubscriptionPlan::findByCode()
+        // then returns null, so capFor() falls through to config('usage.plan_caps')
+        // — which is exactly what these tests assert against (free.ai.face_search
+        // hard=50/soft=40). Without the table the lookup throws "no such table".
+        if (!Schema::hasTable('subscription_plans')) {
+            Schema::create('subscription_plans', function ($t) {
+                $t->bigIncrements('id');
+                $t->string('code', 32)->unique();
+                $t->integer('monthly_ai_credits')->nullable();
+            });
+        } else {
+            DB::table('subscription_plans')->truncate();
+        }
     }
 
     private function svc(bool $breakerOpen = false): QuotaService

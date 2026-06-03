@@ -19,6 +19,14 @@ abstract class MarketingTestCase extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Baseline: marketing master switch OFF. RefreshDatabase replays the
+        // 2026_05_19_000015_seed_how_to_landing_pages migration which force-sets
+        // marketing_enabled='1' as a side effect of seeding landing pages.
+        // Tests asserting the off-by-default / feature-disabled paths must
+        // start from a known-off baseline; tests that need it ON call
+        // enableMarketing() explicitly.
+        AppSetting::set('marketing_enabled', '0');
         AppSetting::flushCache();
     }
 

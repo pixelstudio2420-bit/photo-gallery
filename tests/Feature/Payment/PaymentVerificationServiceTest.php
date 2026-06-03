@@ -37,7 +37,11 @@ class PaymentVerificationServiceTest extends TestCase
                 $t->unsignedBigInteger('user_id');
                 $t->string('order_number')->nullable();
                 $t->decimal('total', 10, 2)->default(0);
+                $t->decimal('subtotal', 10, 2)->default(0);
                 $t->string('status', 32)->default('pending_payment');
+                // Real orders schema gained payment_expires_at after this
+                // fixture was written; the order service inserts it.
+                $t->timestamp('payment_expires_at')->nullable();
                 $t->timestamps();
             });
         } else {
@@ -66,6 +70,22 @@ class PaymentVerificationServiceTest extends TestCase
         } else {
             DB::table('payment_slips')->truncate();
         }
+        // app_settings backs the verify() tunables (predate/stale/future
+        // thresholds). Without the table, AppSetting::get() falls back to
+        // hard-coded defaults and AppSetting::set() can't take effect — so a
+        // test exercising an opt-in path (e.g. hard-reject on predate) can't
+        // configure it. Create it + reset so each test starts from defaults.
+        if (!Schema::hasTable('app_settings')) {
+            Schema::create('app_settings', function ($t) {
+                $t->bigIncrements('id');
+                $t->string('key')->unique();
+                $t->text('value')->nullable();
+                $t->timestamps();
+            });
+        } else {
+            DB::table('app_settings')->truncate();
+        }
+        \App\Models\AppSetting::flushCache();
     }
 
     private function makeOrder(int $userId, float $total = 1000.00, string $status = 'pending_payment'): Order
@@ -175,6 +195,12 @@ class PaymentVerificationServiceTest extends TestCase
 
     public function test_rejects_slip_dated_before_order(): void
     {
+        // Predate is a SOFT flag by default (admin-review signal); it only
+        // becomes a hard reject when the operator opts in. This test asserts
+        // the rejection path, so enable that setting.
+        \App\Models\AppSetting::set('slip_predate_hard_reject', '1');
+        \App\Models\AppSetting::flushCache();
+
         $order = $this->makeOrder(1, 1000);
         $r = $this->svc->verify(
             file: \Illuminate\Http\UploadedFile::fake()->image('s.jpg'),

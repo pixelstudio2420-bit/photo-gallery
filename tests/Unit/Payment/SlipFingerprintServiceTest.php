@@ -30,6 +30,11 @@ class SlipFingerprintServiceTest extends TestCase
                 $t->string('order_number')->nullable();
                 $t->decimal('total', 10, 2)->default(0);
                 $t->string('status', 32)->default('pending_payment');
+                // Mirror the real orders schema: payment_expires_at was added
+                // after this fixture was first written. Without it, the
+                // service's order inserts hit "no column payment_expires_at"
+                // on the in-memory SQLite test DB.
+                $t->timestamp('payment_expires_at')->nullable();
                 $t->timestamps();
             });
         } else {

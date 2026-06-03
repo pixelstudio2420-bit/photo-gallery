@@ -32,6 +32,9 @@ class OrderStateMachineTest extends TestCase
                 $t->string('status', 32)->default('pending_payment');
                 $t->string('idempotency_key', 128)->nullable();
                 $t->timestamp('paid_at')->nullable();
+                // Real orders schema gained payment_expires_at after this
+                // fixture was written; the order service inserts it.
+                $t->timestamp('payment_expires_at')->nullable();
                 $t->timestamps();
             });
         } else {

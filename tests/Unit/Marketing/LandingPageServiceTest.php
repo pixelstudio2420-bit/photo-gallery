@@ -114,6 +114,13 @@ class LandingPageServiceTest extends MarketingUnitTestCase
     public function test_summary_counts_statuses_and_totals(): void
     {
         $svc = app(LandingPageService::class);
+
+        // summary() aggregates ALL marketing_landing_pages. RefreshDatabase
+        // replays the 2026_05_19_000015_seed_how_to_landing_pages migration
+        // which seeds ~12 rows — so without isolating, total would be 15 not 3.
+        // Clear the table first so this test counts only the rows it creates.
+        \Illuminate\Support\Facades\DB::table('marketing_landing_pages')->delete();
+
         $published = $svc->create(['title' => 'Pub']);
         $svc->publish($published);
         $svc->recordView($published);

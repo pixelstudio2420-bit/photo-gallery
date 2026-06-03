@@ -124,6 +124,15 @@ class CommissionResolverTest extends TestCase
 
     public function test_tier_resolved_by_lifetime_revenue(): void
     {
+        // Tiers are UPWARD-only loyalty overrides — they raise the keep rate,
+        // never lower it below the plan/default baseline. The default baseline
+        // is 100 - platform_commission; at the shipped default (20) that's 80%,
+        // which sits ABOVE the seeded 75% Bronze tier and would suppress it.
+        // Set commission=30 so the baseline (70%) is below the tiers and they
+        // genuinely apply. This tests tier RESOLUTION, which is the point here.
+        \App\Models\AppSetting::set('platform_commission', '30');
+        \App\Models\AppSetting::flushCache();
+
         // Three tiers: 0+ → 75%, 50k+ → 82%, 200k+ → 88%
         CommissionTier::create([
             'name' => 'Bronze', 'min_revenue' => 0, 'commission_rate' => 75.0, 'is_active' => true,
@@ -151,6 +160,11 @@ class CommissionResolverTest extends TestCase
 
     public function test_inactive_tier_not_used(): void
     {
+        // Baseline below the tiers so the active tier applies (see
+        // test_tier_resolved_by_lifetime_revenue for the rationale).
+        \App\Models\AppSetting::set('platform_commission', '30');
+        \App\Models\AppSetting::flushCache();
+
         // Active Bronze, INACTIVE Gold — Gold must not apply even though
         // photographer's revenue would qualify.
         CommissionTier::create([
@@ -200,6 +214,11 @@ class CommissionResolverTest extends TestCase
 
     public function test_cache_invalidated_on_payout_create(): void
     {
+        // Baseline below the tiers so the active tier applies (see
+        // test_tier_resolved_by_lifetime_revenue for the rationale).
+        \App\Models\AppSetting::set('platform_commission', '30');
+        \App\Models\AppSetting::flushCache();
+
         CommissionTier::create([
             'name' => 'Bronze', 'min_revenue' => 0, 'commission_rate' => 75.0, 'is_active' => true,
         ]);
@@ -221,6 +240,11 @@ class CommissionResolverTest extends TestCase
 
     public function test_reversed_payouts_excluded_from_lifetime(): void
     {
+        // Baseline below the tiers so the active tier applies (see
+        // test_tier_resolved_by_lifetime_revenue for the rationale).
+        \App\Models\AppSetting::set('platform_commission', '30');
+        \App\Models\AppSetting::flushCache();
+
         CommissionTier::create([
             'name' => 'Bronze', 'min_revenue' => 0, 'commission_rate' => 75.0, 'is_active' => true,
         ]);
