@@ -994,6 +994,7 @@
     @php
       $g6Open = request()->routeIs('admin.settings.queue')
              || request()->routeIs('admin.settings.performance')
+             || request()->routeIs('admin.health.*')
              || request()->routeIs('admin.system.dashboard')
              || request()->routeIs('admin.system.capacity')
              || request()->routeIs('admin.system.capacity.refresh')
@@ -1017,6 +1018,9 @@
       <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="pb-1">
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.deployment.*') ? $sublinkActive : '' }}" href="{{ route('admin.deployment.index') }}">
           <i class="bi bi-server text-cyan-400 text-[0.6rem]"></i> 🚀 Deployment / VPS
+        </a>
+        <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.health.*') ? $sublinkActive : '' }}" href="{{ route('admin.health.index') }}">
+          <i class="bi bi-heart-pulse text-rose-400 text-[0.6rem]"></i> Route &amp; Page Health
         </a>
         <a class="{{ $sublinkCls }} {{ request()->routeIs('admin.system.dashboard') ? $sublinkActive : '' }}" href="{{ route('admin.system.dashboard') }}">
           <i class="bi bi-activity text-emerald-400 text-[0.6rem]"></i> System Monitor

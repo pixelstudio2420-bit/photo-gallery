@@ -131,11 +131,17 @@ class BlogPost extends Model
 
     public function scopeSearch($query, $term)
     {
-        return $query->where(function ($q) use ($term) {
-            $q->where('title', 'ilike', "%{$term}%")
-              ->orWhere('excerpt', 'ilike', "%{$term}%")
-              ->orWhere('content', 'ilike', "%{$term}%")
-              ->orWhere('focus_keyword', 'ilike', "%{$term}%");
+        // `ilike` is PostgreSQL-only. On SQLite (tests) / MySQL it throws —
+        // which 500'd /blog/search (caught by the Route Health monitor). Use
+        // the case-insensitive operator the driver actually supports: pgsql →
+        // ilike; sqlite/mysql LIKE is already case-insensitive for ASCII.
+        $likeOp = $query->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+
+        return $query->where(function ($q) use ($term, $likeOp) {
+            $q->where('title', $likeOp, "%{$term}%")
+              ->orWhere('excerpt', $likeOp, "%{$term}%")
+              ->orWhere('content', $likeOp, "%{$term}%")
+              ->orWhere('focus_keyword', $likeOp, "%{$term}%");
         });
     }
 

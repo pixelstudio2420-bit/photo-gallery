@@ -302,6 +302,16 @@ Schedule::command('accounts:sweep-inactive --quiet-success')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Route & Page Health — daily 06:10 (after the overnight maintenance window
+// so it checks the app in its steady morning state). Hits public routes
+// through the kernel and pings the admin bell on any 5xx / error-page. This
+// is the regression net for the route-level 500s that have bitten us
+// (JSONB ? operator, festival ::interval). --quiet-if-clean keeps logs tidy.
+Schedule::command('routes:health --quiet-if-clean')
+    ->dailyAt('06:10')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Cleanup orphan faces in AWS Rekognition collections — nightly safety net
 // for cases where the EventPhoto::deleting hook failed (AWS outage, hard DB
 // delete, etc.). Bails out silently if AWS is not configured.

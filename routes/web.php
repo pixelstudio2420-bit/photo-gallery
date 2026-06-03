@@ -1539,6 +1539,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/diagnostics/aws', [\App\Http\Controllers\Admin\DiagnosticsController::class, 'awsRekognition'])->name('diagnostics.aws');
         Route::get('/diagnostics/events/{event}/face-coverage', [\App\Http\Controllers\Admin\DiagnosticsController::class, 'eventFaceCoverage'])->name('diagnostics.event-face-coverage');
 
+        // ═══ Route & Page Health (hits public routes, catches 5xx) ═══
+        Route::prefix('health')->name('health.')->group(function () {
+            Route::get('/',        [\App\Http\Controllers\Admin\HealthController::class, 'index'])->name('index');
+            Route::post('/run',    [\App\Http\Controllers\Admin\HealthController::class, 'run'])->name('run');
+            Route::get('/api',     [\App\Http\Controllers\Admin\HealthController::class, 'api'])->name('api');
+        });
+
         // ═══ System Monitor (storage/server/downloads + production readiness) ═══
         Route::prefix('system')->name('system.')->group(function () {
             Route::get('/',                [\App\Http\Controllers\Admin\SystemMonitorController::class, 'dashboard'])->name('dashboard');

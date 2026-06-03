@@ -134,9 +134,21 @@ Postgres-only things that DON'T exist on SQLite:
 - `information_schema.columns` / `.statistics` — use `Schema::hasColumn()`,
   `Schema::hasTable()`, or driver-guard. (This exact bug broke the whole suite —
   see migration `2026_05_01_052445_make_photo_count_nullable_on_pricing_packages`.)
-- `STRING_AGG`, `ILIKE`, JSONB operators, `ALTER COLUMN ... DROP NOT NULL`.
+- `ILIKE` (case-insensitive LIKE) — Postgres-only. Pick the operator by driver:
+  `$op = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like'`
+  (SQLite/MySQL LIKE is already case-insensitive for ASCII). This 500'd
+  `/blog/search` until `BlogPost::scopeSearch` was guarded. NOTE: `ilike` is
+  still used in several other query paths (e.g. photographer search) that only
+  fire behind a `?search=` param — they work on prod (pgsql) but will 500 on
+  SQLite if exercised. Driver-guard when you touch them.
+- `STRING_AGG`, JSONB operators, `ALTER COLUMN ... DROP NOT NULL`,
+  `(x || ' days')::interval` casts (see FestivalThemeService::popupOpenCondition).
 - For nullability changes, prefer the native `->nullable()->change()` Schema
   builder (Laravel 11+, no doctrine/dbal) on non-pgsql drivers.
+
+The **Route & Page Health monitor** (`routes:health` / `/admin/health`) exists
+precisely to catch this class: it hits curated public routes through the kernel
+and flags any 5xx. Run it after touching shared query paths or blade partials.
 
 ### 6.2 JSONB `?` operator collides with PDO placeholders
 PHP's PDO treats `?` as a positional bind placeholder. The JSONB key-exists
